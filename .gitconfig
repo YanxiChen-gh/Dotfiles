@@ -1,0 +1,22 @@
+[alias]
+   pb = pull --rebase
+   details = log -n1 -p --format=fuller
+   co = checkout
+   ci = commit
+   st = status
+   br = branch
+   review = review -T
+	lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative
+	unstage = reset HEAD
+	undo-commit = reset --soft HEAD~1
+   aliases = !git config --list | grep 'alias\\.' | sed 's/alias\\.\\([^=]*\\)=\\(.*\\)/\\1\\ \t => \\2/' | sort
+   branches = branch -av
+   brdel = branch -D
+   rbi = rebase -i
+   rbc = rebase --continue
+[color]
+    ui = true
+[core]
+	excludesfile = /Users/yanxiche/.gitignore
+[pull]
+	rebase = false
