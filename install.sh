@@ -26,7 +26,7 @@ setup_langsmith_mcp() {
     fi
 
     # Check if LangSmith MCP server is already configured
-    if claude mcp list 2>/dev/null | grep -q "LangSmith API MCP Server"; then
+    if claude mcp list 2>/dev/null | grep -q "LangSmith"; then
         echo "✅ LangSmith MCP server already configured"
         return 0
     fi
@@ -42,7 +42,7 @@ setup_langsmith_mcp() {
 
     # Add LangSmith MCP server using CLI
     echo "Adding LangSmith MCP server..."
-    if claude mcp add --transport stdio "LangSmith API MCP Server" \
+    if claude mcp add --transport stdio "LangSmith" \
         --env LANGSMITH_API_KEY="$api_key" \
         -- uvx langsmith-mcp-server; then
         echo "✅ LangSmith MCP server added successfully"
