@@ -103,7 +103,7 @@ create_symlinks
 
 # Install tools from URLs
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
-install_from_url "Claude Code" "claude-code" "https://raw.githubusercontent.com/anthropics/claude-code/main/install.sh"
+install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 
 # Setup MCP servers
 setup_langsmith_mcp
