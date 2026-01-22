@@ -58,6 +58,41 @@ setup_langsmith_mcp() {
     fi
 }
 
+# Setup Glean MCP server configuration
+# Note: Glean MCP requires authentication. You'll need to authenticate after installation.
+# Usage: setup_glean_mcp
+setup_glean_mcp() {
+    echo "Setting up Glean MCP server..."
+
+    # Check if Claude Code is available
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "⚠️  Warning: 'claude' command not found. Skipping Glean MCP setup."
+        echo "   Install Claude Code first, then run: claude mcp add ..."
+        return 1
+    fi
+
+    # Check if Glean MCP server is already configured
+    if claude mcp list 2>/dev/null | grep -q "glean_default"; then
+        echo "✅ Glean MCP server already configured"
+        return 0
+    fi
+
+    # Add Glean MCP server using CLI
+    echo "Adding Glean MCP server..."
+    if claude mcp add glean_default https://vanta-be.glean.com/mcp/default \
+        --transport http \
+        --scope user; then
+        echo "✅ Glean MCP server added successfully"
+        echo "📝 Note: Glean MCP requires authentication. You'll need to authenticate to use it."
+        echo "   See: https://docs.glean.com/user-guide/mcp/usage"
+    else
+        echo "⚠️  Warning: Failed to add Glean MCP server"
+        echo "   You can try manually: claude mcp add glean_default https://vanta-be.glean.com/mcp/default \\"
+        echo "     --transport http --scope user"
+        echo "   See: https://docs.glean.com/user-guide/mcp/usage"
+    fi
+}
+
 # Install a tool from a URL if not already present
 # Usage: install_from_url <display_name> <command_name> <install_url>
 install_from_url() {
@@ -68,14 +103,21 @@ install_from_url() {
     echo "Checking for $display_name..."
     if command -v "$command_name" >/dev/null 2>&1; then
         echo "✅ $display_name already installed"
+        return 0
+    fi
+
+    echo "Installing $display_name..."
+    if command -v bash >/dev/null 2>&1; then
+        runner="bash"
     else
-        echo "Installing $display_name..."
-        if curl -fsSL "$install_url" | sh; then
-            echo "✅ $display_name installed successfully"
-        else
-            echo "⚠️  Warning: $display_name installation failed"
-            echo "   You can try to install manually: curl -fsSL $install_url | sh"
-        fi
+        runner="sh"
+    fi
+
+    if curl -fsSL "$install_url" | "$runner"; then
+        echo "✅ $display_name installed successfully"
+    else
+        echo "⚠️  Warning: $display_name installation failed"
+        echo "   Try manually: curl -fsSL $install_url | $runner"
     fi
 }
 
@@ -107,3 +149,4 @@ install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 
 # Setup MCP servers
 setup_langsmith_mcp
+setup_glean_mcp
