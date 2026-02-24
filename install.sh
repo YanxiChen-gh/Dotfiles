@@ -140,6 +140,7 @@ create_symlinks() {
 
 # Install packages
 install_from_apt "lua5.4"
+install_from_apt "gh"
 
 create_symlinks
 
