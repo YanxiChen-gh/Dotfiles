@@ -1,0 +1,40 @@
+# Snowflake Query Execution
+
+You can run Snowflake queries directly for the user without requiring them to manually execute.
+
+## How to Run Queries
+
+Use the test script at `/workspaces/obsidian/scripts/ai-playground/src/test-snowflake-setup/`:
+
+1. **Modify the query** in `query_snowflake.py` (update the SQL in the `query` variable)
+2. **Run the script**:
+   ```bash
+   cd /workspaces/obsidian/scripts/ai-playground/src/test-snowflake-setup && uv run python query_snowflake.py
+   ```
+
+## Connection Details
+
+- **Connection name**: `JYFRXUC-VANTA`
+- **Auth**: SSO via Okta (browser popup may appear for authentication)
+- **Default warehouse**: `DEV`
+- **Default role**: `EPDVIEWER` (or `PUBLIC` depending on config)
+
+## When to Use
+
+When the user asks for data from Snowflake, needs to explore tables/schemas, or wants query results - run the query for them rather than asking them to do it manually.
+
+## Example Query Modification
+
+```python
+query = """
+SELECT *
+FROM vanta.vanta_ai.ai_records
+WHERE created_at > DATEADD(day, -7, CURRENT_TIMESTAMP())
+LIMIT 100
+"""
+```
+
+## Available Databases/Schemas (known)
+
+- `vanta.vanta_ai.ai_records` - AI call records
+- Explore others with: `SHOW DATABASES;` or `SHOW SCHEMAS IN DATABASE <db>;`

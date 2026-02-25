@@ -85,6 +85,18 @@ elif [ -L "$CURSOR_HOME_DIR/skills-cursor" ]; then
     echo "ℹ️  skills is already symlinked (changes auto-sync)"
 fi
 
+# Export rules (only if not symlinked)
+if [ -d "$CURSOR_HOME_DIR/rules" ] && [ ! -L "$CURSOR_HOME_DIR/rules" ]; then
+    echo "Exporting Cursor rules..."
+    rm -rf "$CURSOR_DOTFILES/rules"
+    cp -r "$CURSOR_HOME_DIR/rules" "$CURSOR_DOTFILES/rules"
+    echo "✅ rules exported"
+elif [ -L "$CURSOR_HOME_DIR/rules" ]; then
+    echo "ℹ️  rules is already symlinked (changes auto-sync)"
+elif [ ! -d "$CURSOR_HOME_DIR/rules" ]; then
+    echo "ℹ️  No rules directory found"
+fi
+
 echo ""
 echo "✅ Sync complete!"
 

@@ -209,6 +209,14 @@ setup_cursor() {
         echo "✅ agent skills linked"
     fi
 
+    # Symlink rules directory
+    if [ -d "$cursor_dotfiles/rules" ]; then
+        echo "Linking Cursor rules..."
+        rm -rf "$cursor_home_dir/rules"
+        ln -s "$cursor_dotfiles/rules" "$cursor_home_dir/rules"
+        echo "✅ rules linked"
+    fi
+
     echo "✅ Cursor configuration setup complete"
 }
 
