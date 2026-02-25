@@ -1,15 +1,141 @@
 {
-    "parallels-desktop.extension.path": "/Users/yanxi.chen/.parallels-desktop-vscode",
-    "parallels-desktop.git.path": "/usr/bin/git",
-    "parallels-desktop.prlctl.path": "/usr/local/bin/prlctl",
-    "parallels-desktop.brew.path": "/opt/homebrew/bin/brew",
     "vim.easymotion": true,
     "vim.enableNeovim": true,
     "vim.smartRelativeLine": true,
     "vim.targets.enable": true,
     "vim.leader": " ",
+    "vim.hlsearch": true,
+    "vim.commandLineModeKeyBindings": [],
+    "vim.visualModeKeyBindingsNonRecursive": [
+        {
+            "before": ["<leader>", "g", "r"],
+            "commands": ["git.revertSelectedRanges"]
+        },
+        {
+            "before": ["leader", "j"],
+            "after": ["leader", "leader", "l"]
+        },
+        {
+            "before": ["leader", "k"],
+            "after": ["leader", "leader", "h"]
+        }
+    ],
+    "vim.insertModeKeyBindingsNonRecursive": [
+        {
+            "before": ["j", "j"],
+            "after": ["<Esc>"]
+        },
+        {
+            "before": ["<C-h>"],
+            "after": ["<left>"]
+        },
+        {
+            "before": ["<C-j>"],
+            "after": ["<down>"]
+        },
+        {
+            "before": ["<C-k>"],
+            "after": ["<up>"]
+        },
+        {
+            "before": ["<C-l>"],
+            "after": ["<right>"]
+        },
+        {
+            "before": ["<c-f>"],
+            "after": ["<s-right>"]
+        },
+        {
+            "before": ["<c-b>"],
+            "after": ["<s-left>"]
+        },
+        {
+            "before": ["<c-a>"],
+            "after": ["<home>"]
+        },
+        {
+            "before": ["<c-e>"],
+            "after": ["<end>"]
+        },
+        {
+            "before": ["<c-d>"],
+            "after": ["<del>"]
+        },
+        {
+            "before": ["<M-h>"],
+            "after": ["<esc>", "g", "T"]
+        },
+        {
+            "before": ["<M-l>"],
+            "after": ["<esc>", "g", "t"]
+        },
+        {
+            "before": ["<silent>", "<expr>"],
+            "after": ["<TAB>"]
+        }
+    ],
+    "vim.normalModeKeyBindingsNonRecursive": [
+        {
+            "before": [";"],
+            "after": [":"]
+        },
+        {
+            "before": ["<leader>", "f", "d"],
+            "commands": [
+                { "command": "editor.action.addSelectionToNextFindMatch", "args": [] },
+                { "command": "workbench.action.findInFiles" }
+            ]
+        },
+        {
+            "before": ["g", "r"],
+            "commands": ["editor.action.goToReferences"]
+        },
+        {
+            "before": ["g", "i"],
+            "commands": ["editor.action.goToImplementation"]
+        },
+        {
+            "before": ["<leader>", "g", "d"],
+            "commands": ["editor.action.dirtydiff.next"]
+        },
+        {
+            "before": ["<leader>", "g", "r"],
+            "commands": ["git.revertSelectedRanges"]
+        },
+        {
+            "before": ["="],
+            "commands": ["workbench.action.editor.nextChange"]
+        },
+        {
+            "before": ["-"],
+            "commands": ["workbench.action.editor.previousChange"]
+        },
+        {
+            "before": ["]", "c"],
+            "commands": ["go-to-next-error.nextInFiles.error"],
+            "silent": true
+        },
+        {
+            "before": ["[", "c"],
+            "commands": ["go-to-next-error.prevInFiles.error"],
+            "silent": true
+        },
+        {
+            "before": ["leader", "j"],
+            "after": ["leader", "leader", "l"]
+        },
+        {
+            "before": ["leader", "k"],
+            "after": ["leader", "leader", "h"]
+        }
+    ],
+
     "workbench.iconTheme": "vscode-icons",
     "terminal.integrated.copyOnSelection": true,
+    "terminal.integrated.fontFamily": "MesloLGS NF",
+    "terminal.integrated.defaultProfile.linux": "zsh",
+    "terminal.integrated.enableMultiLinePasteWarning": "never",
+    "terminal.integrated.suggest.inlineSuggestion": "off",
     "workbench.colorCustomizations": {
         "terminal.findMatchBackground": "#ff0000",
         "terminal.findMatchBorder": "#ff0000",
@@ -17,491 +143,54 @@
         "terminal.findMatchHighlightBorder": "#ff0000",
         "terminalOverviewRuler.findMatchForeground": "#ff0000"
     },
-    "mssql.connections": [
-        {
-            "authenticationType": "Integrated",
-            "connectTimeout": 15,
-            "applicationName": "vscode-mssql",
-            "profileName": "",
-            "trustServerCertificate": true,
-            "server": "data-1.viagogo.prod",
-            "user": "",
-            "password": "",
-            "id": "CC5EC3F1-BB86-4199-8BF8-27DBF5C7EC60",
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
-            "profileSource": 0
-        },
-        {
-            "authenticationType": "Integrated",
-            "connectTimeout": 15,
-            "applicationName": "vscode-mssql",
-            "server": "pointofsale.sqlha.viagogo.prod",
-            "trustServerCertificate": true,
-            "multiSubnetFailover": true,
-            "password": "",
-            "id": "0FB4A6E7-D2F0-4CC8-8C6A-DF94C47EFC12",
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70"
-        },
-        {
-            "server": "pointofsale.sqlha.viagogo.prod",
-            "database": "PointOfSale",
-            "user": "",
-            "authenticationType": "Integrated",
-            "encrypt": "true",
-            "trustServerCertificate": true,
-            "connectTimeout": 15,
-            "commandTimeout": 30,
-            "connectRetryCount": 1,
-            "connectRetryInterval": 10,
-            "applicationName": "vscode-mssql",
-            "connectionString": "",
-            "multiSubnetFailover": true,
-            "password": "",
-            "id": "48D43534-03DE-4F89-A3F4-5112A84295CE",
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
-            "profileSource": 0
-        },
-        {
-            "authenticationType": "Integrated",
-            "connectTimeout": 30,
-            "applicationName": "vscode-mssql",
-            "applicationIntent": "ReadWrite",
-            "profileName": "",
-            "server": "pointofsaleshard5.sqlha.viagogo.prod",
-            "trustServerCertificate": true,
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
-            "id": "76A6033F-FCBD-43ED-B877-B631998459CB",
-            "database": "",
-            "commandTimeout": 30,
-            "encrypt": "Mandatory",
-            "profileSource": 0,
-            "user": "",
-            "password": ""
-        },
-        {
-            "authenticationType": "Integrated",
-            "connectTimeout": 15,
-            "applicationName": "vscode-mssql",
-            "server": "qa.viagogo.sql.viagogo.corp",
-            "trustServerCertificate": true,
-            "password": "",
-            "id": "752D7A79-0C0B-45AA-BF21-E02AA35B38E9",
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70"
-        },
-        {
-            "authenticationType": "Integrated",
-            "connectTimeout": 15,
-            "applicationName": "vscode-mssql",
-            "server": "tcp:qa.pointofsale.sql.viagogo.corp",
-            "trustServerCertificate": true,
-            "password": "",
-            "id": "C56728A5-A494-4B5D-9004-F76F860F37C9",
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70"
-        },
-        {
-            "authenticationType": "Integrated",
-            "connectTimeout": 30,
-            "applicationName": "vscode-mssql",
-            "profileName": "",
-            "server": "tcp:qa.pointofsale.sqlha.viagogo.corp",
-            "trustServerCertificate": true,
-            "password": "",
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
-            "id": "214FFE44-023D-4E79-A553-A5997727CCFD",
-            "profileSource": 0
-        },
-        {
-            "authenticationType": "Integrated",
-            "connectTimeout": 30,
-            "applicationName": "vscode-mssql",
-            "applicationIntent": "ReadWrite",
-            "profileName": "",
-            "server": "tcp:qa.supplydata.sqlha.viagogo.corp",
-            "trustServerCertificate": true,
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
-            "id": "4DE5D4D7-4848-4D77-B241-E79BA37D46D5",
-            "database": "",
-            "user": "",
-            "password": "",
-            "commandTimeout": 30,
-            "encrypt": "Mandatory",
-            "profileSource": 0
-        },
-        {
-            "server": "tcp:qa.pointofsale.sql.viagogo.corp",
-            "database": "PointOfSale",
-            "user": "",
-            "authenticationType": "Integrated",
-            "encrypt": "Mandatory",
-            "trustServerCertificate": true,
-            "connectTimeout": 15,
-            "commandTimeout": 30,
-            "connectRetryCount": 1,
-            "connectRetryInterval": 10,
-            "applicationName": "vscode-mssql",
-            "applicationIntent": "ReadOnly",
-            "connectionString": "",
-            "password": "",
-            "id": "BD1ED70A-DC47-444F-8B3E-BAE94E23F49A",
-            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
-            "profileSource": 0
-        }
-    ],
-    "mssql.enableQueryHistoryCapture": false,
-    "vim.visualModeKeyBindingsNonRecursive": [
-        {
-            "before": [
-                "<leader>",
-                "g",
-                "r"
-            ],
-            "commands": [
-                "git.revertSelectedRanges"
-            ]
-        },
-        {
-            "before": [
-                "leader",
-                "j"
-            ],
-            "after": [
-                "leader",
-                "leader",
-                "l"
-            ]
-        },
-        {
-            "before": [
-                "leader",
-                "k"
-            ],
-            "after": [
-                "leader",
-                "leader",
-                "h"
-            ]
-        }
-    ],
-    "vim.insertModeKeyBindingsNonRecursive": [
-        {
-            "before": [
-                "j",
-                "j"
-            ],
-            "after": [
-                "<Esc>"
-            ]
-        },
-        {
-            "before": [
-                "<C-h>"
-            ],
-            "after": [
-                "<left>"
-            ]
-        },
-        {
-            "before": [
-                "<C-j>"
-            ],
-            "after": [
-                "<down>"
-            ]
-        },
-        {
-            "before": [
-                "<C-k>"
-            ],
-            "after": [
-                "<up>"
-            ]
-        },
-        {
-            "before": [
-                "<C-l>"
-            ],
-            "after": [
-                "<right>"
-            ]
-        },
-        {
-            "before": [
-                "<c-f>"
-            ],
-            "after": [
-                "<s-right>"
-            ]
-        },
-        {
-            "before": [
-                "<c-b>"
-            ],
-            "after": [
-                "<s-left>"
-            ]
-        },
-        {
-            "before": [
-                "<c-a>"
-            ],
-            "after": [
-                "<home>"
-            ]
-        },
-        {
-            "before": [
-                "<c-e>"
-            ],
-            "after": [
-                "<end>"
-            ]
-        },
-        {
-            "before": [
-                "<c-d>"
-            ],
-            "after": [
-                "<del>"
-            ]
-        },
-        {
-            "before": [
-                "<M-h>"
-            ],
-            "after": [
-                "<esc>",
-                "g",
-                "T"
-            ]
-        },
-        {
-            "before": [
-                "<M-l>"
-            ],
-            "after": [
-                "<esc>",
-                "g",
-                "t"
-            ]
-        },
-        {
-            "before": [
-                "<silent>",
-                "<expr>"
-            ],
-            "after": [
-                "<TAB>"
-            ]
-        }
-    ],
-    "vim.normalModeKeyBindingsNonRecursive": [
-        {
-            "before": [
-                ";"
-            ],
-            "after": [
-                ":"
-            ]
-        },
-        {
-            "before": [
-                "<leader>",
-                "f",
-                "d"
-            ],
-            "commands": [
-                {
-                    "command": "editor.action.addSelectionToNextFindMatch",
-                    "args": []
-                },
-                {
-                    "command": "workbench.action.findInFiles"
-                }
-            ]
-        },
-        {
-            "before": [
-                "g",
-                "r"
-            ],
-            "commands": [
-                "editor.action.goToReferences"
-            ]
-        },
-        {
-            "before": [
-                "g",
-                "i"
-            ],
-            "commands": [
-                "editor.action.goToImplementation"
-            ]
-        },
-        {
-            "before": [
-                "<leader>",
-                "g",
-                "d"
-            ],
-            "commands": [
-                "editor.action.dirtydiff.next"
-            ]
-        },
-        {
-            "before": [
-                "<leader>",
-                "g",
-                "r"
-            ],
-            "commands": [
-                "git.revertSelectedRanges"
-            ]
-        },
-        {
-            "before": [
-                "="
-            ],
-            "commands": [
-                "workbench.action.editor.nextChange"
-            ]
-        },
-        {
-            "before": [
-                "-"
-            ],
-            "commands": [
-                "workbench.action.editor.previousChange"
-            ]
-        },
-        {
-            "before": [
-                "]",
-                "c"
-            ],
-            "commands": [
-                "go-to-next-error.nextInFiles.error"
-            ],
-            "silent": true
-        },
-        {
-            "before": [
-                "[",
-                "c"
-            ],
-            "commands": [
-                "go-to-next-error.prevInFiles.error"
-            ],
-            "silent": true
-        },
-        {
-            "before": [
-                "leader",
-                "j"
-            ],
-            "after": [
-                "leader",
-                "leader",
-                "l"
-            ]
-        },
-        {
-            "before": [
-                "leader",
-                "k"
-            ],
-            "after": [
-                "leader",
-                "leader",
-                "h"
-            ]
-        }
-    ],
+
     "git.enableSmartCommit": true,
-    "editor.suggest.showEnumMembers": false,
     "git.confirmSync": false,
     "git.autofetch": true,
+    "git.replaceTagsWhenPull": true,
+    "githubPullRequests.pullBranch": "never",
+
+    "editor.suggest.showEnumMembers": false,
     "[json]": {
         "editor.defaultFormatter": "vscode.json-language-features"
-    },
-    "json.schemas": [],
-    "mssql.enableRichExperiences": true,
-    "[html]": {
-        "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
-    },
-    "@azure.argTenant": "",
-    "[javascript]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
-    },
-    "mssql.shortcuts": {
-        "_comment": "Short cuts must follow the format (ctrl)+(shift)+(alt)+[key]",
-        "event.toggleResultPane": "ctrl+alt+R",
-        "event.focusResultsGrid": "ctrl+alt+G",
-        "event.toggleMessagePane": "ctrl+alt+Y",
-        "event.prevGrid": "ctrl+up",
-        "event.nextGrid": "ctrl+down",
-        "event.copySelection": "ctrl+C",
-        "event.copyWithHeaders": "",
-        "event.copyAllHeaders": "",
-        "event.maximizeGrid": "",
-        "event.selectAll": "ctrl+A",
-        "event.saveAsJSON": "",
-        "event.saveAsCSV": "",
-        "event.saveAsExcel": "",
-        "event.changeColumnWidth": "ctrl+alt+S"
-    },
-    "[typescriptreact]": {
-        "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
     },
     "[jsonc]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode"
     },
-    "dotnetAcquisitionExtension.existingDotnetPath": [],
-    "mssql.objectExplorer.groupBySchema": true,
-    "mssql.openQueryResultsInTabByDefaultDoNotShowPrompt": true,
-    "terminal.integrated.fontFamily": "MesloLGS NF",
-    "vim.hlsearch": true,
-    "vim.commandLineModeKeyBindings": [],
+    "[html]": {
+        "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
+    },
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "rvest.vs-code-prettier-eslint"
+    },
     "[csharp]": {
         "editor.defaultFormatter": "ms-dotnettools.csharp"
     },
-    "githubPullRequests.pullBranch": "never",
-    "vsicons.dontShowNewVersionMessage": true,
-    "redhat.telemetry.enabled": false,
-    "mssql.autoDisableNonTSqlLanguageService": true,
+    "json.schemas": [],
     "eslint.codeActionsOnSave.rules": null,
-    "mssql.connectionGroups": [
-        {
-            "name": "ROOT",
-            "id": "08669C0F-4931-4F27-920A-4D6383A0DE70"
-        }
-    ],
     "svelte.enable-ts-plugin": true,
-    "github.copilot.chat.codeGeneration.instructions": [
-        {
-            "text": "- @azure Rule - Use Azure Best Practices: When generating code for Azure, running terminal commands for Azure, or performing operations related to Azure, invoke your `azure_development-get_best_practices` tool if available."
-        }
-    ],
-    "github.copilot.nextEditSuggestions.enabled": true,
-    "chat.mcp.autostart": "newAndOutdated",
-    "chat.mcp.serverSampling": {
-        "Azure MCP Server Provider: Azure MCP": {
-            "allowedDuringChat": true
-        }
-    },
+
     "gitlens.ai.model": "vscode",
     "gitlens.ai.vscode.model": "copilot:gpt-4.1",
+
     "claudeCode.useTerminal": true,
-    "terminal.integrated.defaultProfile.linux": "zsh",
+    "claudeCode.preferredLocation": "panel",
+
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "chat.mcp.autostart": "newAndOutdated",
+
     "remote.autoForwardPortsSource": "hybrid",
     "debug.javascript.autoAttachFilter": "smart",
-    "claudeCode.preferredLocation": "panel",
-    "terminal.integrated.enableMultiLinePasteWarning": "never",
-    "terminal.integrated.suggest.inlineSuggestion": "off",
-    "git.replaceTagsWhenPull": true,
+    "task.allowAutomaticTasks": "on",
+    "vsicons.dontShowNewVersionMessage": true,
+    "redhat.telemetry.enabled": false,
+    "dotnetAcquisitionExtension.existingDotnetPath": [],
+
     "remote.SSH.remotePlatform": {
         "*.gitpod.local": "linux",
-        "*.gitpod.remote": "linux",
-        "019c58cb-e6fc-7b62-a461-3851802bba52.gitpod.remote": "linux"
-    },
-    "task.allowAutomaticTasks": "on"
+        "*.gitpod.remote": "linux"
+    }
 }

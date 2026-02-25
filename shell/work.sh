@@ -1,0 +1,16 @@
+#!/bin/sh
+# Work-specific shell configuration
+# Sourced when WORK_MACHINE=1 is set
+# Add work aliases, paths, and environment variables here
+
+# ------------------- Vanta/Viagogo Aliases ------------------------
+
+# Add work-specific aliases here as needed
+# Example:
+# alias vpn="sudo openconnect vpn.company.com"
+
+# ------------------- Work PATH Additions ------------------------
+
+# Add work-specific paths here
+# Example:
+# export PATH="$HOME/work-tools/bin:$PATH"

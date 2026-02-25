@@ -1,0 +1,174 @@
+{
+    "_comment": "Work-specific Cursor settings - merged with settings.json on work machines",
+
+    "mssql.connections": [
+        {
+            "authenticationType": "Integrated",
+            "connectTimeout": 15,
+            "applicationName": "vscode-mssql",
+            "profileName": "",
+            "trustServerCertificate": true,
+            "server": "data-1.viagogo.prod",
+            "user": "",
+            "password": "",
+            "id": "CC5EC3F1-BB86-4199-8BF8-27DBF5C7EC60",
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
+            "profileSource": 0
+        },
+        {
+            "authenticationType": "Integrated",
+            "connectTimeout": 15,
+            "applicationName": "vscode-mssql",
+            "server": "pointofsale.sqlha.viagogo.prod",
+            "trustServerCertificate": true,
+            "multiSubnetFailover": true,
+            "password": "",
+            "id": "0FB4A6E7-D2F0-4CC8-8C6A-DF94C47EFC12",
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70"
+        },
+        {
+            "server": "pointofsale.sqlha.viagogo.prod",
+            "database": "PointOfSale",
+            "user": "",
+            "authenticationType": "Integrated",
+            "encrypt": "true",
+            "trustServerCertificate": true,
+            "connectTimeout": 15,
+            "commandTimeout": 30,
+            "connectRetryCount": 1,
+            "connectRetryInterval": 10,
+            "applicationName": "vscode-mssql",
+            "connectionString": "",
+            "multiSubnetFailover": true,
+            "password": "",
+            "id": "48D43534-03DE-4F89-A3F4-5112A84295CE",
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
+            "profileSource": 0
+        },
+        {
+            "authenticationType": "Integrated",
+            "connectTimeout": 30,
+            "applicationName": "vscode-mssql",
+            "applicationIntent": "ReadWrite",
+            "profileName": "",
+            "server": "pointofsaleshard5.sqlha.viagogo.prod",
+            "trustServerCertificate": true,
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
+            "id": "76A6033F-FCBD-43ED-B877-B631998459CB",
+            "database": "",
+            "commandTimeout": 30,
+            "encrypt": "Mandatory",
+            "profileSource": 0,
+            "user": "",
+            "password": ""
+        },
+        {
+            "authenticationType": "Integrated",
+            "connectTimeout": 15,
+            "applicationName": "vscode-mssql",
+            "server": "qa.viagogo.sql.viagogo.corp",
+            "trustServerCertificate": true,
+            "password": "",
+            "id": "752D7A79-0C0B-45AA-BF21-E02AA35B38E9",
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70"
+        },
+        {
+            "authenticationType": "Integrated",
+            "connectTimeout": 15,
+            "applicationName": "vscode-mssql",
+            "server": "tcp:qa.pointofsale.sql.viagogo.corp",
+            "trustServerCertificate": true,
+            "password": "",
+            "id": "C56728A5-A494-4B5D-9004-F76F860F37C9",
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70"
+        },
+        {
+            "authenticationType": "Integrated",
+            "connectTimeout": 30,
+            "applicationName": "vscode-mssql",
+            "profileName": "",
+            "server": "tcp:qa.pointofsale.sqlha.viagogo.corp",
+            "trustServerCertificate": true,
+            "password": "",
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
+            "id": "214FFE44-023D-4E79-A553-A5997727CCFD",
+            "profileSource": 0
+        },
+        {
+            "authenticationType": "Integrated",
+            "connectTimeout": 30,
+            "applicationName": "vscode-mssql",
+            "applicationIntent": "ReadWrite",
+            "profileName": "",
+            "server": "tcp:qa.supplydata.sqlha.viagogo.corp",
+            "trustServerCertificate": true,
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
+            "id": "4DE5D4D7-4848-4D77-B241-E79BA37D46D5",
+            "database": "",
+            "user": "",
+            "password": "",
+            "commandTimeout": 30,
+            "encrypt": "Mandatory",
+            "profileSource": 0
+        },
+        {
+            "server": "tcp:qa.pointofsale.sql.viagogo.corp",
+            "database": "PointOfSale",
+            "user": "",
+            "authenticationType": "Integrated",
+            "encrypt": "Mandatory",
+            "trustServerCertificate": true,
+            "connectTimeout": 15,
+            "commandTimeout": 30,
+            "connectRetryCount": 1,
+            "connectRetryInterval": 10,
+            "applicationName": "vscode-mssql",
+            "applicationIntent": "ReadOnly",
+            "connectionString": "",
+            "password": "",
+            "id": "BD1ED70A-DC47-444F-8B3E-BAE94E23F49A",
+            "groupId": "08669C0F-4931-4F27-920A-4D6383A0DE70",
+            "profileSource": 0
+        }
+    ],
+    "mssql.enableQueryHistoryCapture": false,
+    "mssql.enableRichExperiences": true,
+    "mssql.objectExplorer.groupBySchema": true,
+    "mssql.openQueryResultsInTabByDefaultDoNotShowPrompt": true,
+    "mssql.autoDisableNonTSqlLanguageService": true,
+    "mssql.connectionGroups": [
+        {
+            "name": "ROOT",
+            "id": "08669C0F-4931-4F27-920A-4D6383A0DE70"
+        }
+    ],
+    "mssql.shortcuts": {
+        "_comment": "Short cuts must follow the format (ctrl)+(shift)+(alt)+[key]",
+        "event.toggleResultPane": "ctrl+alt+R",
+        "event.focusResultsGrid": "ctrl+alt+G",
+        "event.toggleMessagePane": "ctrl+alt+Y",
+        "event.prevGrid": "ctrl+up",
+        "event.nextGrid": "ctrl+down",
+        "event.copySelection": "ctrl+C",
+        "event.copyWithHeaders": "",
+        "event.copyAllHeaders": "",
+        "event.maximizeGrid": "",
+        "event.selectAll": "ctrl+A",
+        "event.saveAsJSON": "",
+        "event.saveAsCSV": "",
+        "event.saveAsExcel": "",
+        "event.changeColumnWidth": "ctrl+alt+S"
+    },
+
+    "@azure.argTenant": "",
+    "github.copilot.chat.codeGeneration.instructions": [
+        {
+            "text": "- @azure Rule - Use Azure Best Practices: When generating code for Azure, running terminal commands for Azure, or performing operations related to Azure, invoke your `azure_development-get_best_practices` tool if available."
+        }
+    ],
+    "chat.mcp.serverSampling": {
+        "Azure MCP Server Provider: Azure MCP": {
+            "allowedDuringChat": true
+        }
+    }
+}
