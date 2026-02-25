@@ -17,6 +17,6 @@
 [color]
     ui = true
 [core]
-	excludesfile = /Users/yanxiche/.gitignore
+	excludesfile = ~/.gitignore
 [pull]
 	rebase = false

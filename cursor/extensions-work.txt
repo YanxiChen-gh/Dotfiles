@@ -1,0 +1,14 @@
+# Work-specific Cursor Extensions
+# Only installed when WORK_MACHINE=1
+
+# SQL Server (Viagogo databases)
+ms-mssql.mssql
+
+# .NET / C#
+ms-dotnettools.vscode-dotnet-runtime
+
+# Azure
+ms-azuretools.vscode-azureresourcegroups
+
+# PowerShell (Windows servers)
+ms-vscode.powershell

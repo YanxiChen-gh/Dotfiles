@@ -130,18 +130,21 @@ install_from_url() {
 
 # Create symlinks to dot files
 create_symlinks() {
-    # Get the directory in which this script lives.
     script_dir=$(dirname "$(readlink -f "$0")")
 
-    # Get a list of all files in this directory that start with a dot.
-    files=$(find -maxdepth 1 -type f -name ".*")
+    # Files to symlink (exclude .example files)
+    for file in "$script_dir"/.*; do
+        [ -f "$file" ] || continue
+        name=$(basename "$file")
+        
+        # Skip example files and git files
+        case "$name" in
+            *.example|.git*|.DS_Store) continue ;;
+        esac
 
-    # Create a symbolic link to each file in the home directory.
-    for file in $files; do
-        name=$(basename $file)
         echo "Creating symlink to $name in home directory."
-        rm -rf ~/$name
-        ln -s $script_dir/$name ~/$name
+        rm -rf "$HOME/$name"
+        ln -s "$file" "$HOME/$name"
     done
 }
 
@@ -177,12 +180,38 @@ setup_cursor() {
     mkdir -p "$cursor_user_dir"
     mkdir -p "$cursor_home_dir"
 
-    # Symlink settings.json
+    # Handle settings.json - merge with work settings if WORK_MACHINE=1
     if [ -f "$cursor_dotfiles/settings.json" ]; then
-        echo "Linking Cursor settings.json..."
+        echo "Setting up Cursor settings.json..."
         rm -f "$cursor_user_dir/settings.json"
-        ln -s "$cursor_dotfiles/settings.json" "$cursor_user_dir/settings.json"
-        echo "✅ settings.json linked"
+        
+        if [ "$WORK_MACHINE" = "1" ] && [ -f "$cursor_dotfiles/settings-work.json" ]; then
+            # Merge personal + work settings using Python
+            if command -v python3 >/dev/null 2>&1; then
+                python3 -c "
+import json
+with open('$cursor_dotfiles/settings.json') as f:
+    personal = json.load(f)
+with open('$cursor_dotfiles/settings-work.json') as f:
+    work = json.load(f)
+# Remove comment field from work settings
+work.pop('_comment', None)
+# Merge: work settings override personal
+merged = {**personal, **work}
+with open('$cursor_user_dir/settings.json', 'w') as f:
+    json.dump(merged, f, indent=4)
+"
+                echo "✅ settings.json created (personal + work merged)"
+            else
+                # Fallback: just use personal settings
+                ln -s "$cursor_dotfiles/settings.json" "$cursor_user_dir/settings.json"
+                echo "⚠️  Python not found, using personal settings only"
+            fi
+        else
+            # Personal machine: symlink personal settings
+            ln -s "$cursor_dotfiles/settings.json" "$cursor_user_dir/settings.json"
+            echo "✅ settings.json linked"
+        fi
     fi
 
     # Symlink keybindings.json
@@ -240,24 +269,12 @@ setup_cursor() {
     echo "✅ Cursor configuration setup complete"
 }
 
-# Install Cursor extensions from extensions.txt
-install_cursor_extensions() {
-    echo "Installing Cursor extensions..."
-    script_dir=$(dirname "$(readlink -f "$0")")
-    extensions_file="$script_dir/cursor/extensions.txt"
-
-    if [ ! -f "$extensions_file" ]; then
-        echo "⚠️  Warning: cursor/extensions.txt not found. Skipping extension installation."
-        return 1
-    fi
-
-    # Check if cursor CLI is available
-    if ! command -v cursor >/dev/null 2>&1; then
-        echo "⚠️  Warning: 'cursor' command not found. Skipping extension installation."
-        echo "   Extensions can be installed manually or after adding cursor to PATH."
-        echo "   On macOS: Add /Applications/Cursor.app/Contents/Resources/app/bin to PATH"
-        return 1
-    fi
+# Install extensions from a file
+# Usage: install_extensions_from_file <file_path>
+install_extensions_from_file() {
+    extensions_file="$1"
+    
+    [ -f "$extensions_file" ] || return 1
 
     installed=0
     failed=0
@@ -275,7 +292,35 @@ install_cursor_extensions() {
         fi
     done < "$extensions_file"
 
-    echo "✅ Extensions installed: $installed, failed: $failed"
+    echo "  Installed: $installed, failed: $failed"
+}
+
+# Install Cursor extensions from extensions.txt (and extensions-work.txt if WORK_MACHINE=1)
+install_cursor_extensions() {
+    echo "Installing Cursor extensions..."
+    script_dir=$(dirname "$(readlink -f "$0")")
+
+    # Check if cursor CLI is available
+    if ! command -v cursor >/dev/null 2>&1; then
+        echo "⚠️  Warning: 'cursor' command not found. Skipping extension installation."
+        echo "   Extensions can be installed manually or after adding cursor to PATH."
+        echo "   On macOS: Add /Applications/Cursor.app/Contents/Resources/app/bin to PATH"
+        return 1
+    fi
+
+    # Install personal extensions
+    if [ -f "$script_dir/cursor/extensions.txt" ]; then
+        echo "Installing personal extensions..."
+        install_extensions_from_file "$script_dir/cursor/extensions.txt"
+    fi
+
+    # Install work extensions if WORK_MACHINE=1
+    if [ "$WORK_MACHINE" = "1" ] && [ -f "$script_dir/cursor/extensions-work.txt" ]; then
+        echo "Installing work extensions..."
+        install_extensions_from_file "$script_dir/cursor/extensions-work.txt"
+    fi
+
+    echo "✅ Extension installation complete"
 }
 
 # Setup work-specific tools (Glean MCP, etc.)

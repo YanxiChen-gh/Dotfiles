@@ -1,0 +1,20 @@
+# Machine-specific zsh configuration
+# Copy this file to ~/.zshrc.local and customize
+# This file is sourced at the end of .zshrc and is NOT tracked in git
+
+# ------------------- Work Machine Flag ------------------------
+# Set this on work machines to enable work-specific config
+# export WORK_MACHINE=1
+
+# ------------------- API Keys ------------------------
+# Store sensitive keys here (never commit these!)
+# export LANGSMITH_API_KEY="sk-..."
+# export OPENAI_API_KEY="sk-..."
+
+# ------------------- Local PATH Additions ------------------------
+# Machine-specific paths
+# export PATH="/some/local/path:$PATH"
+
+# ------------------- Local Aliases ------------------------
+# Machine-specific aliases
+# alias myproject="cd ~/Projects/my-project"
