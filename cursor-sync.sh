@@ -85,15 +85,39 @@ elif [ -L "$CURSOR_HOME_DIR/skills-cursor" ]; then
     echo "ℹ️  skills is already symlinked (changes auto-sync)"
 fi
 
-# Export rules (only if not symlinked)
-if [ -d "$CURSOR_HOME_DIR/rules" ] && [ ! -L "$CURSOR_HOME_DIR/rules" ]; then
-    echo "Exporting Cursor rules..."
-    rm -rf "$CURSOR_DOTFILES/rules"
-    cp -r "$CURSOR_HOME_DIR/rules" "$CURSOR_DOTFILES/rules"
-    echo "✅ rules exported"
-elif [ -L "$CURSOR_HOME_DIR/rules" ]; then
-    echo "ℹ️  rules is already symlinked (changes auto-sync)"
-elif [ ! -d "$CURSOR_HOME_DIR/rules" ]; then
+# Export rules
+# Rules are individually symlinked, so we check each file
+if [ -d "$CURSOR_HOME_DIR/rules" ]; then
+    echo "Checking Cursor rules..."
+    mkdir -p "$CURSOR_DOTFILES/rules"
+    mkdir -p "$CURSOR_DOTFILES/rules-work"
+    
+    for rule in "$CURSOR_HOME_DIR/rules"/*.mdc; do
+        [ -f "$rule" ] || continue
+        name=$(basename "$rule")
+        
+        if [ -L "$rule" ]; then
+            echo "  ℹ️  $name is symlinked (auto-sync)"
+        else
+            # Determine if it's a work rule (prompt user)
+            if [ -t 0 ]; then
+                printf "  Is '$name' a work-specific rule? [y/N] "
+                read -r is_work_rule
+                if [ "$is_work_rule" = "y" ] || [ "$is_work_rule" = "Y" ]; then
+                    cp "$rule" "$CURSOR_DOTFILES/rules-work/$name"
+                    echo "  ✅ $name exported to rules-work/"
+                else
+                    cp "$rule" "$CURSOR_DOTFILES/rules/$name"
+                    echo "  ✅ $name exported to rules/"
+                fi
+            else
+                # Non-interactive: default to personal rules
+                cp "$rule" "$CURSOR_DOTFILES/rules/$name"
+                echo "  ✅ $name exported to rules/"
+            fi
+        fi
+    done
+else
     echo "ℹ️  No rules directory found"
 fi
 

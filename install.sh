@@ -209,12 +209,32 @@ setup_cursor() {
         echo "✅ agent skills linked"
     fi
 
-    # Symlink rules directory
-    if [ -d "$cursor_dotfiles/rules" ]; then
+    # Symlink rules directory (merge personal + work rules)
+    if [ -d "$cursor_dotfiles/rules" ] || [ -d "$cursor_dotfiles/rules-work" ]; then
         echo "Linking Cursor rules..."
-        rm -rf "$cursor_home_dir/rules"
-        ln -s "$cursor_dotfiles/rules" "$cursor_home_dir/rules"
-        echo "✅ rules linked"
+        mkdir -p "$cursor_home_dir/rules"
+        
+        # Link personal rules
+        if [ -d "$cursor_dotfiles/rules" ]; then
+            for rule in "$cursor_dotfiles/rules"/*.mdc; do
+                [ -f "$rule" ] || continue
+                name=$(basename "$rule")
+                rm -f "$cursor_home_dir/rules/$name"
+                ln -s "$rule" "$cursor_home_dir/rules/$name"
+            done
+            echo "✅ personal rules linked"
+        fi
+        
+        # Link work rules only if WORK_MACHINE=1
+        if [ "$WORK_MACHINE" = "1" ] && [ -d "$cursor_dotfiles/rules-work" ]; then
+            for rule in "$cursor_dotfiles/rules-work"/*.mdc; do
+                [ -f "$rule" ] || continue
+                name=$(basename "$rule")
+                rm -f "$cursor_home_dir/rules/$name"
+                ln -s "$rule" "$cursor_home_dir/rules/$name"
+            done
+            echo "✅ work rules linked"
+        fi
     fi
 
     echo "✅ Cursor configuration setup complete"
