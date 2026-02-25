@@ -1,0 +1,35 @@
+---
+description: Always format URLs as clickable markdown links in chat responses
+globs:
+alwaysApply: true
+---
+
+# Format URLs as Markdown Links
+
+When outputting URLs in chat responses, always use markdown link syntax so they are clickable in the Cursor chat view.
+
+## Examples
+
+### Good
+
+```
+Created PR: [#125862](https://github.com/VantaInc/obsidian/pull/125862)
+
+See the [JIRA ticket](https://vanta.atlassian.net/browse/AIPLAT-106) for details.
+
+[Test recording](https://www.loom.com/share/fb9c10cd1dc44af9a4353bb7919eff3a)
+```
+
+### Bad
+
+```
+Created PR: https://github.com/VantaInc/obsidian/pull/125862
+
+See the JIRA ticket at https://vanta.atlassian.net/browse/AIPLAT-106
+
+Test recording: https://www.loom.com/share/fb9c10cd1dc44af9a4353bb7919eff3a
+```
+
+## Rationale
+
+Raw URLs are not clickable in Cursor's chat view. Markdown link syntax `[text](url)` renders as clickable links, improving usability.
