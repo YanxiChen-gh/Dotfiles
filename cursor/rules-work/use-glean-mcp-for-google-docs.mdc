@@ -1,0 +1,15 @@
+---
+description: Use Glean MCP to read Google Docs instead of WebFetch
+globs:
+alwaysApply: true
+---
+
+# Use Glean MCP for Google Docs
+
+When a user shares a Google Docs link, always use the Glean MCP `read_document` tool to fetch the content instead of `WebFetch`. WebFetch will hit Google's sign-in wall and fail.
+
+``` 
+CallMcpTool(server: "user-glean_default", toolName: "read_document", arguments: { urls: ["<google-doc-url>"] })
+```
+
+The `urls` parameter accepts an array of URLs. This works for any document indexed by Glean (Google Docs, Confluence, etc.).
