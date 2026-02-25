@@ -1,5 +1,12 @@
 #!/bin/sh
 
+# Detect OS
+case "$(uname -s)" in
+    Darwin*) OS="macos" ;;
+    Linux*)  OS="linux" ;;
+    *)       OS="unknown" ;;
+esac
+
 # Install a package using apt-get
 # Usage: install_from_apt <package_name>
 install_from_apt() {
@@ -138,9 +145,163 @@ create_symlinks() {
     done
 }
 
-# Install packages
-install_from_apt "lua5.4"
-install_from_apt "gh"
+# Setup Cursor IDE configuration
+# Symlinks settings, keybindings, snippets, and skills from Dotfiles
+setup_cursor() {
+    echo "Setting up Cursor IDE configuration..."
+
+    # Skip if Cursor is not installed (e.g., in Gitpod/Codespaces)
+    if ! command -v cursor >/dev/null 2>&1 && [ ! -d "/Applications/Cursor.app" ] && [ ! -d "$HOME/.cursor" ]; then
+        echo "ℹ️  Cursor not installed, skipping Cursor setup."
+        return 0
+    fi
+
+    script_dir=$(dirname "$(readlink -f "$0")")
+    cursor_dotfiles="$script_dir/cursor"
+
+    if [ ! -d "$cursor_dotfiles" ]; then
+        echo "⚠️  Warning: cursor/ directory not found in Dotfiles. Skipping Cursor setup."
+        return 1
+    fi
+
+    # Determine Cursor config paths based on OS
+    if [ "$OS" = "macos" ]; then
+        cursor_user_dir="$HOME/Library/Application Support/Cursor/User"
+        cursor_home_dir="$HOME/.cursor"
+    else
+        cursor_user_dir="$HOME/.config/Cursor/User"
+        cursor_home_dir="$HOME/.cursor"
+    fi
+
+    # Create directories if they don't exist
+    mkdir -p "$cursor_user_dir"
+    mkdir -p "$cursor_home_dir"
+
+    # Symlink settings.json
+    if [ -f "$cursor_dotfiles/settings.json" ]; then
+        echo "Linking Cursor settings.json..."
+        rm -f "$cursor_user_dir/settings.json"
+        ln -s "$cursor_dotfiles/settings.json" "$cursor_user_dir/settings.json"
+        echo "✅ settings.json linked"
+    fi
+
+    # Symlink keybindings.json
+    if [ -f "$cursor_dotfiles/keybindings.json" ]; then
+        echo "Linking Cursor keybindings.json..."
+        rm -f "$cursor_user_dir/keybindings.json"
+        ln -s "$cursor_dotfiles/keybindings.json" "$cursor_user_dir/keybindings.json"
+        echo "✅ keybindings.json linked"
+    fi
+
+    # Symlink snippets directory
+    if [ -d "$cursor_dotfiles/snippets" ]; then
+        echo "Linking Cursor snippets..."
+        rm -rf "$cursor_user_dir/snippets"
+        ln -s "$cursor_dotfiles/snippets" "$cursor_user_dir/snippets"
+        echo "✅ snippets linked"
+    fi
+
+    # Symlink skills directory
+    if [ -d "$cursor_dotfiles/skills" ]; then
+        echo "Linking Cursor agent skills..."
+        rm -rf "$cursor_home_dir/skills-cursor"
+        ln -s "$cursor_dotfiles/skills" "$cursor_home_dir/skills-cursor"
+        echo "✅ agent skills linked"
+    fi
+
+    # Symlink rules directory (merge personal + work rules)
+    if [ -d "$cursor_dotfiles/rules" ] || [ -d "$cursor_dotfiles/rules-work" ]; then
+        echo "Linking Cursor rules..."
+        mkdir -p "$cursor_home_dir/rules"
+        
+        # Link personal rules
+        if [ -d "$cursor_dotfiles/rules" ]; then
+            for rule in "$cursor_dotfiles/rules"/*.mdc; do
+                [ -f "$rule" ] || continue
+                name=$(basename "$rule")
+                rm -f "$cursor_home_dir/rules/$name"
+                ln -s "$rule" "$cursor_home_dir/rules/$name"
+            done
+            echo "✅ personal rules linked"
+        fi
+        
+        # Link work rules only if WORK_MACHINE=1
+        if [ "$WORK_MACHINE" = "1" ] && [ -d "$cursor_dotfiles/rules-work" ]; then
+            for rule in "$cursor_dotfiles/rules-work"/*.mdc; do
+                [ -f "$rule" ] || continue
+                name=$(basename "$rule")
+                rm -f "$cursor_home_dir/rules/$name"
+                ln -s "$rule" "$cursor_home_dir/rules/$name"
+            done
+            echo "✅ work rules linked"
+        fi
+    fi
+
+    echo "✅ Cursor configuration setup complete"
+}
+
+# Install Cursor extensions from extensions.txt
+install_cursor_extensions() {
+    echo "Installing Cursor extensions..."
+    script_dir=$(dirname "$(readlink -f "$0")")
+    extensions_file="$script_dir/cursor/extensions.txt"
+
+    if [ ! -f "$extensions_file" ]; then
+        echo "⚠️  Warning: cursor/extensions.txt not found. Skipping extension installation."
+        return 1
+    fi
+
+    # Check if cursor CLI is available
+    if ! command -v cursor >/dev/null 2>&1; then
+        echo "⚠️  Warning: 'cursor' command not found. Skipping extension installation."
+        echo "   Extensions can be installed manually or after adding cursor to PATH."
+        echo "   On macOS: Add /Applications/Cursor.app/Contents/Resources/app/bin to PATH"
+        return 1
+    fi
+
+    installed=0
+    failed=0
+    while IFS= read -r extension || [ -n "$extension" ]; do
+        # Skip empty lines and comments
+        [ -z "$extension" ] && continue
+        case "$extension" in \#*) continue ;; esac
+
+        echo "  Installing $extension..."
+        if cursor --install-extension "$extension" 2>/dev/null; then
+            installed=$((installed + 1))
+        else
+            echo "    ⚠️  Failed to install $extension"
+            failed=$((failed + 1))
+        fi
+    done < "$extensions_file"
+
+    echo "✅ Extensions installed: $installed, failed: $failed"
+}
+
+# Setup work-specific tools (Glean MCP, etc.)
+# Only runs if WORK_MACHINE=1 or user confirms interactively
+setup_work_tools() {
+    if [ "$WORK_MACHINE" = "1" ]; then
+        echo "Work machine detected (WORK_MACHINE=1). Setting up work tools..."
+        setup_glean_mcp
+    elif [ -t 0 ]; then
+        printf "Setup work-specific tools (Glean MCP)? [y/N] "
+        read -r is_work
+        if [ "$is_work" = "y" ] || [ "$is_work" = "Y" ]; then
+            setup_glean_mcp
+        else
+            echo "Skipping work-specific tools."
+        fi
+    else
+        echo "Skipping work-specific tools (non-interactive, WORK_MACHINE not set)."
+    fi
+}
+
+# Install packages (Linux only)
+if [ "$OS" = "linux" ]; then
+    install_from_apt "lua5.4"
+    install_from_apt "gh"
+fi
 
 create_symlinks
 
@@ -148,6 +309,12 @@ create_symlinks
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 
+# Setup Cursor IDE
+setup_cursor
+install_cursor_extensions
+
 # Setup MCP servers
 setup_langsmith_mcp
-setup_glean_mcp
+
+# Setup work-specific tools (conditional)
+setup_work_tools
