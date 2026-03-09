@@ -137,9 +137,9 @@ create_symlinks() {
         [ -f "$file" ] || continue
         name=$(basename "$file")
         
-        # Skip example files and git files
+        # Skip example files, git metadata, and macOS metadata
         case "$name" in
-            *.example|.git*|.DS_Store) continue ;;
+            *.example|.git|.DS_Store) continue ;;
         esac
 
         echo "Creating symlink to $name in home directory."
