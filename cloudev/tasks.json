@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    {
+      "id": "claude-login",
+      "name": "Claude Code Login",
+      "check": { "command": "claude auth status 2>/dev/null | grep -q '\"loggedIn\": true'" },
+      "fix": { "type": "interactive", "command": "claude login", "description": "Login to Claude Code" }
+    },
+    {
+      "id": "glean-mcp-sso",
+      "name": "Glean MCP SSO",
+      "check": { "command": "claude mcp list 2>/dev/null | grep glean_default | grep -qv 'Needs authentication'" },
+      "fix": { "type": "interactive", "command": "claude", "description": "Run /mcp → glean_default → Authenticate" }
+    }
+  ]
+}

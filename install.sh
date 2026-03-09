@@ -148,6 +148,25 @@ create_symlinks() {
     done
 }
 
+# Setup Claude Dev tasks configuration
+# Symlinks cloudev/tasks.json to ~/.cloudev/tasks.json
+setup_cloudev_tasks() {
+    script_dir=$(dirname "$(readlink -f "$0")")
+    source_tasks="$script_dir/cloudev/tasks.json"
+    target_dir="$HOME/.cloudev"
+    target_tasks="$target_dir/tasks.json"
+
+    if [ ! -f "$source_tasks" ]; then
+        echo "ℹ️  cloudev/tasks.json not found, skipping Claude Dev tasks setup."
+        return 0
+    fi
+
+    mkdir -p "$target_dir"
+    rm -f "$target_tasks"
+    ln -s "$source_tasks" "$target_tasks"
+    echo "✅ Linked Claude Dev tasks: $target_tasks -> $source_tasks"
+}
+
 # Setup Cursor IDE configuration
 # Symlinks settings, keybindings, snippets, and skills from Dotfiles
 setup_cursor() {
@@ -349,6 +368,7 @@ if [ "$OS" = "linux" ]; then
 fi
 
 create_symlinks
+setup_cloudev_tasks
 
 # Install tools from URLs
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
