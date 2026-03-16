@@ -1,6 +1,7 @@
 #!/bin/bash
 # Setup Tailscale and AWS auth for MongoDB MCP connection
 # Run this in your terminal when Claude asks you to authenticate
+# Writes temporary AWS credentials to /tmp/mongo-aws-creds.json
 set -euo pipefail
 
 RST="" RED="" GRN="" YLW="" BLU=""
@@ -16,41 +17,19 @@ warn()  { echo -e "${YLW}[*]${RST} $1"; }
 error() { echo -e "${RED}[!]${RST} $1"; }
 
 PROFILE="${1:-}"
-SUBNET="${2:-}"
+CREDS_FILE="/tmp/mongo-aws-creds.json"
 
 if [ -z "$PROFILE" ]; then
-    echo "Usage: ./setup-mongo-auth.sh <aws-profile> [subnet-router]"
-    echo "Example: ./setup-mongo-auth.sh stagingmongoreadonly low-trust"
+    echo "Usage: ./setup-mongo-auth.sh <aws-profile>"
+    echo "Example: ./setup-mongo-auth.sh stagingmongoreadonly"
     exit 1
 fi
 
-# 1. Check Tailscale
-if [ -n "$SUBNET" ]; then
-    info "Checking Tailscale..."
-    if tailscale status --self 2>&1 | grep -qi "logged out\|stopped"; then
-        warn "Tailscale not connected. Starting..."
-        sudo tailscale up --accept-dns --accept-routes
-    fi
+# 1. Setup Tailscale
+info "Setting up Tailscale..."
+sudo tailscale up --accept-dns --accept-routes
 
-    # Ensure accept-routes is on
-    if tailscale debug prefs 2>&1 | grep -q '"RouteAll": false'; then
-        warn "Enabling --accept-routes..."
-        sudo tailscale set --accept-routes
-    fi
-
-    # Verify subnet router
-    if tailscale status --self=false --peers 2>&1 | grep -q "$SUBNET"; then
-        info "Subnet router '$SUBNET' is reachable"
-    else
-        error "Subnet router '$SUBNET' not found in Tailscale peers"
-        error "You may need to request access: https://vanta.freshservice.com/support/catalog/items/114"
-        exit 1
-    fi
-else
-    info "Skipping Tailscale (not required for this environment)"
-fi
-
-# 2. Check AWS auth
+# 2. Check AWS profile exists
 info "Checking AWS profile '$PROFILE'..."
 if ! aws-vault list --profiles 2>/dev/null | grep -qE "^${PROFILE}$"; then
     error "Profile '$PROFILE' not found in ~/.aws/config"
@@ -58,16 +37,37 @@ if ! aws-vault list --profiles 2>/dev/null | grep -qE "^${PROFILE}$"; then
     exit 1
 fi
 
+# 3. Authenticate and export credentials
 info "Authenticating to '$PROFILE' (this may open a browser for SSO)..."
-if aws-vault exec "$PROFILE" -- echo "authenticated" 2>&1; then
-    info "AWS auth successful"
-else
+CREDS=$(aws-vault exec "$PROFILE" -- env 2>&1) || {
     error "AWS auth failed. Try:"
     error "  1. Sign out: https://vanta.awsapps.com/start#/signout"
     error "  2. Clear cache: aws-vault clear"
     error "  3. Re-run this script"
     exit 1
+}
+
+ACCESS_KEY=$(echo "$CREDS" | grep '^AWS_ACCESS_KEY_ID=' | cut -d= -f2)
+SECRET_KEY=$(echo "$CREDS" | grep '^AWS_SECRET_ACCESS_KEY=' | cut -d= -f2)
+SESSION_TOKEN=$(echo "$CREDS" | grep '^AWS_SESSION_TOKEN=' | cut -d= -f2)
+
+if [ -z "$ACCESS_KEY" ] || [ -z "$SECRET_KEY" ] || [ -z "$SESSION_TOKEN" ]; then
+    error "Failed to extract AWS credentials"
+    exit 1
 fi
 
+# 4. Write credentials to temp file (readable only by current user)
+cat > "$CREDS_FILE" <<EOF
+{
+  "accessKeyId": "$ACCESS_KEY",
+  "secretAccessKey": "$SECRET_KEY",
+  "sessionToken": "$SESSION_TOKEN",
+  "profile": "$PROFILE"
+}
+EOF
+chmod 600 "$CREDS_FILE"
+
+info "AWS credentials written to $CREDS_FILE"
+info "Credentials expire in ~1 hour. Re-run this script to refresh."
 echo ""
 info "All checks passed! Tell Claude you're ready."
