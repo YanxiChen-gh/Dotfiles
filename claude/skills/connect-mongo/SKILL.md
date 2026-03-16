@@ -56,25 +56,16 @@ When the user invokes `/connect-mongo [environment]`:
 
 3. **Check prerequisites** (remote environments only):
 
-   First, do a quick check to see if auth already works:
-   ```bash
-   aws-vault exec <profile> -- echo "authenticated" 2>&1
-   ```
+   **IMPORTANT: Do NOT run aws-vault or tailscale commands yourself.** AWS SSO requires a browser for login, which cannot work from the agent. Instead, always tell the user to run the helper script in their terminal:
 
-   If auth fails or Tailscale isn't connected, tell the user to run the helper script in their terminal:
    ```
    ~/.claude/skills/connect-mongo/setup-mongo-auth.sh <profile> <subnet>
    ```
    For example: `~/.claude/skills/connect-mongo/setup-mongo-auth.sh stagingmongoreadonly low-trust`
 
-   This script handles Tailscale setup (including --accept-routes) and AWS SSO login interactively in the terminal where a browser can be opened. Wait for the user to confirm it completed successfully before proceeding.
+   This script handles Tailscale setup (including --accept-routes) and AWS SSO login interactively. **Wait for the user to confirm it completed successfully before proceeding.**
 
-4. **Verify connectivity** (remote environments only):
-   ```bash
-   aws-vault exec <profile> -- mongosh "<uri>?authSource=%24external&authMechanism=MONGODB-AWS&readPreference=secondary" --eval "db.runCommand({ping:1})" 2>&1
-   ```
-   - If this fails, diagnose the error and help the user fix it.
-   - If this succeeds, proceed to step 5.
+4. **Proceed to update config** once the user confirms the script passed.
 
 5. **Update `.mcp.json`**: Find the `.mcp.json` file in the current project root.
 
