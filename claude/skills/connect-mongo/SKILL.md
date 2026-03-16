@@ -54,34 +54,20 @@ When the user invokes `/connect-mongo [environment]`:
    - `qa-infra`: profile=`qainframongoreadonly`, uri=`mongodb+srv://qa-infra.pdnqk.mongodb.net/obsidian`, subnet=`low-trust`
    - `qa-infra-global`: profile=`qainframongoreadonly`, uri=`mongodb+srv://qa-infra-global.byhev.mongodb.net/obsidian`, subnet=`low-trust`
 
-3. **Check prerequisites** (remote environments only — run these checks in parallel):
+3. **Check prerequisites** (remote environments only):
 
-   **a. Tailscale** (skip for gov environments which use AWS VPN):
-   ```bash
-   tailscale status --self 2>&1
-   ```
-   - If "Logged out" or not running: Tell user to run `tailscale login` or `sudo tailscale up` and wait for them to confirm.
-   - Then check accept-routes:
-   ```bash
-   tailscale debug prefs 2>&1 | grep RouteAll
-   ```
-   - If `"RouteAll": false`: Tell user to run `sudo tailscale set --accept-routes` and wait for confirmation.
-   - Then verify the subnet router is visible:
-   ```bash
-   tailscale status --self=false --peers 2>&1 | grep "<subnet>"
-   ```
-   - If subnet router not found: Warn user that the required subnet router is not visible.
-
-   **b. AWS auth**:
-   ```bash
-   aws-vault list --profiles 2>&1 | grep "^<profile>$"
-   ```
-   - If profile not found: Tell user to update `~/.aws/config`.
-   - Then test auth:
+   First, do a quick check to see if auth already works:
    ```bash
    aws-vault exec <profile> -- echo "authenticated" 2>&1
    ```
-   - If SSO expired or auth fails: Tell user to run `aws-vault login <profile>` and wait for confirmation.
+
+   If auth fails or Tailscale isn't connected, tell the user to run the helper script in their terminal:
+   ```
+   ~/.claude/skills/connect-mongo/setup-mongo-auth.sh <profile> <subnet>
+   ```
+   For example: `~/.claude/skills/connect-mongo/setup-mongo-auth.sh stagingmongoreadonly low-trust`
+
+   This script handles Tailscale setup (including --accept-routes) and AWS SSO login interactively in the terminal where a browser can be opened. Wait for the user to confirm it completed successfully before proceeding.
 
 4. **Verify connectivity** (remote environments only):
    ```bash
