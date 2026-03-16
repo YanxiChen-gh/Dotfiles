@@ -380,7 +380,7 @@ setup_datadog_mcp() {
     fi
 }
 
-# Setup Claude Code config: user-level CLAUDE.md and commands
+# Setup Claude Code config: user-level CLAUDE.md and skills
 setup_claude_config() {
     script_dir=$(dirname "$(readlink -f "$0")")
     claude_dir="$HOME/.claude"
@@ -393,17 +393,17 @@ setup_claude_config() {
         echo "✅ Claude Code CLAUDE.md linked (work)"
     fi
 
-    # Symlink commands (always — connect-mongo is useful everywhere)
-    source_commands="$script_dir/claude/commands"
-    if [ -d "$source_commands" ]; then
-        mkdir -p "$claude_dir/commands"
-        for cmd in "$source_commands"/*.md; do
-            [ -f "$cmd" ] || continue
-            name=$(basename "$cmd")
-            rm -f "$claude_dir/commands/$name"
-            ln -s "$cmd" "$claude_dir/commands/$name"
+    # Symlink skills (each skill is a directory with SKILL.md)
+    source_skills="$script_dir/claude/skills"
+    if [ -d "$source_skills" ]; then
+        mkdir -p "$claude_dir/skills"
+        for skill_dir in "$source_skills"/*/; do
+            [ -d "$skill_dir" ] || continue
+            name=$(basename "$skill_dir")
+            rm -rf "$claude_dir/skills/$name"
+            ln -s "$skill_dir" "$claude_dir/skills/$name"
         done
-        echo "✅ Claude Code commands linked"
+        echo "✅ Claude Code skills linked"
     fi
 }
 
