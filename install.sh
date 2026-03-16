@@ -409,19 +409,44 @@ setup_claude_config() {
     fi
 }
 
-# Setup work-specific tools (Glean MCP, Datadog MCP, etc.)
+# Setup MongoDB MCP server (user scope — always available, connect at runtime via /connect-mongo)
+setup_mongodb_mcp() {
+    echo "Setting up MongoDB MCP server..."
+
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "⚠️  Warning: 'claude' command not found. Skipping MongoDB MCP setup."
+        return 1
+    fi
+
+    if claude mcp list 2>/dev/null | grep -q "mongodb"; then
+        echo "✅ MongoDB MCP server already configured"
+        return 0
+    fi
+
+    echo "Adding MongoDB MCP server..."
+    if claude mcp add --transport stdio --scope user "mongodb" \
+        -- npx -y mongodb-mcp-server; then
+        echo "✅ MongoDB MCP server added (use /connect-mongo to connect)"
+    else
+        echo "⚠️  Warning: Failed to add MongoDB MCP server"
+    fi
+}
+
+# Setup work-specific tools (Glean MCP, Datadog MCP, MongoDB MCP, etc.)
 # Only runs if WORK_MACHINE=1 or user confirms interactively
 setup_work_tools() {
     if [ "$WORK_MACHINE" = "1" ]; then
         echo "Work machine detected (WORK_MACHINE=1). Setting up work tools..."
         setup_glean_mcp
         setup_datadog_mcp
+        setup_mongodb_mcp
     elif [ -t 0 ]; then
-        printf "Setup work-specific tools (Glean, Datadog MCP)? [y/N] "
+        printf "Setup work-specific tools (Glean, Datadog, MongoDB MCP)? [y/N] "
         read -r is_work
         if [ "$is_work" = "y" ] || [ "$is_work" = "Y" ]; then
             setup_glean_mcp
             setup_datadog_mcp
+            setup_mongodb_mcp
         else
             echo "Skipping work-specific tools."
         fi
