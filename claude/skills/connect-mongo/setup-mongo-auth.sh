@@ -37,13 +37,21 @@ if ! aws-vault list --profiles 2>/dev/null | grep -qE "^${PROFILE}$"; then
     exit 1
 fi
 
-# 3. Authenticate and export credentials
+# 3. Authenticate first (allows SSO browser to open)
 info "Authenticating to '$PROFILE' (this may open a browser for SSO)..."
-CREDS=$(aws-vault exec "$PROFILE" -- env 2>&1) || {
+if ! aws-vault exec "$PROFILE" -- echo "authenticated"; then
     error "AWS auth failed. Try:"
     error "  1. Sign out: https://vanta.awsapps.com/start#/signout"
     error "  2. Clear cache: aws-vault clear"
     error "  3. Re-run this script"
+    exit 1
+fi
+info "AWS auth successful"
+
+# 4. Export credentials (session is now cached, no browser needed)
+info "Exporting credentials..."
+CREDS=$(aws-vault exec "$PROFILE" -- env) || {
+    error "Failed to export credentials"
     exit 1
 }
 
@@ -56,7 +64,7 @@ if [ -z "$ACCESS_KEY" ] || [ -z "$SECRET_KEY" ] || [ -z "$SESSION_TOKEN" ]; then
     exit 1
 fi
 
-# 4. Write credentials to temp file (readable only by current user)
+# 5. Write credentials to temp file (readable only by current user)
 cat > "$CREDS_FILE" <<EOF
 {
   "accessKeyId": "$ACCESS_KEY",
