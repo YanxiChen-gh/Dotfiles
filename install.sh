@@ -393,17 +393,19 @@ setup_claude_config() {
         echo "✅ Claude Code CLAUDE.md linked (work)"
     fi
 
-    # Symlink skills (each skill is a directory with SKILL.md)
-    source_skills="$script_dir/claude/skills"
-    if [ -d "$source_skills" ]; then
-        mkdir -p "$claude_dir/skills"
-        for skill_dir in "$source_skills"/*/; do
-            [ -d "$skill_dir" ] || continue
-            name=$(basename "$skill_dir")
-            rm -rf "$claude_dir/skills/$name"
-            ln -s "$skill_dir" "$claude_dir/skills/$name"
-        done
-        echo "✅ Claude Code skills linked"
+    # Symlink skills (work scope only)
+    if [ "$WORK_MACHINE" = "1" ]; then
+        source_skills="$script_dir/claude/skills"
+        if [ -d "$source_skills" ]; then
+            mkdir -p "$claude_dir/skills"
+            for skill_dir in "$source_skills"/*/; do
+                [ -d "$skill_dir" ] || continue
+                name=$(basename "$skill_dir")
+                rm -rf "$claude_dir/skills/$name"
+                ln -s "$skill_dir" "$claude_dir/skills/$name"
+            done
+            echo "✅ Claude Code skills linked (work)"
+        fi
     fi
 }
 
