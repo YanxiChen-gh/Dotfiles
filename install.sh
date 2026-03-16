@@ -342,23 +342,130 @@ install_cursor_extensions() {
     echo "✅ Extension installation complete"
 }
 
-# Setup work-specific tools (Glean MCP, etc.)
+# Setup Datadog MCP server configuration (user scope — always available)
+# Reads API keys from environment variables (DATADOG_LOCAL_DEVELOPMENT_KEY_2, DATADOG_APP_KEY)
+setup_datadog_mcp() {
+    echo "Setting up Datadog MCP server..."
+
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "⚠️  Warning: 'claude' command not found. Skipping Datadog MCP setup."
+        return 1
+    fi
+
+    if claude mcp list 2>/dev/null | grep -q "datadog"; then
+        echo "✅ Datadog MCP server already configured"
+        return 0
+    fi
+
+    api_key="${DATADOG_LOCAL_DEVELOPMENT_KEY_2:-}"
+    app_key="${DATADOG_APP_KEY:-}"
+
+    if [ -z "$api_key" ] || [ -z "$app_key" ]; then
+        echo "⚠️  DATADOG_LOCAL_DEVELOPMENT_KEY_2 or DATADOG_APP_KEY not set"
+        echo "   Skipping Datadog MCP setup. Set these env vars and re-run."
+        return 1
+    fi
+
+    echo "Adding Datadog MCP server..."
+    if claude mcp add --transport stdio --scope user "datadog" \
+        -- npx datadog-mcp-server \
+        --apiKey "$api_key" \
+        --appKey "$app_key" \
+        --site datadoghq.com \
+        --logsSite logs.datadoghq.com \
+        --metricsSite datadoghq.com; then
+        echo "✅ Datadog MCP server added successfully"
+    else
+        echo "⚠️  Warning: Failed to add Datadog MCP server"
+    fi
+}
+
+# Setup Claude Code config: user-level CLAUDE.md and commands
+setup_claude_config() {
+    script_dir=$(dirname "$(readlink -f "$0")")
+    claude_dir="$HOME/.claude"
+    mkdir -p "$claude_dir"
+
+    # Symlink user-level CLAUDE.md (work scope only)
+    if [ "$WORK_MACHINE" = "1" ] && [ -f "$script_dir/claude/CLAUDE.md" ]; then
+        rm -f "$claude_dir/CLAUDE.md"
+        ln -s "$script_dir/claude/CLAUDE.md" "$claude_dir/CLAUDE.md"
+        echo "✅ Claude Code CLAUDE.md linked (work)"
+    fi
+
+    # Symlink commands (always — connect-mongo is useful everywhere)
+    source_commands="$script_dir/claude/commands"
+    if [ -d "$source_commands" ]; then
+        mkdir -p "$claude_dir/commands"
+        for cmd in "$source_commands"/*.md; do
+            [ -f "$cmd" ] || continue
+            name=$(basename "$cmd")
+            rm -f "$claude_dir/commands/$name"
+            ln -s "$cmd" "$claude_dir/commands/$name"
+        done
+        echo "✅ Claude Code commands linked"
+    fi
+}
+
+# Setup work-specific tools (Glean MCP, Datadog MCP, etc.)
 # Only runs if WORK_MACHINE=1 or user confirms interactively
 setup_work_tools() {
     if [ "$WORK_MACHINE" = "1" ]; then
         echo "Work machine detected (WORK_MACHINE=1). Setting up work tools..."
         setup_glean_mcp
+        setup_datadog_mcp
     elif [ -t 0 ]; then
-        printf "Setup work-specific tools (Glean MCP)? [y/N] "
+        printf "Setup work-specific tools (Glean, Datadog MCP)? [y/N] "
         read -r is_work
         if [ "$is_work" = "y" ] || [ "$is_work" = "Y" ]; then
             setup_glean_mcp
+            setup_datadog_mcp
         else
             echo "Skipping work-specific tools."
         fi
     else
         echo "Skipping work-specific tools (non-interactive, WORK_MACHINE not set)."
     fi
+}
+
+# Install LangSmith CLI
+# Usage: install_langsmith_cli
+install_langsmith_cli() {
+    echo "Checking for LangSmith CLI..."
+
+    if command -v langsmith >/dev/null 2>&1; then
+        echo "✅ LangSmith CLI already installed"
+        return 0
+    fi
+
+    # Prefer uv (already installed above), then pipx, then pip as fallback
+    if command -v uv >/dev/null 2>&1; then
+        echo "Installing LangSmith CLI with uv..."
+        if uv tool install --upgrade "langsmith[cli]"; then
+            echo "✅ LangSmith CLI installed successfully"
+            return 0
+        fi
+    fi
+
+    if command -v pipx >/dev/null 2>&1; then
+        echo "Installing LangSmith CLI with pipx..."
+        if pipx install --force "langsmith[cli]"; then
+            echo "✅ LangSmith CLI installed successfully"
+            return 0
+        fi
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        echo "Installing LangSmith CLI with pip..."
+        if python3 -m pip install --user -U "langsmith[cli]"; then
+            echo "✅ LangSmith CLI installed successfully"
+            return 0
+        fi
+    fi
+
+    echo "⚠️  Warning: Failed to install LangSmith CLI"
+    echo "   Try manually: uv tool install 'langsmith[cli]'"
+    return 1
 }
 
 # Install packages (Linux only)
@@ -373,6 +480,7 @@ setup_cloudev_tasks
 # Install tools from URLs
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
+install_langsmith_cli
 
 # Setup Cursor IDE
 setup_cursor
@@ -380,6 +488,9 @@ install_cursor_extensions
 
 # Setup MCP servers
 setup_langsmith_mcp
+
+# Setup Claude Code config and commands
+setup_claude_config
 
 # Setup work-specific tools (conditional)
 setup_work_tools
