@@ -491,6 +491,14 @@ install_cursor_extensions
 # Setup MCP servers
 setup_langsmith_mcp
 
+# Install LangSmith skills for Claude Code
+if command -v claude >/dev/null 2>&1; then
+    echo "Installing LangSmith skills..."
+    npx skills add langchain-ai/langsmith-skills --agent claude-code --skill '*' --yes --global 2>/dev/null \
+        && echo "✅ LangSmith skills installed" \
+        || echo "⚠️  LangSmith skills installation failed (can retry manually)"
+fi
+
 # Setup Claude Code config and commands
 setup_claude_config
 
