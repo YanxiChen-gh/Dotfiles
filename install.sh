@@ -49,7 +49,7 @@ setup_langsmith_mcp() {
 
     # Add LangSmith MCP server using CLI
     echo "Adding LangSmith MCP server..."
-    if claude mcp add --transport stdio "LangSmith" \
+    if claude mcp add --transport stdio --scope user "LangSmith" \
         --env LANGSMITH_API_KEY="$api_key" \
         -- uvx langsmith-mcp-server; then
         echo "✅ LangSmith MCP server added successfully"
