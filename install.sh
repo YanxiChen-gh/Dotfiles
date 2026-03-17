@@ -380,6 +380,38 @@ setup_datadog_mcp() {
     fi
 }
 
+# Install superpowers plugin for Claude Code (user scope — always available)
+setup_superpowers_plugin() {
+    echo "Setting up superpowers plugin for Claude Code..."
+
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "⚠️  Warning: 'claude' command not found. Skipping superpowers plugin setup."
+        return 1
+    fi
+
+    if claude plugin list 2>/dev/null | grep -q "superpowers"; then
+        echo "✅ superpowers plugin already installed"
+        return 0
+    fi
+
+    # Register the superpowers marketplace if not already known
+    if ! claude plugin marketplace list 2>/dev/null | grep -q "superpowers-marketplace"; then
+        echo "Adding superpowers-marketplace..."
+        if ! claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null; then
+            echo "⚠️  Warning: Failed to add superpowers-marketplace"
+            return 1
+        fi
+    fi
+
+    echo "Installing superpowers plugin..."
+    if claude plugin install superpowers@superpowers-marketplace 2>/dev/null; then
+        echo "✅ superpowers plugin installed"
+    else
+        echo "⚠️  Warning: Failed to install superpowers plugin"
+        return 1
+    fi
+}
+
 # Setup Claude Code config: user-level CLAUDE.md and skills
 setup_claude_config() {
     script_dir=$(dirname "$(readlink -f "$0")")
@@ -526,6 +558,7 @@ fi
 
 # Setup Claude Code config and commands
 setup_claude_config
+setup_superpowers_plugin
 
 # Setup work-specific tools (conditional)
 setup_work_tools
