@@ -441,6 +441,49 @@ setup_claude_config() {
     fi
 }
 
+# Install Netlify CLI globally via npm
+install_netlify_cli() {
+    echo "Checking for Netlify CLI..."
+
+    if command -v netlify >/dev/null 2>&1; then
+        echo "✅ Netlify CLI already installed"
+        return 0
+    fi
+
+    echo "Installing Netlify CLI..."
+    if npm install -g netlify-cli; then
+        echo "✅ Netlify CLI installed successfully"
+    else
+        echo "⚠️  Warning: Netlify CLI installation failed"
+        echo "   Try manually: npm install -g netlify-cli"
+        return 1
+    fi
+}
+
+# Setup Netlify MCP server (user scope — work only)
+setup_netlify_mcp() {
+    echo "Setting up Netlify MCP server..."
+
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "⚠️  Warning: 'claude' command not found. Skipping Netlify MCP setup."
+        return 1
+    fi
+
+    if claude mcp list 2>/dev/null | grep -q "netlify"; then
+        echo "✅ Netlify MCP server already configured"
+        return 0
+    fi
+
+    echo "Adding Netlify MCP server..."
+    if claude mcp add --scope user "netlify" \
+        -- npx -y @netlify/mcp; then
+        echo "✅ Netlify MCP server added successfully"
+    else
+        echo "⚠️  Warning: Failed to add Netlify MCP server"
+        echo "   Try manually: claude mcp add netlify npx -- -y @netlify/mcp"
+    fi
+}
+
 # Setup MongoDB MCP server (user scope — always available, connect at runtime via /connect-mongo)
 setup_mongodb_mcp() {
     echo "Setting up MongoDB MCP server..."
@@ -472,18 +515,22 @@ setup_work_tools() {
         setup_glean_mcp
         setup_datadog_mcp
         setup_mongodb_mcp
+        install_netlify_cli
+        setup_netlify_mcp
     elif [ -t 0 ]; then
-        printf "Setup work-specific tools (Glean, Datadog, MongoDB MCP)? [y/N] "
+        printf "Setup work-specific tools (Glean, Datadog, MongoDB, Netlify MCP)? [y/N] "
         read -r is_work
         if [ "$is_work" = "y" ] || [ "$is_work" = "Y" ]; then
             setup_glean_mcp
             setup_datadog_mcp
             setup_mongodb_mcp
+            install_netlify_cli
+            setup_netlify_mcp
         else
             echo "Skipping work-specific tools."
         fi
     else
-        echo "Skipping work-specific tools (non-interactive, WORK_MACHINE not set)."
+        echo "Skipping work-specific tools (non-interactive, WORK_MACHINE not set). Includes: Glean, Datadog, MongoDB, Netlify."
     fi
 }
 
