@@ -1,0 +1,258 @@
+#!/bin/sh
+set -e
+
+usage() {
+    printf '%s\n' "Usage: $0 [options] [REPO_ROOT]
+
+Copy Claude Code skills from a repo into .cursor/skills/_cc_sync/ for Cursor.
+REPO_ROOT defaults to the current directory.
+
+Options:
+  --dry-run          Print actions only
+  --agents           Also copy .claude/plugins/*/agents/*.md to .cursor/commands/
+  --config FILE      JSON config (ignore_targets, optional)
+  -h, --help         Show this help
+
+Repo may contain optional .cc-cursor-sync.json:
+  { \"ignore_targets\": [\"skills-legacy-name\"] }
+
+Differs from cursor-sync.sh (exports Cursor UI config into Dotfiles).
+This script reads .claude/ inside a workspace and writes generated Cursor skills."
+}
+
+_sync_invoked_as=$0
+case "$_sync_invoked_as" in
+    */*) ;;
+    *)
+        _sync_invoked_as=$(command -v "$_sync_invoked_as" 2>/dev/null) || _sync_invoked_as=$0
+        ;;
+esac
+_p=$_sync_invoked_as
+while [ -h "$_p" ]; do
+    _link=$(readlink "$_p" 2>/dev/null) || break
+    case "$_link" in
+        /*) _p=$_link ;;
+        *) _p=$(dirname -- "$_p")/$_link ;;
+    esac
+done
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$_p")" && pwd)
+unset _sync_invoked_as _p _link
+DRY_RUN=0
+SYNC_AGENTS=0
+CONFIG_FILE=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --dry-run) DRY_RUN=1; shift ;;
+        --agents) SYNC_AGENTS=1; shift ;;
+        --config)
+            if [ -z "${2:-}" ]; then
+                printf 'Error: --config requires a file\n' >&2
+                exit 1
+            fi
+            CONFIG_FILE=$2
+            shift 2
+            ;;
+        *) break ;;
+    esac
+done
+
+REPO_ROOT=${1:-.}
+REPO_ROOT=$(CDPATH= cd -- "$REPO_ROOT" && pwd)
+CLAUDE_DIR="$REPO_ROOT/.claude"
+OUT_ROOT="$REPO_ROOT/.cursor/skills/_cc_sync"
+COMMANDS_DIR="$REPO_ROOT/.cursor/commands"
+
+if [ ! -d "$CLAUDE_DIR" ]; then
+    printf 'Error: %s not found (not a Claude Code workspace root?)\n' "$CLAUDE_DIR" >&2
+    exit 1
+fi
+
+should_ignore() {
+    _target=$1
+    if [ -n "$IGNORE_TARGETS" ]; then
+        printf '%s\n' "$IGNORE_TARGETS" | grep -Fxq "$_target" 2>/dev/null && return 0
+    fi
+    return 1
+}
+
+IGNORE_TARGETS=""
+REPO_CONFIG="$REPO_ROOT/.cc-cursor-sync.json"
+if [ -z "$CONFIG_FILE" ] && [ -f "$REPO_CONFIG" ]; then
+    CONFIG_FILE=$REPO_CONFIG
+fi
+if [ -n "$CONFIG_FILE" ] && [ -f "$CONFIG_FILE" ] && command -v python3 >/dev/null 2>&1; then
+    IGNORE_TARGETS=$(python3 -c "
+import json,sys
+try:
+    with open(sys.argv[1]) as f:
+        c=json.load(f)
+    for t in c.get('ignore_targets',[]):
+        print(t)
+except Exception:
+    pass
+" "$CONFIG_FILE" 2>/dev/null || true)
+fi
+
+target_name_from_claude_relpath() {
+    _rel=$1
+    printf '%s\n' "$_rel" | tr '/' '-' | tr ' ' '_'
+}
+
+transform_skill_md() {
+    _src=$1
+    _dst=$2
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c '
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+lines = text.splitlines(keepends=True)
+out = []
+i = 0
+at_block = []
+at_line_re = re.compile(r"^@[ \t]*([^@#\s][^\s#]*)")
+
+def flush_at_block():
+    global out, at_block
+    if not at_block:
+        return
+    while len(out) >= 1 and out[-1].strip() == "":
+        out.pop()
+    if len(out) >= 1 and out[-1].strip() == "## Required (auto-loaded)":
+        out.pop()
+        while len(out) >= 1 and out[-1].strip() == "":
+            out.pop()
+    out.append("\n")
+    out.append("## Required context (read from repo root)\n")
+    out.append("Before following this skill, read these paths with your file-reading tool (paths are relative to the repository root):\n\n")
+    for p in at_block:
+        out.append(f"- `{p}`\n")
+    out.append("\n")
+    at_block = []
+
+while i < len(lines):
+    line = lines[i]
+    m = at_line_re.match(line)
+    if m:
+        at_block.append(m.group(1).strip())
+        i += 1
+        continue
+    if at_block and line.strip() == "":
+        flush_at_block()
+        out.append(line)
+        i += 1
+        continue
+    if at_block and not at_line_re.match(line):
+        flush_at_block()
+    out.append(line)
+    i += 1
+flush_at_block()
+open(dst, "w", encoding="utf-8").write("".join(out))
+' "$_src" "$_dst"
+    else
+        cp "$_src" "$_dst"
+    fi
+}
+
+copy_skill_tree() {
+    _src_dir=$1
+    _target=$2
+    _dest="$OUT_ROOT/$_target"
+    if should_ignore "$_target"; then
+        printf 'Skipping (ignored): %s\n' "$_target"
+        return 0
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then
+        printf '[dry-run] copy skill -> %s\n' "$_dest"
+        return 0
+    fi
+    rm -rf "$_dest"
+    mkdir -p "$_dest"
+    cp -R "$_src_dir"/. "$_dest/"
+    if [ -f "$_dest/SKILL.md" ]; then
+        transform_skill_md "$_src_dir/SKILL.md" "$_dest/SKILL.md"
+    fi
+    printf 'Synced skill: %s\n' "$_target"
+}
+
+if [ "$DRY_RUN" -eq 0 ]; then
+    mkdir -p "$OUT_ROOT"
+    rm -rf "$OUT_ROOT"/*
+    mkdir -p "$OUT_ROOT"
+fi
+
+cat > /tmp/cc_sync_readme_$$ <<EOF
+# Generated by cc-sync-to-cursor-workspace.sh
+
+Do not edit files in this directory. Edit \`.claude/skills\` or plugin \`skills/\`
+in the repository and re-run:
+
+    ${SCRIPT_DIR}/cc-sync-to-cursor-workspace.sh [REPO_ROOT]
+
+Optional: \`.cc-cursor-sync.json\` with \`ignore_targets\` to skip outputs.
+EOF
+
+if [ "$DRY_RUN" -eq 0 ]; then
+    cp /tmp/cc_sync_readme_$$ "$OUT_ROOT/README.md"
+fi
+rm -f /tmp/cc_sync_readme_$$
+
+if [ -d "$CLAUDE_DIR/skills" ]; then
+    for skill_dir in "$CLAUDE_DIR/skills"/*/; do
+        [ -d "$skill_dir" ] || continue
+        [ -f "$skill_dir/SKILL.md" ] || continue
+        name=$(basename "$skill_dir")
+        rel="skills/$name"
+        target=$(target_name_from_claude_relpath "$rel")
+        copy_skill_tree "$skill_dir" "$target"
+    done
+fi
+
+if [ -d "$CLAUDE_DIR/plugins" ]; then
+    for plugin_dir in "$CLAUDE_DIR/plugins"/*/; do
+        [ -d "$plugin_dir" ] || continue
+        [ -f "$plugin_dir/.claude-plugin/plugin.json" ] || continue
+        plugin_name=$(basename "$plugin_dir")
+        skills_root="$plugin_dir/skills"
+        if [ ! -d "$skills_root" ]; then
+            continue
+        fi
+        _list=$(mktemp)
+        find "$skills_root" -name SKILL.md -type f 2>/dev/null > "$_list" || true
+        while IFS= read -r skill_md || [ -n "$skill_md" ]; do
+            [ -n "$skill_md" ] || continue
+            skill_container=$(dirname "$skill_md")
+            rel_path=${skill_container#"$CLAUDE_DIR/"}
+            target=$(target_name_from_claude_relpath "$rel_path")
+            copy_skill_tree "$skill_container" "$target"
+        done < "$_list"
+        rm -f "$_list"
+    done
+fi
+
+if [ "$SYNC_AGENTS" -eq 1 ] && [ -d "$CLAUDE_DIR/plugins" ]; then
+    if [ "$DRY_RUN" -eq 0 ]; then
+        mkdir -p "$COMMANDS_DIR"
+    fi
+    for plugin_dir in "$CLAUDE_DIR/plugins"/*/; do
+        [ -d "$plugin_dir" ] || continue
+        [ -d "$plugin_dir/agents" ] || continue
+        plugin_name=$(basename "$plugin_dir")
+        for agent_md in "$plugin_dir/agents"/*.md; do
+            [ -f "$agent_md" ] || continue
+            base=$(basename "$agent_md" .md)
+            safe=$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9._-')
+            out_name="cc-agent-${plugin_name}-${safe}.md"
+            if [ "$DRY_RUN" -eq 1 ]; then
+                printf '[dry-run] agent -> %s/%s\n' "$COMMANDS_DIR" "$out_name"
+            else
+                cp "$agent_md" "$COMMANDS_DIR/$out_name"
+                printf 'Synced agent command: %s\n' "$out_name"
+            fi
+        done
+    done
+fi
+
+printf '\nDone. Output: %s\n' "$OUT_ROOT"

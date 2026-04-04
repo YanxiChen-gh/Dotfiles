@@ -200,9 +200,29 @@ fi
 # Use this for: WORK_MACHINE=1, API keys, local paths, etc.
 [ -f ~/.zshrc.local ] && source ~/.zshrc.local
 
+# ------------------- Dotfiles on PATH ------------------------
+# Picks up cc-sync-to-cursor-workspace.sh and other repo-root scripts.
+# 1) If this .zshrc is symlinked from the repo (install.sh), use that directory.
+# 2) Else common clone locations (Gitpod uses ~/.dotfiles).
+# Override in ~/.zshrc.local: export DOTFILES_DIR=/your/path
+if [ -z "$DOTFILES_DIR" ]; then
+    _df_from_zshrc="${${(%):-%x}:A:h}"
+    if [ -f "$_df_from_zshrc/cc-sync-to-cursor-workspace.sh" ]; then
+        DOTFILES_DIR="$_df_from_zshrc"
+    fi
+    unset _df_from_zshrc
+fi
+if [ -z "$DOTFILES_DIR" ]; then
+    [ -d "$HOME/.dotfiles" ] && DOTFILES_DIR="$HOME/.dotfiles"
+    [ -z "$DOTFILES_DIR" ] && [ -d "$HOME/Dotfiles" ] && DOTFILES_DIR="$HOME/Dotfiles"
+    [ -z "$DOTFILES_DIR" ] && [ -d "$HOME/Repos/Dotfiles" ] && DOTFILES_DIR="$HOME/Repos/Dotfiles"
+fi
+if [ -n "$DOTFILES_DIR" ] && [ -d "$DOTFILES_DIR" ]; then
+    export DOTFILES_DIR
+    export PATH="$DOTFILES_DIR:$PATH"
+fi
+
 # ------------------- Work Configuration ------------------------
-# Load work-specific config if WORK_MACHINE=1
-if [ "$WORK_MACHINE" = "1" ]; then
-    DOTFILES_DIR="${DOTFILES_DIR:-$HOME/Repos/Dotfiles}"
-    [ -f "$DOTFILES_DIR/shell/work.sh" ] && source "$DOTFILES_DIR/shell/work.sh"
+if [ "$WORK_MACHINE" = "1" ] && [ -n "$DOTFILES_DIR" ] && [ -f "$DOTFILES_DIR/shell/work.sh" ]; then
+    source "$DOTFILES_DIR/shell/work.sh"
 fi

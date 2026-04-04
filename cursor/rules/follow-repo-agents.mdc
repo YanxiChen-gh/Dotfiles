@@ -1,0 +1,10 @@
+---
+description: When working inside a repository that defines AGENTS.md or .ai-rules, treat those as the canonical policy source instead of re-deriving the same standards from memory. Use for monorepos and team codebases.
+alwaysApply: false
+---
+
+# Follow repository agent instructions
+
+When the open workspace or attached files include `AGENTS.md`, `CLAUDE.md`, or a `.ai-rules/` directory, read and follow them as the source of truth for that project’s engineering rules.
+
+Do not contradict committed repo guidance with generic global habits. Prefer loading those files over relying on duplicated policy text elsewhere.

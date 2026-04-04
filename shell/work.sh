@@ -10,7 +10,4 @@
 # alias vpn="sudo openconnect vpn.company.com"
 
 # ------------------- Work PATH Additions ------------------------
-
-# Add work-specific paths here
-# Example:
-# export PATH="$HOME/work-tools/bin:$PATH"
+# Dotfiles root is already on PATH from ~/.zshrc when DOTFILES_DIR is set.

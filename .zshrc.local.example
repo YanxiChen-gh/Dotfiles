@@ -2,6 +2,10 @@
 # Copy this file to ~/.zshrc.local and customize
 # This file is sourced at the end of .zshrc and is NOT tracked in git
 
+# ------------------- Dotfiles clone location ------------------------
+# If your Dotfiles repo is not auto-detected (~/.zshrc in repo, ~/.dotfiles, ~/Dotfiles, ~/Repos/Dotfiles):
+# export DOTFILES_DIR="$HOME/src/Dotfiles"
+
 # ------------------- Work Machine Flag ------------------------
 # Set this on work machines to enable work-specific config
 # export WORK_MACHINE=1

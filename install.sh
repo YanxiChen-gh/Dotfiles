@@ -249,11 +249,27 @@ with open('$cursor_user_dir/settings.json', 'w') as f:
         echo "✅ snippets linked"
     fi
 
-    # Symlink skills directory
-    if [ -d "$cursor_dotfiles/skills" ]; then
+    # Agent skills: personal cursor/skills + work shared-skills (same skill dirs for Claude + Cursor)
+    if [ -d "$cursor_dotfiles/skills" ] || { [ "$WORK_MACHINE" = "1" ] && [ -d "$script_dir/shared-skills" ]; }; then
         echo "Linking Cursor agent skills..."
         rm -rf "$cursor_home_dir/skills-cursor"
-        ln -s "$cursor_dotfiles/skills" "$cursor_home_dir/skills-cursor"
+        mkdir -p "$cursor_home_dir/skills-cursor"
+        if [ -d "$cursor_dotfiles/skills" ]; then
+            for skill_dir in "$cursor_dotfiles/skills"/*/; do
+                [ -d "$skill_dir" ] || continue
+                name=$(basename "$skill_dir")
+                rm -f "$cursor_home_dir/skills-cursor/$name"
+                ln -s "$skill_dir" "$cursor_home_dir/skills-cursor/$name"
+            done
+        fi
+        if [ "$WORK_MACHINE" = "1" ] && [ -d "$script_dir/shared-skills" ]; then
+            for skill_dir in "$script_dir/shared-skills"/*/; do
+                [ -d "$skill_dir" ] || continue
+                name=$(basename "$skill_dir")
+                rm -f "$cursor_home_dir/skills-cursor/$name"
+                ln -s "$skill_dir" "$cursor_home_dir/skills-cursor/$name"
+            done
+        fi
         echo "✅ agent skills linked"
     fi
 
@@ -425,19 +441,21 @@ setup_claude_config() {
         echo "✅ Claude Code CLAUDE.md linked (work)"
     fi
 
-    # Symlink skills (work scope only)
+    # Symlink skills (work scope only): claude/skills + shared-skills (both tools via install)
     if [ "$WORK_MACHINE" = "1" ]; then
-        source_skills="$script_dir/claude/skills"
-        if [ -d "$source_skills" ]; then
-            mkdir -p "$claude_dir/skills"
+        mkdir -p "$claude_dir/skills"
+        for source_skills in "$script_dir/claude/skills" "$script_dir/shared-skills"; do
+            if [ ! -d "$source_skills" ]; then
+                continue
+            fi
             for skill_dir in "$source_skills"/*/; do
                 [ -d "$skill_dir" ] || continue
                 name=$(basename "$skill_dir")
                 rm -rf "$claude_dir/skills/$name"
                 ln -s "$skill_dir" "$claude_dir/skills/$name"
             done
-            echo "✅ Claude Code skills linked (work)"
-        fi
+        done
+        echo "✅ Claude Code skills linked (work)"
     fi
 }
 
