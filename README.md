@@ -36,3 +36,25 @@ Skills under `shared-skills/` are symlinked to **both** `~/.claude/skills` and `
 ### Work monorepo clone
 
 Point the script at your local checkout (no repo changes required there): `cc-sync-to-cursor-workspace.sh ~/path/to/obsidian`. Generated files under that clone’s `.cursor/skills/_cc_sync/` are local-only unless you choose to commit them later as a team decision.
+
+## Verifying changes
+
+From the repo root:
+
+```sh
+./scripts/verify-dotfiles.sh
+```
+
+This runs:
+
+1. **`sh -n`** on `install.sh`, `cc-sync-to-cursor-workspace.sh`, `cursor-sync.sh`, `shell/work.sh`, and the verify script itself.
+2. **`shellcheck -S error`** on those files when `shellcheck` is installed (warnings are ignored so existing style nits do not fail the run).
+3. **Integration:** copies [`test-fixtures/minimal-claude-workspace/`](test-fixtures/minimal-claude-workspace/) to a temp directory, runs `cc-sync-to-cursor-workspace.sh` on it, and checks that `SKILL.md` was rewritten (`## Required context` and the former `@` path). **Requires `python3`** for that transform.
+
+Fast check without integration:
+
+```sh
+./scripts/verify-dotfiles.sh --quick
+```
+
+Use this before pushing or when editing shell scripts. Full `install.sh` with a throwaway `HOME` is still useful for release-style validation but is slow and can touch MCP/network; the verify script is the default loop.
