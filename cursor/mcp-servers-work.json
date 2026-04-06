@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "glean_default": {
+      "url": "https://vanta-be.glean.com/mcp/default"
+    },
+    "mongodb": {
+      "command": "npx",
+      "args": ["-y", "mongodb-mcp-server"]
+    },
+    "netlify": {
+      "command": "npx",
+      "args": ["-y", "@netlify/mcp"]
+    }
+  }
+}

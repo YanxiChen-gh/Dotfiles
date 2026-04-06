@@ -27,14 +27,16 @@ setup_langsmith_mcp() {
 
     # Check if Claude Code is available
     if ! command -v claude >/dev/null 2>&1; then
-        echo "⚠️  Warning: 'claude' command not found. Skipping LangSmith MCP setup."
+        echo "⚠️  Warning: 'claude' command not found. Skipping Claude LangSmith MCP CLI setup."
         echo "   Install Claude Code first, then run: claude mcp add ..."
+        merge_cursor_mcp_langsmith
         return 1
     fi
 
     # Check if LangSmith MCP server is already configured
     if claude mcp list 2>/dev/null | grep -q "LangSmith"; then
-        echo "✅ LangSmith MCP server already configured"
+        echo "✅ LangSmith MCP server already configured (Claude)"
+        merge_cursor_mcp_langsmith
         return 0
     fi
 
@@ -63,6 +65,8 @@ setup_langsmith_mcp() {
         echo "   You can try manually: claude mcp add --transport stdio 'LangSmith API MCP Server' \\"
         echo "     --env LANGSMITH_API_KEY=your_key -- uvx langsmith-mcp-server"
     fi
+
+    merge_cursor_mcp_langsmith
 }
 
 # Setup Glean MCP server configuration
@@ -126,6 +130,110 @@ install_from_url() {
         echo "⚠️  Warning: $display_name installation failed"
         echo "   Try manually: curl -fsSL $install_url | $runner"
     fi
+}
+
+# Merge mcpServers from a fragment JSON into ~/.cursor/mcp.json (adds only missing server names).
+# Fragment must be {"mcpServers": {...}} or a flat object of server name -> config.
+# Usage: merge_cursor_mcp_fragment <path_to_json>
+merge_cursor_mcp_fragment() {
+    fragment_path=$1
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "⚠️  Python3 not found; skipping Cursor MCP merge ($fragment_path)"
+        return 1
+    fi
+    if [ ! -f "$fragment_path" ]; then
+        echo "⚠️  Cursor MCP fragment not found: $fragment_path"
+        return 1
+    fi
+    python3 -c "
+import json, os, sys
+fragment_path = sys.argv[1]
+cursor_dir = os.path.expanduser('~/.cursor')
+os.makedirs(cursor_dir, exist_ok=True)
+path = os.path.join(cursor_dir, 'mcp.json')
+with open(fragment_path) as f:
+    frag = json.load(f)
+servers = frag['mcpServers'] if isinstance(frag, dict) and 'mcpServers' in frag else frag
+if not isinstance(servers, dict):
+    sys.exit('Invalid fragment: expected object or mcpServers object')
+data = {}
+if os.path.isfile(path):
+    with open(path) as f:
+        data = json.load(f)
+ms = data.setdefault('mcpServers', {})
+added = [k for k in servers if k not in ms]
+for k, v in servers.items():
+    if k not in ms:
+        ms[k] = v
+with open(path, 'w') as f:
+    json.dump(data, f, indent=2)
+if added:
+    print('✅ Cursor MCP: added', ', '.join(added))
+else:
+    print('✅ Cursor MCP: already had', ', '.join(servers.keys()))
+" "$fragment_path" || return 1
+}
+
+# Merge LangSmith MCP entry for Cursor (from repo fragment).
+merge_cursor_mcp_langsmith() {
+    script_dir=$(dirname "$(readlink -f "$0")")
+    f="$script_dir/cursor/mcp-servers-personal.json"
+    if [ ! -f "$f" ]; then
+        return 0
+    fi
+    echo "Merging LangSmith into Cursor MCP config..."
+    merge_cursor_mcp_fragment "$f" || true
+}
+
+# Add Datadog MCP to ~/.cursor/mcp.json using env placeholders (same vars as Claude setup).
+merge_cursor_mcp_datadog() {
+    if ! command -v python3 >/dev/null 2>&1; then
+        return 1
+    fi
+    python3 <<'PY'
+import json, os
+path = os.path.expanduser("~/.cursor/mcp.json")
+datadog = {
+    "command": "npx",
+    "args": [
+        "datadog-mcp-server",
+        "--apiKey", "${DATADOG_LOCAL_DEVELOPMENT_KEY_2}",
+        "--appKey", "${DATADOG_APP_KEY}",
+        "--site", "datadoghq.com",
+        "--logsSite", "logs.datadoghq.com",
+        "--metricsSite", "datadoghq.com",
+    ],
+}
+os.makedirs(os.path.dirname(path), exist_ok=True)
+data = {}
+if os.path.isfile(path):
+    with open(path) as f:
+        data = json.load(f)
+ms = data.setdefault("mcpServers", {})
+if "datadog" not in ms:
+    ms["datadog"] = datadog
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+    print("✅ Cursor MCP: added datadog")
+else:
+    print("✅ Cursor MCP: datadog already present")
+PY
+}
+
+# Merge user MCP servers from Claude Code (~/.claude.json top-level mcpServers) into ~/.cursor/mcp.json.
+# Strips Claude-only fields (e.g. type). Only adds/updates entries present in Claude; does not remove Cursor-only servers.
+# Usage: sync_cursor_mcp_from_claude
+sync_cursor_mcp_from_claude() {
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "⚠️  Python3 not found; skipping Claude → Cursor MCP sync"
+        return 1
+    fi
+    claude_json="${HOME}/.claude.json"
+    if [ ! -f "$claude_json" ]; then
+        return 0
+    fi
+    script_dir=$(dirname "$(readlink -f "$0")")
+    python3 "$script_dir/scripts/sync_cursor_mcp_from_claude.py" || return $?
 }
 
 # Create symlinks to dot files
@@ -535,6 +643,7 @@ setup_work_tools() {
         setup_mongodb_mcp
         install_netlify_cli
         setup_netlify_mcp
+        merge_cursor_work_mcp_entries
     elif [ -t 0 ]; then
         printf "Setup work-specific tools (Glean, Datadog, MongoDB, Netlify MCP)? [y/N] "
         read -r is_work
@@ -544,11 +653,27 @@ setup_work_tools() {
             setup_mongodb_mcp
             install_netlify_cli
             setup_netlify_mcp
+            merge_cursor_work_mcp_entries
         else
             echo "Skipping work-specific tools."
         fi
     else
         echo "Skipping work-specific tools (non-interactive, WORK_MACHINE not set). Includes: Glean, Datadog, MongoDB, Netlify."
+    fi
+}
+
+# Merge work MCP servers into ~/.cursor/mcp.json (Glean, MongoDB, Netlify; Datadog if env vars set).
+merge_cursor_work_mcp_entries() {
+    script_dir=$(dirname "$(readlink -f "$0")")
+    work_fragment="$script_dir/cursor/mcp-servers-work.json"
+    if [ -f "$work_fragment" ]; then
+        echo "Merging work MCP servers into Cursor config..."
+        merge_cursor_mcp_fragment "$work_fragment" || true
+    fi
+    api_key="${DATADOG_LOCAL_DEVELOPMENT_KEY_2:-}"
+    app_key="${DATADOG_APP_KEY:-}"
+    if [ -n "$api_key" ] && [ -n "$app_key" ]; then
+        merge_cursor_mcp_datadog || true
     fi
 }
 
@@ -615,10 +740,18 @@ setup_langsmith_mcp
 
 # Install LangSmith skills for Claude Code
 if command -v claude >/dev/null 2>&1; then
-    echo "Installing LangSmith skills..."
+    echo "Installing LangSmith skills for Claude Code..."
     npx skills add langchain-ai/langsmith-skills --agent claude-code --skill '*' --yes --global 2>/dev/null \
-        && echo "✅ LangSmith skills installed" \
-        || echo "⚠️  LangSmith skills installation failed (can retry manually)"
+        && echo "✅ LangSmith skills installed (Claude Code)" \
+        || echo "⚠️  LangSmith skills installation failed for Claude Code (can retry manually)"
+fi
+
+# Install LangSmith skills for Cursor (same package; agent-specific install path)
+if command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -d "$HOME/.cursor" ]; then
+    echo "Installing LangSmith skills for Cursor..."
+    npx skills add langchain-ai/langsmith-skills --agent cursor --skill '*' --yes --global 2>/dev/null \
+        && echo "✅ LangSmith skills installed (Cursor)" \
+        || echo "⚠️  LangSmith skills installation failed for Cursor (can retry manually)"
 fi
 
 # Setup Claude Code config and commands
@@ -627,3 +760,6 @@ setup_superpowers_plugin
 
 # Setup work-specific tools (conditional)
 setup_work_tools
+
+# Align Cursor MCP with Claude Code user config (after all claude mcp add steps)
+sync_cursor_mcp_from_claude || true

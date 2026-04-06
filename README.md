@@ -17,7 +17,7 @@ cc-sync-to-cursor-workspace.sh /path/to/work/repo
 # Preview
 cc-sync-to-cursor-workspace.sh --dry-run /path/to/obsidian
 
-# Also copy plugin agents to .cursor/commands/
+# Also copy plugin agents to `.cursor/commands/`
 cc-sync-to-cursor-workspace.sh --agents /path/to/obsidian
 
 # Optional JSON at repo root or --config FILE: { "ignore_targets": ["skills-noisy-thing"] }
@@ -48,13 +48,19 @@ From the repo root:
 This runs:
 
 1. **`sh -n`** on `install.sh`, `cc-sync-to-cursor-workspace.sh`, `cursor-sync.sh`, `shell/work.sh`, and the verify script itself.
-2. **`shellcheck -S error`** on those files when `shellcheck` is installed (warnings are ignored so existing style nits do not fail the run).
-3. **Integration:** copies [`test-fixtures/minimal-claude-workspace/`](test-fixtures/minimal-claude-workspace/) to a temp directory, runs `cc-sync-to-cursor-workspace.sh` on it, and checks that `SKILL.md` was rewritten (`## Required context` and the former `@` path). **Requires `python3`** for that transform.
+2. **`python3 -m py_compile`** on [`scripts/sync_cursor_mcp_from_claude.py`](scripts/sync_cursor_mcp_from_claude.py) when present (syntax check).
+3. **`shellcheck -S error`** on those shell files when `shellcheck` is installed (warnings are ignored so existing style nits do not fail the run).
+4. **Integration:** copies [`test-fixtures/minimal-claude-workspace/`](test-fixtures/minimal-claude-workspace/) to a temp directory, runs `cc-sync-to-cursor-workspace.sh` on it, and checks that `SKILL.md` was rewritten (`## Required context` and the former `@` path). **Requires `python3`** for that transform.
+5. **E2E:** [`tests/e2e/run.sh`](tests/e2e/run.sh) (MCP Claude → Cursor sync script; isolated temp dirs, does not touch your real `~/.cursor`). **Requires `python3`.**
 
-Fast check without integration:
+Fast check without integration or e2e:
 
 ```sh
 ./scripts/verify-dotfiles.sh --quick
 ```
 
 Use this before pushing or when editing shell scripts. Full `install.sh` with a throwaway `HOME` is still useful for release-style validation but is slow and can touch MCP/network; the verify script is the default loop.
+
+### CI
+
+[GitHub Actions](.github/workflows/ci.yml) runs `./scripts/verify-dotfiles.sh` on every push and pull request to `main` / `master`. See [CONTRIBUTING.md](CONTRIBUTING.md) for expectations on changes to this repo.
