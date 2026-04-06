@@ -9,7 +9,7 @@ Run cheap checks on this Dotfiles repo:
   - shellcheck on those files (if shellcheck is on PATH)
   - cc-sync-to-cursor-workspace.sh on a temp copy of test-fixtures/minimal-claude-workspace
 
---quick   Skip integration sync (syntax + shellcheck only)"
+--quick   Skip integration sync and e2e (syntax + shellcheck + py_compile only)"
 }
 
 QUICK=0
@@ -49,6 +49,17 @@ do
     fi
 done
 
+printf '\n== python3 -m py_compile ==\n'
+for f in scripts/sync_cursor_mcp_from_claude.py; do
+    if [ -f "$f" ]; then
+        if ! python3 -m py_compile "$f"; then
+            fail "py_compile $f"
+        else
+            pass "py_compile $f"
+        fi
+    fi
+done
+
 if command -v shellcheck >/dev/null 2>&1; then
     printf '\n== shellcheck (-S error) ==\n'
     for f in install.sh cc-sync-to-cursor-workspace.sh cursor-sync.sh shell/work.sh scripts/verify-dotfiles.sh; do
@@ -66,8 +77,10 @@ fi
 
 if [ "$QUICK" -eq 1 ]; then
     printf '\n== integration (skipped --quick) ==\n'
+    printf '\n== e2e (skipped --quick) ==\n'
 elif [ "$errors" -ne 0 ]; then
     printf '\n== integration (skipped: fix syntax/shellcheck failures first) ==\n'
+    printf '\n== e2e (skipped: fix failures above first) ==\n'
 else
     printf '\n== integration (cc-sync on fixture copy) ==\n'
     FIXTURE="$ROOT/test-fixtures/minimal-claude-workspace"
@@ -96,6 +109,15 @@ else
         fi
         rm -rf "$WORK"
         trap - EXIT INT TERM
+    fi
+
+    if [ "$errors" -eq 0 ]; then
+        printf '\n== e2e (tests/e2e/run.sh) ==\n'
+        if ! sh "$ROOT/tests/e2e/run.sh"; then
+            fail "tests/e2e/run.sh"
+        else
+            pass "tests/e2e/run.sh"
+        fi
     fi
 fi
 
