@@ -7,6 +7,10 @@ case "$(uname -s)" in
     *)       OS="unknown" ;;
 esac
 
+# Set default workspace directory (used by Gas Town init)
+WORKSPACES_DIR="${WORKSPACES_DIR:-/workspaces/workspaces}"
+mkdir -p "$WORKSPACES_DIR"
+
 # Install a package using apt-get
 # Usage: install_from_apt <package_name>
 install_from_apt() {
