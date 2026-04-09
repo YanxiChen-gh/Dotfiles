@@ -836,8 +836,10 @@ setup_cloudev_tasks
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_langsmith_cli
-install_pup_cli
-install_gastown
+if [ "$WORK_MACHINE" = "1" ]; then
+    install_pup_cli
+    install_gastown
+fi
 
 # Setup Cursor IDE
 setup_cursor
