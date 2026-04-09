@@ -567,6 +567,66 @@ setup_claude_config() {
     fi
 }
 
+# Install Datadog pup CLI from GitHub releases
+# Downloads the latest pre-built binary for the current OS/arch
+# Usage: install_pup_cli
+install_pup_cli() {
+    echo "Checking for Datadog pup CLI..."
+
+    if command -v pup >/dev/null 2>&1; then
+        echo "✅ Datadog pup CLI already installed"
+        return 0
+    fi
+
+    echo "Installing Datadog pup CLI..."
+
+    # Determine OS and architecture for download
+    case "$(uname -s)" in
+        Darwin*) pup_os="Darwin" ;;
+        Linux*)  pup_os="Linux" ;;
+        *)
+            echo "⚠️  Unsupported OS for pup. Try: https://github.com/datadog-labs/pup"
+            return 1
+            ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64|amd64) pup_arch="x86_64" ;;
+        arm64|aarch64) pup_arch="arm64" ;;
+        *)
+            echo "⚠️  Unsupported architecture for pup: $(uname -m)"
+            return 1
+            ;;
+    esac
+
+    # Fetch latest version tag from GitHub
+    pup_version=$(gh release view --repo datadog-labs/pup --json tagName -q .tagName 2>/dev/null | sed 's/^v//')
+    if [ -z "$pup_version" ]; then
+        echo "⚠️  Could not determine latest pup version"
+        echo "   Try manually: https://github.com/datadog-labs/pup/releases"
+        return 1
+    fi
+
+    pup_tarball="pup_${pup_version}_${pup_os}_${pup_arch}.tar.gz"
+    pup_url="https://github.com/datadog-labs/pup/releases/download/v${pup_version}/${pup_tarball}"
+    pup_install_dir="$HOME/.local/bin"
+
+    mkdir -p "$pup_install_dir"
+
+    tmpdir=$(mktemp -d)
+    if curl -fsSL "$pup_url" -o "$tmpdir/$pup_tarball" && \
+       tar -xzf "$tmpdir/$pup_tarball" -C "$tmpdir" && \
+       install -m 755 "$tmpdir/pup" "$pup_install_dir/pup"; then
+        rm -rf "$tmpdir"
+        echo "✅ Datadog pup CLI installed to $pup_install_dir/pup"
+    else
+        rm -rf "$tmpdir"
+        echo "⚠️  Warning: Datadog pup CLI installation failed"
+        echo "   Try manually: https://github.com/datadog-labs/pup/releases"
+        return 1
+    fi
+}
+
 # Install Netlify CLI globally via npm
 install_netlify_cli() {
     echo "Checking for Netlify CLI..."
@@ -730,6 +790,7 @@ setup_cloudev_tasks
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_langsmith_cli
+install_pup_cli
 
 # Setup Cursor IDE
 setup_cursor
