@@ -635,8 +635,28 @@ install_pup_cli() {
     fi
 }
 
+# Ensure Node.js and npm are available
+# Codespaces typically have node pre-installed; this is a fallback
+install_node_if_missing() {
+    if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+        echo "✅ Node.js $(node --version) and npm $(npm --version) already installed"
+        return 0
+    fi
+
+    echo "Installing Node.js via NodeSource..."
+    if curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && \
+       sudo apt-get install -y nodejs; then
+        echo "✅ Node.js installed: $(node --version), npm $(npm --version)"
+    else
+        echo "⚠️  Warning: Node.js installation failed"
+        echo "   Try manually: https://nodejs.org/en/download"
+        return 1
+    fi
+}
+
 # Install Gas Town (gt) CLI and its dependencies
-# Installs: libicu-dev, tmux (apt), Dolt (binary), gt (npm)
+# Installs: libicu-dev, tmux (apt), Dolt (binary), node (if missing), gt (npm)
+# Then initializes gt and Dolt for the workspace if not already done
 install_gastown() {
     echo "Checking for Gas Town (gt) CLI..."
 
@@ -657,19 +677,35 @@ install_gastown() {
         fi
     fi
 
+    # Ensure npm is available before installing gt
+    install_node_if_missing || return 1
+
     # Install gt CLI via npm
     if command -v gt >/dev/null 2>&1; then
         echo "✅ Gas Town (gt) CLI already installed"
-        return 0
+    else
+        echo "Installing Gas Town (gt) CLI..."
+        if sudo npm install -g @gastown/gt; then
+            echo "✅ Gas Town (gt) CLI installed successfully"
+        else
+            echo "⚠️  Warning: Gas Town (gt) CLI installation failed"
+            echo "   Try manually: sudo npm install -g @gastown/gt"
+            return 1
+        fi
     fi
 
-    echo "Installing Gas Town (gt) CLI..."
-    if sudo npm install -g @gastown/gt; then
-        echo "✅ Gas Town (gt) CLI installed successfully"
-    else
-        echo "⚠️  Warning: Gas Town (gt) CLI installation failed"
-        echo "   Try manually: sudo npm install -g @gastown/gt"
-        return 1
+    # Initialize gt workspace and Dolt if not already done
+    if command -v gt >/dev/null 2>&1 && [ -n "$WORKSPACES_DIR" ]; then
+        if [ ! -d "$WORKSPACES_DIR/.beads" ]; then
+            echo "Initializing Gas Town workspace at $WORKSPACES_DIR..."
+            gt install "$WORKSPACES_DIR" --git && echo "✅ Gas Town workspace initialized"
+        fi
+        if command -v dolt >/dev/null 2>&1 && [ -d "$WORKSPACES_DIR/.beads" ]; then
+            if ! dolt --data-dir="$WORKSPACES_DIR/.beads" sql -q "SELECT 1" >/dev/null 2>&1; then
+                echo "Initializing Dolt database..."
+                gt dolt init-rig town && echo "✅ Dolt database initialized"
+            fi
+        fi
     fi
 }
 
