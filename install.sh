@@ -625,6 +625,14 @@ install_pup_cli() {
         echo "   Try manually: https://github.com/datadog-labs/pup/releases"
         return 1
     fi
+
+    # Install pup skills for AI coding assistants
+    echo "Installing pup skills..."
+    if pup skills install --target-agent claude-code 2>/dev/null; then
+        echo "✅ Datadog pup skills installed"
+    else
+        echo "⚠️  Warning: pup skills install failed (may need auth first: pup auth login)"
+    fi
 }
 
 # Install Netlify CLI globally via npm
