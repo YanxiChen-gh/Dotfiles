@@ -7,6 +7,10 @@ case "$(uname -s)" in
     *)       OS="unknown" ;;
 esac
 
+# Set default workspace directory (used by Gas Town init)
+WORKSPACES_DIR="${WORKSPACES_DIR:-/workspaces/workspaces}"
+mkdir -p "$WORKSPACES_DIR"
+
 # Install a package using apt-get
 # Usage: install_from_apt <package_name>
 install_from_apt() {
@@ -635,6 +639,80 @@ install_pup_cli() {
     fi
 }
 
+# Ensure Node.js and npm are available
+# Codespaces typically have node pre-installed; this is a fallback
+install_node_if_missing() {
+    if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+        echo "✅ Node.js $(node --version) and npm $(npm --version) already installed"
+        return 0
+    fi
+
+    echo "Installing Node.js via NodeSource..."
+    if curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && \
+       sudo apt-get install -y nodejs; then
+        echo "✅ Node.js installed: $(node --version), npm $(npm --version)"
+    else
+        echo "⚠️  Warning: Node.js installation failed"
+        echo "   Try manually: https://nodejs.org/en/download"
+        return 1
+    fi
+}
+
+# Install Gas Town (gt) CLI and its dependencies
+# Installs: libicu-dev, tmux (apt), Dolt (binary), node (if missing), gt (npm)
+# Then initializes gt and Dolt for the workspace if not already done
+install_gastown() {
+    echo "Checking for Gas Town (gt) CLI..."
+
+    # Install system dependencies (libicu-dev for beads, tmux for Mayor sessions)
+    install_from_apt "libicu-dev"
+    install_from_apt "tmux"
+
+    # Install Dolt if not present
+    if command -v dolt >/dev/null 2>&1; then
+        echo "✅ Dolt already installed"
+    else
+        echo "Installing Dolt..."
+        if curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash; then
+            echo "✅ Dolt installed successfully"
+        else
+            echo "⚠️  Warning: Dolt installation failed"
+            echo "   Try manually: curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash"
+        fi
+    fi
+
+    # Ensure npm is available before installing gt
+    install_node_if_missing || return 1
+
+    # Install gt CLI via npm
+    if command -v gt >/dev/null 2>&1; then
+        echo "✅ Gas Town (gt) CLI already installed"
+    else
+        echo "Installing Gas Town (gt) CLI..."
+        if sudo npm install -g @gastown/gt; then
+            echo "✅ Gas Town (gt) CLI installed successfully"
+        else
+            echo "⚠️  Warning: Gas Town (gt) CLI installation failed"
+            echo "   Try manually: sudo npm install -g @gastown/gt"
+            return 1
+        fi
+    fi
+
+    # Initialize gt workspace and Dolt if not already done
+    if command -v gt >/dev/null 2>&1 && [ -n "$WORKSPACES_DIR" ]; then
+        if [ ! -d "$WORKSPACES_DIR/.beads" ]; then
+            echo "Initializing Gas Town workspace at $WORKSPACES_DIR..."
+            gt install "$WORKSPACES_DIR" --git && echo "✅ Gas Town workspace initialized"
+        fi
+        if command -v dolt >/dev/null 2>&1 && [ -d "$WORKSPACES_DIR/.beads" ]; then
+            if ! dolt --data-dir="$WORKSPACES_DIR/.beads" sql -q "SELECT 1" >/dev/null 2>&1; then
+                echo "Initializing Dolt database..."
+                gt dolt init-rig town && echo "✅ Dolt database initialized"
+            fi
+        fi
+    fi
+}
+
 # Install Netlify CLI globally via npm
 install_netlify_cli() {
     echo "Checking for Netlify CLI..."
@@ -798,7 +876,10 @@ setup_cloudev_tasks
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_langsmith_cli
-install_pup_cli
+if [ "$WORK_MACHINE" = "1" ]; then
+    install_pup_cli
+    install_gastown
+fi
 
 # Setup Cursor IDE
 setup_cursor
