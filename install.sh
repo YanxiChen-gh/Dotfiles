@@ -567,6 +567,40 @@ setup_claude_config() {
     fi
 }
 
+# Install Tailscale CLI
+# Uses the official install script which adds the apt repo and installs.
+# In containers without systemd, starts tailscaled with userspace networking.
+# Usage: install_tailscale
+install_tailscale() {
+    echo "Checking for Tailscale..."
+
+    if command -v tailscale >/dev/null 2>&1; then
+        echo "✅ Tailscale already installed ($(tailscale version | head -1))"
+    else
+        echo "Installing Tailscale..."
+        if curl -fsSL https://tailscale.com/install.sh | sh; then
+            echo "✅ Tailscale installed successfully"
+        else
+            echo "⚠️  Warning: Tailscale installation failed"
+            echo "   Try manually: https://tailscale.com/download"
+            return 1
+        fi
+    fi
+
+    # In containers without systemd, start tailscaled manually
+    if ! tailscale status >/dev/null 2>&1; then
+        if ! pidof systemd >/dev/null 2>&1; then
+            echo "Starting tailscaled (no systemd detected)..."
+            sudo tailscaled --tun=userspace-networking \
+                --state=/var/lib/tailscale/tailscaled.state \
+                --socket=/run/tailscale/tailscaled.sock > /tmp/tailscaled.log 2>&1 &
+            echo "✅ tailscaled started with userspace networking (pid $!)"
+        else
+            sudo systemctl start tailscaled
+        fi
+    fi
+}
+
 # Install Datadog pup CLI from GitHub releases
 # Downloads the latest pre-built binary for the current OS/arch
 # Usage: install_pup_cli
@@ -790,7 +824,10 @@ setup_cloudev_tasks
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_langsmith_cli
-install_pup_cli
+if [ "$WORK_MACHINE" = "1" ]; then
+    install_tailscale
+    install_pup_cli
+fi
 
 # Setup Cursor IDE
 setup_cursor
