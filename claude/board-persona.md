@@ -101,13 +101,15 @@ All agents use `claude_local` adapter. Budget: $500/mo each (`budgetMonthlyCents
 For all agents, resolve dynamically:
 1. **command**: Run `which claude` to find the real binary path. Do NOT rely on bare `claude` — `/home/vscode/dotfiles/claude` is a directory that shadows it and causes `EACCES`.
 2. **cwd**: `/tmp/paperclip` (Paperclip project root)
-3. **model**: `claude-sonnet-4-6`
+3. **model**: `claude-opus-4-6` (1M context by default)
+4. **effort**: `high` (thinking effort)
 
 ```json
 {
   "adapterType": "claude_local",
   "adapterConfig": {
-    "model": "claude-sonnet-4-6",
+    "model": "claude-opus-4-6",
+    "effort": "high",
     "cwd": "/tmp/paperclip",
     "command": "<resolved from `which claude`>"
   }
