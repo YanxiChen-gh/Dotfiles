@@ -83,25 +83,46 @@ On load, check if the company is already set up (`GET /api/companies`). If it ex
 
 All agents use `claude_local` adapter. Budget: $500/mo each (`budgetMonthlyCents: 50000`).
 
+**Org chart**: CEO -> CTO + HeadOfProduct -> individual contributors.
+
+#### Leadership
+
 | Name | Role | Title | Reports To | Capabilities |
 |------|------|-------|------------|--------------|
 | CEO | ceo | Chief Executive Officer | — | Strategic leadership, org management, technical vision, AI strategy |
-| MLEngineer | engineer | Senior ML Engineer | CEO | Machine learning, deep learning, PyTorch, model training, MLOps, data pipelines, Python, TypeScript |
-| AIBackendEngineer | engineer | AI Backend Engineer | CEO | LLM integration, RAG systems, vector databases, prompt engineering, Node.js, TypeScript, API design |
-| AIFrontendEngineer | engineer | AI Frontend Engineer | CEO | React, TypeScript, AI-powered UX, streaming interfaces, chat UIs, real-time data visualization |
+| CTO | cto | Chief Technology Officer | CEO | Technical architecture, scalability, build-vs-buy, tech debt, infrastructure strategy, AI systems design |
+| HeadOfProduct | pm | Head of Product | CEO | Product strategy, user research, adoption, prioritization, cross-team coordination, non-engineer UX advocacy |
+
+#### Engineering (reports to CTO)
+
+| Name | Role | Title | Capabilities |
+|------|------|-------|--------------|
+| MLEngineer | engineer | Senior ML Engineer | Machine learning, deep learning, PyTorch, model training, MLOps, data pipelines, Python, TypeScript |
+| AIBackendEngineer | engineer | AI Backend Engineer | LLM integration, RAG systems, vector databases, prompt engineering, Node.js, TypeScript, API design |
+| AIFrontendEngineer | engineer | AI Frontend Engineer | React, TypeScript, AI-powered UX, streaming interfaces, chat UIs, real-time data visualization |
+| DevOpsEngineer | devops | Senior DevOps Engineer | Infrastructure, CI/CD pipelines, containers, dev environments, database management, monitoring |
+| QAEngineer | qa | Senior QA Engineer | Test strategy, quality assurance, CI/CD testing, regression testing, evaluation frameworks |
+
+#### Product (reports to HeadOfProduct)
+
+| Name | Role | Title | Capabilities |
+|------|------|-------|--------------|
+| AIResearcher | researcher | AI Research Analyst | User research, competitive analysis, assumption validation, survey design, AI evaluation best practices |
+| AIDesigner | designer | Senior AI UX Designer | UX design, user journey mapping, information architecture, accessibility, design systems |
 
 ### Adapter Configuration
 
 For all agents, resolve dynamically:
 1. **command**: Run `which claude` to find the real binary path. Do NOT rely on bare `claude` — `/home/vscode/dotfiles/claude` is a directory that shadows it and causes `EACCES`.
 2. **cwd**: `/tmp/paperclip` (Paperclip project root)
-3. **model**: `claude-sonnet-4-6`
+3. **model**: `claude-opus-4-6` for ICs and managers, `claude-sonnet-4-6` for CEO
 
 ```json
 {
   "adapterType": "claude_local",
   "adapterConfig": {
-    "model": "claude-sonnet-4-6",
+    "model": "claude-opus-4-6",
+    "effort": "high",
     "cwd": "/tmp/paperclip",
     "command": "<resolved from `which claude`>"
   }
