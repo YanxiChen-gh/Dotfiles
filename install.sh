@@ -670,15 +670,27 @@ setup_paperclip() {
         return 1
     fi
 
+    # Configure remote Postgres if PAPERCLIP_DATABASE_URL is set (before migrations and server start)
+    paperclip_config_dir="$HOME/.paperclip/instances/default"
+    paperclip_config="$paperclip_config_dir/config.json"
+    if [ -n "${PAPERCLIP_DATABASE_URL:-}" ] && [ ! -f "$paperclip_config" ]; then
+        mkdir -p "$paperclip_config_dir"
+        cat > "$paperclip_config" <<CONF
+{
+  "\$meta": { "version": 1, "updatedAt": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)", "source": "configure" },
+  "database": { "mode": "postgres", "connectionString": "$PAPERCLIP_DATABASE_URL" },
+  "logging": { "mode": "file" },
+  "server": { "deploymentMode": "local_trusted", "host": "127.0.0.1", "port": 3100 }
+}
+CONF
+        echo "✅ Paperclip configured for remote Postgres"
+    elif [ -f "$paperclip_config" ]; then
+        echo "✅ Paperclip config already exists"
+    fi
+
     # Run DB migrations
     echo "Running Paperclip DB migrations..."
     pnpm db:migrate 2>/dev/null || echo "⚠️  DB migration skipped or failed (may already be up to date)"
-
-    # Configure persistent Neon DB if PAPERCLIP_DATABASE_URL is set
-    if [ -n "${PAPERCLIP_DATABASE_URL:-}" ]; then
-        echo "DATABASE_URL=$PAPERCLIP_DATABASE_URL" > "$paperclip_dir/.env"
-        echo "✅ Paperclip configured with persistent Neon DB"
-    fi
 
     # Start dev server in background if not already running
     if curl -s http://127.0.0.1:3100/api/companies >/dev/null 2>&1; then
