@@ -816,6 +816,24 @@ setup_paperclip() {
         return 1
     fi
 
+    # Configure remote Postgres if PAPERCLIP_DATABASE_URL is set
+    paperclip_config_dir="$HOME/.paperclip/instances/default"
+    paperclip_config="$paperclip_config_dir/config.json"
+    if [ -n "$PAPERCLIP_DATABASE_URL" ] && [ ! -f "$paperclip_config" ]; then
+        mkdir -p "$paperclip_config_dir"
+        cat > "$paperclip_config" <<CONF
+{
+  "\$meta": { "version": 1, "updatedAt": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)", "source": "configure" },
+  "database": { "mode": "postgres", "connectionString": "$PAPERCLIP_DATABASE_URL" },
+  "logging": { "mode": "file" },
+  "server": { "deploymentMode": "local_trusted", "host": "127.0.0.1", "port": 3100 }
+}
+CONF
+        echo "✅ Paperclip configured for remote Postgres"
+    elif [ -f "$paperclip_config" ]; then
+        echo "✅ Paperclip config already exists"
+    fi
+
     # Run DB migrations
     echo "Running Paperclip DB migrations..."
     pnpm db:migrate 2>/dev/null || echo "⚠️  DB migration skipped or failed (may already be up to date)"
