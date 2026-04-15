@@ -779,6 +779,80 @@ setup_mongodb_mcp() {
     fi
 }
 
+# Setup Paperclip AI (agent orchestration platform)
+# Clones the repo, installs deps, runs migrations, and starts the dev server.
+# The company/agents are bootstrapped via the board persona file at load time.
+setup_paperclip() {
+    echo "Setting up Paperclip AI..."
+    paperclip_dir="/tmp/paperclip"
+
+    # Clone if not present
+    if [ ! -d "$paperclip_dir" ]; then
+        echo "Cloning Paperclip..."
+        if git clone https://github.com/paperclipai/paperclip.git "$paperclip_dir"; then
+            echo "✅ Paperclip cloned to $paperclip_dir"
+        else
+            echo "⚠️  Warning: Failed to clone Paperclip"
+            return 1
+        fi
+    else
+        echo "✅ Paperclip already present at $paperclip_dir"
+    fi
+
+    # Check for pnpm
+    if ! command -v pnpm >/dev/null 2>&1; then
+        echo "Installing pnpm..."
+        npm install -g pnpm || { echo "⚠️  pnpm install failed"; return 1; }
+    fi
+
+    # Install dependencies
+    echo "Installing Paperclip dependencies..."
+    cd "$paperclip_dir" || return 1
+    if pnpm install; then
+        echo "✅ Paperclip dependencies installed"
+    else
+        echo "⚠️  Warning: pnpm install failed"
+        cd - >/dev/null
+        return 1
+    fi
+
+    # Run DB migrations
+    echo "Running Paperclip DB migrations..."
+    pnpm db:migrate 2>/dev/null || echo "⚠️  DB migration skipped or failed (may already be up to date)"
+
+    # Start dev server in background if not already running
+    if curl -s http://127.0.0.1:3100/api/companies >/dev/null 2>&1; then
+        echo "✅ Paperclip server already running on port 3100"
+    else
+        echo "Starting Paperclip dev server..."
+        nohup pnpm dev >/tmp/paperclip-server.log 2>&1 &
+        echo "  Waiting for server to come up..."
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -s http://127.0.0.1:3100/api/companies >/dev/null 2>&1; then
+                echo "✅ Paperclip dev server started (port 3100)"
+                break
+            fi
+            sleep 2
+        done
+        if ! curl -s http://127.0.0.1:3100/api/companies >/dev/null 2>&1; then
+            echo "⚠️  Server didn't start within 20s. Check /tmp/paperclip-server.log"
+        fi
+    fi
+
+    cd - >/dev/null
+
+    # Copy board persona file into the Paperclip project and symlink to ~/.claude
+    script_dir=$(dirname "$(readlink -f "$0")")
+    persona_source="$script_dir/claude/board-persona.md"
+    persona_target="$paperclip_dir/.claude/board-persona.md"
+    if [ -f "$persona_source" ]; then
+        mkdir -p "$paperclip_dir/.claude"
+        cp "$persona_source" "$persona_target"
+        ln -sf "$persona_target" "$HOME/.claude/paperclip.md"
+        echo "✅ Board persona installed (load ~/.claude/paperclip.md persona)"
+    fi
+}
+
 # Setup work-specific tools (Glean MCP, Datadog MCP, MongoDB MCP, etc.)
 # Only runs if WORK_MACHINE=1 or user confirms interactively
 setup_work_tools() {
@@ -789,9 +863,10 @@ setup_work_tools() {
         setup_mongodb_mcp
         install_netlify_cli
         setup_netlify_mcp
+        setup_paperclip
         merge_cursor_work_mcp_entries
     elif [ -t 0 ]; then
-        printf "Setup work-specific tools (Glean, Datadog, MongoDB, Netlify MCP)? [y/N] "
+        printf "Setup work-specific tools (Glean, Datadog, MongoDB, Netlify, Paperclip)? [y/N] "
         read -r is_work
         if [ "$is_work" = "y" ] || [ "$is_work" = "Y" ]; then
             setup_glean_mcp
@@ -799,12 +874,13 @@ setup_work_tools() {
             setup_mongodb_mcp
             install_netlify_cli
             setup_netlify_mcp
+            setup_paperclip
             merge_cursor_work_mcp_entries
         else
             echo "Skipping work-specific tools."
         fi
     else
-        echo "Skipping work-specific tools (non-interactive, WORK_MACHINE not set). Includes: Glean, Datadog, MongoDB, Netlify."
+        echo "Skipping work-specific tools (non-interactive, WORK_MACHINE not set). Includes: Glean, Datadog, MongoDB, Netlify, Paperclip."
     fi
 }
 
