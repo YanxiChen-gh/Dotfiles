@@ -674,6 +674,12 @@ setup_paperclip() {
     echo "Running Paperclip DB migrations..."
     pnpm db:migrate 2>/dev/null || echo "⚠️  DB migration skipped or failed (may already be up to date)"
 
+    # Configure persistent Neon DB if PAPERCLIP_DATABASE_URL is set
+    if [ -n "${PAPERCLIP_DATABASE_URL:-}" ]; then
+        echo "DATABASE_URL=$PAPERCLIP_DATABASE_URL" > "$paperclip_dir/.env"
+        echo "✅ Paperclip configured with persistent Neon DB"
+    fi
+
     # Start dev server in background if not already running
     if curl -s http://127.0.0.1:3100/api/companies >/dev/null 2>&1; then
         echo "✅ Paperclip server already running on port 3100"

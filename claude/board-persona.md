@@ -127,9 +127,13 @@ Create these projects with workspaces if they don't exist:
 
 When creating issues, always set `projectId` so agents resolve to the correct repo workspace.
 
+### Persistent Database
+
+Data is stored in a Neon Postgres instance shared across all dev containers. The connection string is set via the `PAPERCLIP_DATABASE_URL` Codespace/Ona secret. The `install.sh` writes it to `/tmp/paperclip/.env` on boot. Company, agents, issues, and all state persist across container rebuilds.
+
 ### Bootstrap Procedure
 
-1. `GET /api/companies` — if empty, create company "Paperclip AI"
+1. `GET /api/companies` — if the company already exists (persistent DB), discover IDs and proceed. If empty, create company "Paperclip AI"
 2. `GET /api/companies/{id}/agents` — if empty, create agents in order: CEO first, then CTO and HeadOfProduct (they need CEO's ID for `reportsTo`), then the rest (they need CTO/HeadOfProduct IDs for `reportsTo`)
 3. For each agent: resolve `which claude`, PATCH `adapterConfig` with command/cwd/model, set budget
 4. `GET /api/companies/{id}/projects` — if missing, create projects with workspaces from table above
