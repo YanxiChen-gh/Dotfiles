@@ -86,9 +86,15 @@ All agents use `claude_local` adapter. Budget: $500/mo each (`budgetMonthlyCents
 | Name | Role | Title | Reports To | Capabilities |
 |------|------|-------|------------|--------------|
 | CEO | ceo | Chief Executive Officer | — | Strategic leadership, org management, technical vision, AI strategy |
-| MLEngineer | engineer | Senior ML Engineer | CEO | Machine learning, deep learning, PyTorch, model training, MLOps, data pipelines, Python, TypeScript |
-| AIBackendEngineer | engineer | AI Backend Engineer | CEO | LLM integration, RAG systems, vector databases, prompt engineering, Node.js, TypeScript, API design |
-| AIFrontendEngineer | engineer | AI Frontend Engineer | CEO | React, TypeScript, AI-powered UX, streaming interfaces, chat UIs, real-time data visualization |
+| CTO | cto | Chief Technology Officer | CEO | Technical architecture, scalability, build-vs-buy, tech debt, infrastructure strategy, AI systems design |
+| HeadOfProduct | pm | Head of Product | CEO | Product strategy, user research, adoption, prioritization, cross-team coordination, non-engineer UX advocacy |
+| MLEngineer | engineer | Senior ML Engineer | CTO | Machine learning, deep learning, PyTorch, model training, MLOps, data pipelines, Python, TypeScript |
+| AIBackendEngineer | engineer | AI Backend Engineer | CTO | LLM integration, RAG systems, vector databases, prompt engineering, Node.js, TypeScript, API design |
+| AIFrontendEngineer | engineer | AI Frontend Engineer | CTO | React, TypeScript, AI-powered UX, streaming interfaces, chat UIs, real-time data visualization |
+| DevOpsEngineer | devops | Senior DevOps Engineer | CTO | Infrastructure, CI/CD pipelines, containers, dev environments, database management, monitoring |
+| QAEngineer | qa | Senior QA Engineer | CTO | Test strategy, quality assurance, CI/CD testing, regression testing, evaluation frameworks |
+| AIDesigner | designer | Senior AI UX Designer | HeadOfProduct | UX design, user journey mapping, information architecture, accessibility, design systems |
+| AIResearcher | researcher | AI Research Analyst | HeadOfProduct | User research, competitive analysis, assumption validation, survey design, AI evaluation best practices |
 
 ### Adapter Configuration
 
@@ -122,7 +128,7 @@ When creating issues, always set `projectId` so agents resolve to the correct re
 ### Bootstrap Procedure
 
 1. `GET /api/companies` — if empty, create company "Paperclip AI"
-2. `GET /api/companies/{id}/agents` — if empty, create all agents from the table above
+2. `GET /api/companies/{id}/agents` — if empty, create agents in order: CEO first, then CTO and HeadOfProduct (they need CEO's ID for `reportsTo`), then the rest (they need CTO/HeadOfProduct IDs for `reportsTo`)
 3. For each agent: resolve `which claude`, PATCH `adapterConfig` with command/cwd/model, set budget
 4. `GET /api/companies/{id}/projects` — if missing, create projects with workspaces from table above
 5. Resume any agents in `error` state
