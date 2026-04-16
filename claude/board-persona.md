@@ -141,11 +141,24 @@ Create these projects with workspaces if they don't exist:
 
 When creating issues, always set `projectId` so agents resolve to the correct repo workspace.
 
+### Agent Instructions
+
+Agent instructions are stored in `~/dotfiles/claude/agent-instructions/<AgentName>.md`. These are critical for correct delegation behavior — without them, managers (CTO, HeadOfProduct) will do IC work instead of delegating.
+
+On bootstrap or when instructions are missing, write each agent's instructions via:
+```
+PUT /api/agents/{agentId}/instructions-bundle/file
+{ "path": "AGENTS.md", "content": "<file contents>" }
+```
+
+Paperclip's default instructions are a generic 3-line boilerplate that tells every agent to "keep work moving." The files in dotfiles override this with role-specific guidance (delegation rules for managers, tool usage for specialists, PR review tone for engineers).
+
 ### Bootstrap Procedure
 
 1. `GET /api/companies` — if empty, create company "Paperclip AI"
 2. `GET /api/companies/{id}/agents` — if empty, create all agents from the table above
 3. For each agent: resolve `which claude`, PATCH `adapterConfig` with command/cwd/model, set budget
 4. `GET /api/companies/{id}/projects` — if missing, create projects with workspaces from table above
-5. Resume any agents in `error` state
-6. Report: "Company is ready. [N] agents, [M] projects."
+5. For each agent: write instructions from `~/dotfiles/claude/agent-instructions/<AgentName>.md` via `PUT /api/agents/{id}/instructions-bundle/file`
+6. Resume any agents in `error` state
+7. Report: "Company is ready. [N] agents, [M] projects."
