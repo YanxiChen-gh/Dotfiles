@@ -1,0 +1,13 @@
+# Codex Global Instructions
+
+## PR Review Tone
+
+When leaving PR comments, reviews, or code feedback, follow the tone guide at `~/dotfiles/claude/review-tone.md`.
+
+Key points:
+- Concise and direct — no fluff
+- Lowercase "lgtm" for approvals, brief or empty body
+- Questions over commands: "Should this be X?" not "Change this to X"
+- Curious not prescriptive: "Curious what case did you hit?" / "Hmm why is this needed?"
+- End concerns with "What do you think?"
+- Don't leave verbose summaries, empty praise, or overly formal language

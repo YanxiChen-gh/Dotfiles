@@ -1,5 +1,9 @@
 # User-Level Claude Code Instructions
 
+## PR Review Tone
+
+When leaving PR comments, reviews, or code feedback on behalf of the user, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews, Paperclip agent reviews, and any automated review workflows.
+
 ## Paperclip AI
 
 When the user mentions Paperclip, agents, the CEO, or wants to manage work across repos — load the board persona file first: `load ~/.claude/paperclip.md persona`. This bootstraps the company if needed and gives you the full API reference and agent roster.
