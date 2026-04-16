@@ -97,12 +97,11 @@ All agents use `claude_local` adapter. Budget: $500/mo each (`budgetMonthlyCents
 
 | Name | Role | Title | Capabilities |
 |------|------|-------|--------------|
+| FullstackEngineer | engineer | Fullstack Engineer | Full-stack: React, TypeScript, Node.js, GraphQL resolvers, API design, LLM integration, RAG systems, prompt engineering, AI evaluation pipelines, LangSmith datasets/traces, Alpaca design system, frontend testing (Vitest), backend testing (Mocha) |
 | MLEngineer | engineer | Senior ML Engineer | Machine learning, deep learning, PyTorch, model training, MLOps, data pipelines, Python, TypeScript |
-| AIBackendEngineer | engineer | AI Backend Engineer | LLM integration, RAG systems, vector databases, prompt engineering, Node.js, TypeScript, API design |
-| AIFrontendEngineer | engineer | AI Frontend Engineer | React, TypeScript, AI-powered UX, streaming interfaces, chat UIs, real-time data visualization |
 | DevOpsEngineer | devops | Senior DevOps Engineer | Infrastructure, CI/CD pipelines, containers, dev environments, database management, monitoring |
 | QAEngineer | qa | Senior QA Engineer | Test strategy, quality assurance, CI/CD testing, regression testing, evaluation frameworks |
-| AIBIEngineer | engineer | AI BI Engineer | Snowflake SQL, data analysis, BI dashboards, data modeling, Cortex AI functions, data pipelines, analytics engineering. Delegates Snowflake queries to `cortex -p "<question>" --max-turns 15 --dangerously-allow-all-tool-calls` (Cortex Code CLI handles schema exploration and SQL execution autonomously). Requires Snowflake connection in `~/.snowflake/connections.toml`. |
+| AIBIEngineer | engineer | AI BI Engineer | Snowflake SQL, data analysis, BI dashboards. Delegates Snowflake queries to `cortex -p "<question>" --max-turns 15 --dangerously-allow-all-tool-calls`. |
 
 #### Product (reports to HeadOfProduct)
 
@@ -115,8 +114,10 @@ All agents use `claude_local` adapter. Budget: $500/mo each (`budgetMonthlyCents
 
 For all agents, resolve dynamically:
 1. **command**: Run `which claude` to find the real binary path. Do NOT rely on bare `claude` — `/home/vscode/dotfiles/claude` is a directory that shadows it and causes `EACCES`.
-2. **cwd**: `/tmp/paperclip` (Paperclip project root)
+2. **cwd**: `/workspaces/obsidian` (NOT `/tmp/paperclip`)
 3. **model**: `claude-opus-4-6` for ICs and managers, `claude-sonnet-4-6` for CEO
+
+For ICs, enable git worktrees for isolation:
 
 ```json
 {
@@ -124,11 +125,19 @@ For all agents, resolve dynamically:
   "adapterConfig": {
     "model": "claude-opus-4-6",
     "effort": "high",
-    "cwd": "/tmp/paperclip",
-    "command": "<resolved from `which claude`>"
+    "cwd": "/workspaces/obsidian",
+    "command": "<resolved from `which claude`>",
+    "workspaceStrategy": {
+      "type": "git_worktree",
+      "baseRef": "main",
+      "branchTemplate": "yanxi-chen/{{agent.name}}/{{issue.identifier}}",
+      "worktreeParentDir": "/workspaces/obsidian/.claude/worktrees"
+    }
   }
 }
 ```
+
+**Important**: Worktrees require `projectId` on every issue. Without it, Paperclip can't resolve the workspace and the worktree creation fails with "not a git repository."
 
 ### Projects
 
