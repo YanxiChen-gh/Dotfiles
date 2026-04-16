@@ -102,6 +102,7 @@ All agents use `claude_local` adapter. Budget: $500/mo each (`budgetMonthlyCents
 | AIFrontendEngineer | engineer | AI Frontend Engineer | React, TypeScript, AI-powered UX, streaming interfaces, chat UIs, real-time data visualization |
 | DevOpsEngineer | devops | Senior DevOps Engineer | Infrastructure, CI/CD pipelines, containers, dev environments, database management, monitoring |
 | QAEngineer | qa | Senior QA Engineer | Test strategy, quality assurance, CI/CD testing, regression testing, evaluation frameworks |
+| AIBIEngineer | engineer | AI BI Engineer | Snowflake SQL, data analysis, BI dashboards, data modeling, Cortex AI functions, data pipelines, analytics engineering. Delegates Snowflake queries to `cortex -p "<question>" --max-turns 15 --dangerously-allow-all-tool-calls` (Cortex Code CLI handles schema exploration and SQL execution autonomously). Requires Snowflake connection in `~/.snowflake/connections.toml`. |
 
 #### Product (reports to HeadOfProduct)
 
