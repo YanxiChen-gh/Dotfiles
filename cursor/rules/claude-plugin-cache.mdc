@@ -1,0 +1,18 @@
+---
+description: When working with Claude Code skills, plugins, evals, or the .claude/ directory, check the Claude Code plugin cache for additional tools and scripts.
+alwaysApply: false
+---
+
+# Claude Code plugin cache
+
+Cursor does not automatically discover Claude Code plugins. When working on tasks involving skills, evals, or .claude/ plugin code, check these locations for relevant utilities:
+
+- **Global plugin cache**: `~/.claude/plugins/cache/` — installed Claude Code plugins with scripts, skills, and agents
+- **Repo plugins**: `.claude/plugins/` — repo-local plugins may have scripts/ directories not synced to .cursor/
+
+Discover what's available:
+- `find ~/.claude/plugins/cache -name SKILL.md` — find all cached plugin skills
+- `find ~/.claude/plugins/cache -name "*.py" -o -name "*.sh" -o -name "*.ts"` — find utility scripts
+- `ls ~/.claude/plugins/cache/` — list installed plugins
+
+Check the plugin cache before concluding a tool or workflow doesn't exist.
