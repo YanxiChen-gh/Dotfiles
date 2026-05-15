@@ -8,11 +8,11 @@ alwaysApply: true
 
 ## Environment overview
 
-Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, Turborepo. Docker required for dev services. Environment fully mirrors `.devcontainer/Dockerfile` and `.devcontainer/lifecycle/` scripts. All 53 env vars are synced from the Ona environment via `ona environment ssh <id> -- env`.
+Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, Turborepo. Docker required for dev services. The Cursor Cloud startup script handles dependency refresh, Ona env sync, and Cloud VM kernel/Docker limits. This rule is for durable operating guidance and troubleshooting.
 
 ## Ona env var sync
 
-Env vars are pulled from the latest running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- env`) and written to `~/.ona_env`. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment.
+The startup script pulls env vars from the latest running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- env`) and writes them to `~/.ona_env`. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh should source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment.
 
 ## Private npm registries
 
@@ -20,22 +20,19 @@ Env vars are pulled from the latest running Ona environment using the Ona CLI (`
 
 ## Docker dev services
 
-- Set `DOCKER_CPUSET=0-7` (or match `nproc`) - default `0-11` assumes 12+ cores.
-- Use `sudo` for `docker compose` commands.
-- Raise inotify limits before starting the web stack: `sudo sysctl -w fs.inotify.max_user_watches=2097152 fs.inotify.max_user_instances=4096 fs.inotify.max_queued_events=65536`.
-- Configure Docker with a high default `nofile` ulimit (`1048576`) before creating containers. Without this, MongoDB can crash during index builds or snapshot restore with `Too many open files`.
+- Use `DOCKER_CPUSET=0-7` (or match `nproc`) because the repo default `0-11` assumes 12+ cores.
+- Use `sudo` for `docker compose` if the current user cannot access `/var/run/docker.sock`.
+- The startup script should raise inotify limits and configure Docker's default `nofile` ulimit before containers are created. If MongoDB crashes during index builds or snapshot restore with `Too many open files`, verify those limits and recreate the affected containers.
 - If Docker is restarted while compose containers exist, stale containerd task state can cause `file exists`; run `docker compose down --remove-orphans`, restart `dockerd`, then start again.
 - If MySQL exits with InnoDB `OS error 122` after a daemon restart, remove only the local dev MySQL volume (`docker volume rm obsidian_mysql-data`) and restart the stack.
-- MongoDB may crash with "Too many open files" on first startup if Docker `nofile` was not configured - restart after fixing Docker defaults.
-- Start infrastructure first, then app services.
 - Canonical web startup is `just dev-start-web -d`. This starts Mongo and the full web service group, but it does not restore the staging snapshot; `.devcontainer/util/prepare-dev-services.sh` performs snapshot recovery.
 - Full snapshot recovery can be heavy in small Cloud VMs. If it fails late, targeted `mongorestore` for required collections (for example `authusers`, `users`, `domains`, `frameworks`, `frameworksections`) can unblock local login smoke tests.
 
 ## System dependencies
 
-- `redis-memory-server` needs `libstdc++` for the linker: `sudo ln -sf /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so`
-- Dotfiles gitconfig overrides git credential helper — fix with: `git config credential.helper '!gh auth git-credential'`
+- `redis-memory-server` needs `libstdc++` for the linker. The startup script creates the `libstdc++.so` symlink; if Yarn native builds fail with `cannot find -lstdc++`, verify the symlink.
+- Dotfiles gitconfig can override the Cloud VM git credential helper. The startup script sets `git config credential.helper '!gh auth git-credential'`; reapply it if GitHub pushes fail.
 
 ## Dotfiles
 
-Cloned from `YanxiChen-gh/Dotfiles` at `~/Dotfiles`. Run `cd ~/Dotfiles && WORK_MACHINE=1 sh install.sh` to set up symlinks, Cursor config, MCP servers, and work tools.
+Cloud setup guidance is stored in `YanxiChen-gh/Dotfiles` under `cursor/rules-work/cloud-agent-setup.mdc` and symlinked by the dotfiles installer. Do not put personal Cloud VM instructions into the repo-level `AGENTS.md` unless the guidance applies to every Vanta engineer.
