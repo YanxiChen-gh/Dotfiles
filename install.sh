@@ -571,6 +571,54 @@ setup_claude_config() {
     fi
 }
 
+# Enable Vanta AI Platform Claude Code plugin and sync its skills to Cursor.
+setup_vanta_ai_platform_plugin() {
+    if [ "$WORK_MACHINE" != "1" ]; then
+        return 0
+    fi
+
+    obsidian_root="${OBSIDIAN_ROOT:-/workspaces/obsidian}"
+    if [ ! -d "$obsidian_root/.claude/plugins/ai-platform-team" ]; then
+        echo "ℹ️  obsidian checkout not found; skipping AI Platform plugin setup"
+        return 0
+    fi
+
+    echo "Setting up Vanta AI Platform plugin for Claude Code and Cursor..."
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 - "$HOME/.claude/settings.json" <<'PY'
+import json
+import os
+import sys
+
+path = os.path.expanduser(sys.argv[1])
+os.makedirs(os.path.dirname(path), exist_ok=True)
+
+data = {}
+if os.path.exists(path):
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+
+data.setdefault("enabledPlugins", {})["ai-platform-team@obsidian-local"] = True
+
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+        echo "✅ AI Platform plugin enabled for Claude Code"
+    else
+        echo "⚠️  Python3 not found; skipping Claude Code plugin enablement"
+    fi
+
+    script_dir=$(dirname "$(readlink -f "$0")")
+    sync_script="$script_dir/cc-sync-to-cursor-workspace.sh"
+    if [ -x "$sync_script" ]; then
+        "$sync_script" "$obsidian_root" || true
+    else
+        echo "⚠️  Cursor skill sync script not found or not executable: $sync_script"
+    fi
+}
+
 # Install Datadog pup CLI from GitHub releases
 # Downloads the latest pre-built binary for the current OS/arch
 # Usage: install_pup_cli
@@ -1033,6 +1081,7 @@ fi
 # Setup Claude Code config and commands
 setup_claude_config
 setup_superpowers_plugin
+setup_vanta_ai_platform_plugin
 
 # Setup work-specific tools (conditional)
 setup_work_tools
