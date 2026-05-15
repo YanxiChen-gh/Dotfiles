@@ -14,6 +14,17 @@ Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, 
 
 Env vars are pulled from the latest running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- env`) and written to `~/.ona_env`. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment.
 
+After writing `~/.ona_env`, verify in a fresh login zsh without printing values:
+`NPM_TASKFORCESH_TOKEN`, `NPM_LEVEL_CI_TOKEN`, `CLOUDSMITH_NPM_TOKEN`,
+`LANGSMITH_API_KEY`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` should all be
+present. If they are missing, treat the Ona sync or shell-source step as failed
+even if `yarn install` happens to succeed from cached packages.
+
+Ensure `~/.zshrc` has a guarded source stanza for `~/.ona_env` and does not
+error when optional shell customizations are absent. In Cloud VMs, a missing
+Oh My Zsh install or failing `gitstatus` initialization should not prevent env
+loading.
+
 ## Private npm registries
 
 `NPM_TASKFORCESH_TOKEN`, `NPM_LEVEL_CI_TOKEN`, and `CLOUDSMITH_NPM_TOKEN` are synced from Ona. These are required for `yarn install`.
@@ -21,7 +32,15 @@ Env vars are pulled from the latest running Ona environment using the Ona CLI (`
 ## Docker dev services
 
 - Set `DOCKER_CPUSET=0-7` (or match `nproc`) - default `0-11` assumes 12+ cores.
-- Use `sudo` for `docker compose` commands.
+- Ensure the Docker daemon is running before `just dev-start-web -d`.
+- Add `ubuntu` to the `docker` group and make sure the active shell session has
+  that group membership before running repo commands. If the current process
+  started before the group was applied, run Docker-backed commands under
+  `sg docker -c '...'` or restart the login session; otherwise `docker compose`
+  fails with socket permission errors even though the group file is correct.
+- Use `sudo` for direct `docker compose` commands only when group access is not
+  available. Prefer fixing group access for repo scripts because `just
+  dev-start-web -d` invokes Docker internally.
 - Raise inotify limits before starting the web stack: `sudo sysctl -w fs.inotify.max_user_watches=2097152 fs.inotify.max_user_instances=4096 fs.inotify.max_queued_events=65536`.
 - Configure Docker with a high default `nofile` ulimit (`1048576`) before creating containers. Without this, MongoDB can crash during index builds or snapshot restore with `Too many open files`.
 - If Docker is restarted while compose containers exist, stale containerd task state can cause `file exists`; run `docker compose down --remove-orphans`, restart `dockerd`, then start again.
@@ -30,11 +49,28 @@ Env vars are pulled from the latest running Ona environment using the Ona CLI (`
 - Start infrastructure first, then app services.
 - Canonical web startup is `just dev-start-web -d`. This starts Mongo and the full web service group, but it does not restore the staging snapshot; `.devcontainer/util/prepare-dev-services.sh` performs snapshot recovery.
 - Full snapshot recovery can be heavy in small Cloud VMs. If it fails late, targeted `mongorestore` for required collections (for example `authusers`, `users`, `domains`, `frameworks`, `frameworksections`) can unblock local login smoke tests.
+- If local dev impersonation fails with `User <id> not found`, check
+  `obsidian.authusers` and `obsidian.users` counts. Zero counts mean the stack is
+  running but snapshot data was not restored.
 
 ## System dependencies
 
 - `redis-memory-server` needs `libstdc++` for the linker: `sudo ln -sf /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so`
 - Dotfiles gitconfig overrides git credential helper — fix with: `git config credential.helper '!gh auth git-credential'`
+- Keep the Cloud Git identity as Yanxi, not Cursor Agent:
+  `git config --global user.name "Yanxi Chen"` and
+  `git config --global user.email "13044821+YanxiChen-gh@users.noreply.github.com"`.
+  Do not let Cursor-generated signing config or `cursoragent@cursor.com`
+  overwrite the Dotfiles identity.
+
+## MCP servers
+
+- For LangSmith, `LANGSMITH_API_KEY` must come from the synced Ona env. Do not
+  leave `~/.cursor/mcp.json` with the placeholder
+  `"LANGSMITH_API_KEY": "your_langsmith_api_key"` because that overrides the real
+  environment for the MCP server process. After setup, smoke-test with an MCP
+  `initialize` and `tools/list` request against `uvx langsmith-mcp-server`
+  without printing the key.
 
 ## Dotfiles
 
