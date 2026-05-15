@@ -22,8 +22,14 @@ Env vars are pulled from the latest running Ona environment using the Ona CLI (`
 
 - Set `DOCKER_CPUSET=0-7` (or match `nproc`) - default `0-11` assumes 12+ cores.
 - Use `sudo` for `docker compose` commands.
-- MongoDB may crash with "Too many open files" on first startup - restart the container.
+- Raise inotify limits before starting the web stack: `sudo sysctl -w fs.inotify.max_user_watches=2097152 fs.inotify.max_user_instances=4096 fs.inotify.max_queued_events=65536`.
+- Configure Docker with a high default `nofile` ulimit (`1048576`) before creating containers. Without this, MongoDB can crash during index builds or snapshot restore with `Too many open files`.
+- If Docker is restarted while compose containers exist, stale containerd task state can cause `file exists`; run `docker compose down --remove-orphans`, restart `dockerd`, then start again.
+- If MySQL exits with InnoDB `OS error 122` after a daemon restart, remove only the local dev MySQL volume (`docker volume rm obsidian_mysql-data`) and restart the stack.
+- MongoDB may crash with "Too many open files" on first startup if Docker `nofile` was not configured - restart after fixing Docker defaults.
 - Start infrastructure first, then app services.
+- Canonical web startup is `just dev-start-web -d`. This starts Mongo and the full web service group, but it does not restore the staging snapshot; `.devcontainer/util/prepare-dev-services.sh` performs snapshot recovery.
+- Full snapshot recovery can be heavy in small Cloud VMs. If it fails late, targeted `mongorestore` for required collections (for example `authusers`, `users`, `domains`, `frameworks`, `frameworksections`) can unblock local login smoke tests.
 
 ## System dependencies
 
