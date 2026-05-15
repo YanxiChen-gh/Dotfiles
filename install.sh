@@ -924,7 +924,7 @@ sync_ona_env_from_ona() {
     fi
 
     script_dir=$(dirname "$(readlink -f "$0")")
-    sync_script="$script_dir/scripts/sync_ona_env_from_ona.sh"
+    sync_script="$script_dir/sync-ona-env-to-cursor-cloud.sh"
     if [ -x "$sync_script" ]; then
         "$sync_script" || true
     fi

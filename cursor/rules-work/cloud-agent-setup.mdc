@@ -12,9 +12,47 @@ Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, 
 
 ## Ona env var sync
 
-The startup script pulls env vars from the latest running Ona environment using `scripts/sync_ona_env_from_ona.sh` and writes them to `~/.ona_env` without printing secret values. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh should source this file while preserving local `HOME`, `USER`, `LOGNAME`, `SHELL`, `PWD`, and `PATH`. This includes API keys, npm tokens, Turbo config, Oso config, `GH_TOKEN`, etc., matching the real dev environment.
+Use the Dotfiles script for the actual sync logic:
 
-For work machines only (`WORK_MACHINE=1`), run `scripts/setup_work_github_auth.sh` after syncing `~/.ona_env`. It authenticates the GitHub CLI from `GH_TOKEN`, removes the fallback `cursor` auth if present, runs `gh auth setup-git`, and sets Git identity to Yanxi. Never print `GH_TOKEN`; validate with `gh api user --jq .login`.
+```sh
+sync-ona-env-to-cursor-cloud.sh
+```
+
+That script selects the latest running Ona environment for `VantaInc/obsidian`
+on `main`, pulls its login-shell process env, and writes the Cursor Cloud env
+file at `~/.ona_env`. Keep selection, filtering, quoting, atomic writes, and
+validation in the script — not in this rule.
+
+Expected invariants after the script runs:
+
+- `GH_TOKEN` is copied from Ona; GitHub CLI and authenticated Git operations depend on it.
+- Secret-like variables (`*_TOKEN`, `*_API_KEY`, `*_APP_KEY`, `*_SECRET`, etc.) and Vanta tooling variables (Turbo, Oso, npm registry config) are synced without printing values.
+- Validation prints only `VAR=SET`/`VAR=MISSING`, never secret values.
+- Do not import remote machine identity variables such as `HOME`, `USER`,
+  `LOGNAME`, `SHELL`, `PWD`, `OLDPWD`, `SHLVL`, `_`, or `PATH`. Importing the
+  Ona instance's `HOME` (for example `/home/vscode`) breaks local Cloud VM path
+  expansion and causes later commands to look for files under the wrong home
+  directory.
+- `GH_TOKEN`, `NPM_TASKFORCESH_TOKEN`, `NPM_LEVEL_CI_TOKEN`,
+  `CLOUDSMITH_NPM_TOKEN`, `LANGSMITH_API_KEY`, `OPENAI_API_KEY`, and
+  `ANTHROPIC_API_KEY` are present in a fresh zsh after sync. If they are
+  missing, treat the Ona sync or shell-source step as failed even if cached
+  packages let `yarn install` succeed.
+
+`~/.ona_env` must be sourced by interactive and non-interactive shells. Bash
+startup files and zsh startup files should source it; for zsh specifically,
+`~/.zshenv` must source `~/.ona_env` so `zsh -lc` sees the same variables as an
+interactive shell. Preserve `HOME=/home/ubuntu`; do not replace it with the Ona
+instance home. Ensure `~/.zshrc` has a guarded source stanza for `~/.ona_env` and
+does not error when optional shell customizations are absent. In Cloud VMs, a
+missing Oh My Zsh install or failing `gitstatus` initialization should not
+prevent env loading.
+
+For work machines only (`WORK_MACHINE=1`), run `scripts/setup_work_github_auth.sh`
+after syncing `~/.ona_env`. It authenticates the GitHub CLI from `GH_TOKEN`,
+removes the fallback `cursor` auth if present, configures authenticated Git
+operations through `gh auth git-credential`, and sets Git identity to Yanxi.
+Never print `GH_TOKEN`; validate with `gh api user --jq .login`.
 
 ## Private npm registries
 
@@ -23,17 +61,43 @@ For work machines only (`WORK_MACHINE=1`), run `scripts/setup_work_github_auth.s
 ## Docker dev services
 
 - Use `DOCKER_CPUSET=0-7` (or match `nproc`) because the repo default `0-11` assumes 12+ cores.
-- Use `sudo` for `docker compose` if the current user cannot access `/var/run/docker.sock`.
+- Ensure the Docker daemon is running before `just dev-start-web -d`.
+- Add `ubuntu` to the `docker` group and make sure the active shell session has
+  that group membership before running repo commands. If the current process
+  started before the group was applied, run Docker-backed commands under
+  `sg docker -c '...'` or restart the login session; otherwise `docker compose`
+  fails with socket permission errors even though the group file is correct.
+- Use `sudo` for direct `docker compose` commands only when group access is not
+  available. Prefer fixing group access for repo scripts because `just
+  dev-start-web -d` invokes Docker internally.
 - The startup script should raise inotify limits and configure Docker's default `nofile` ulimit before containers are created. If MongoDB crashes during index builds or snapshot restore with `Too many open files`, verify those limits and recreate the affected containers.
 - If Docker is restarted while compose containers exist, stale containerd task state can cause `file exists`; run `docker compose down --remove-orphans`, restart `dockerd`, then start again.
 - If MySQL exits with InnoDB `OS error 122` after a daemon restart, remove only the local dev MySQL volume (`docker volume rm obsidian_mysql-data`) and restart the stack.
+- Start infrastructure first, then app services.
 - Canonical web startup is `just dev-start-web -d`. This starts Mongo and the full web service group, but it does not restore the staging snapshot; `.devcontainer/util/prepare-dev-services.sh` performs snapshot recovery.
 - Full snapshot recovery can be heavy in small Cloud VMs. If it fails late, targeted `mongorestore` for required collections (for example `authusers`, `users`, `domains`, `frameworks`, `frameworksections`) can unblock local login smoke tests.
+- If local dev impersonation fails with `User <id> not found`, check
+  `obsidian.authusers` and `obsidian.users` counts. Zero counts mean the stack is
+  running but snapshot data was not restored.
 
 ## System dependencies
 
 - `redis-memory-server` needs `libstdc++` for the linker. The startup script creates the `libstdc++.so` symlink; if Yarn native builds fail with `cannot find -lstdc++`, verify the symlink.
 - Dotfiles gitconfig can override the Cloud VM git credential helper. The startup script sets `git config credential.helper '!gh auth git-credential'`; reapply it if GitHub pushes fail.
+- Keep the Cloud Git identity as Yanxi, not Cursor Agent:
+  `git config --global user.name "Yanxi Chen"` and
+  `git config --global user.email "13044821+YanxiChen-gh@users.noreply.github.com"`.
+  Do not let Cursor-generated signing config or `cursoragent@cursor.com`
+  overwrite the Dotfiles identity.
+
+## MCP servers
+
+- For LangSmith, `LANGSMITH_API_KEY` must come from the synced Ona env. Do not
+  leave `~/.cursor/mcp.json` with the placeholder
+  `"LANGSMITH_API_KEY": "your_langsmith_api_key"` because that overrides the real
+  environment for the MCP server process. After setup, smoke-test with an MCP
+  `initialize` and `tools/list` request against `uvx langsmith-mcp-server`
+  without printing the key.
 
 ## Dotfiles
 

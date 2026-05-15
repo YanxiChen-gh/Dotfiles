@@ -40,7 +40,7 @@ github_user=${GITHUB_USER:-YanxiChen-gh}
 git_name=${GIT_AUTHOR_NAME:-${GIT_COMMITTER_NAME:-Yanxi Chen}}
 git_email=${GIT_AUTHOR_EMAIL:-${GIT_COMMITTER_EMAIL:-13044821+${github_user}@users.noreply.github.com}}
 
-token_login=$(GH_TOKEN=$GH_TOKEN gh api user --jq .login 2>/dev/null || true)
+token_login=$(env GH_TOKEN="$GH_TOKEN" gh api user --jq .login 2>/dev/null || true)
 if [ -z "$token_login" ]; then
     echo "Skipping GitHub auth setup: GH_TOKEN could not authenticate with GitHub."
     exit 0
