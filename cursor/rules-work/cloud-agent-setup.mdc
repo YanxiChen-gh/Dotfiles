@@ -12,24 +12,41 @@ Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, 
 
 ## Ona env var sync
 
-Env vars are pulled from the latest running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- bash -lc env`) and written to `~/.ona_env`. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment. Use the login shell form because some secrets, including GitHub credentials, may be loaded by shell startup and are absent from plain `env`.
+Use the Dotfiles script for the actual sync logic:
 
-When writing `~/.ona_env`, do not import remote machine identity variables such
-as `HOME`, `USER`, `LOGNAME`, `SHELL`, `PWD`, `OLDPWD`, `SHLVL`, `_`, or `PATH`.
-Importing the Ona instance's `HOME` (for example `/home/vscode`) breaks local
-Cloud VM path expansion and causes later commands to look for files under the
-wrong home directory.
+```sh
+sync-ona-env-to-cursor-cloud.sh
+```
 
-After writing `~/.ona_env`, verify in a fresh login zsh without printing values:
-`NPM_TASKFORCESH_TOKEN`, `NPM_LEVEL_CI_TOKEN`, `CLOUDSMITH_NPM_TOKEN`,
-`LANGSMITH_API_KEY`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` should all be
-present. If they are missing, treat the Ona sync or shell-source step as failed
-even if `yarn install` happens to succeed from cached packages.
+That script selects the latest running Ona environment for `VantaInc/obsidian`
+on `main`, pulls its login-shell process env, and writes the Cursor Cloud env
+file at `~/.ona_env`. Keep selection, filtering, quoting, atomic writes, and
+validation in the script — not in this rule.
 
-Ensure `~/.zshrc` has a guarded source stanza for `~/.ona_env` and does not
-error when optional shell customizations are absent. In Cloud VMs, a missing
-Oh My Zsh install or failing `gitstatus` initialization should not prevent env
-loading.
+Expected invariants after the script runs:
+
+- `GH_TOKEN` is copied from Ona; GitHub CLI and authenticated Git operations depend on it.
+- Secret-like variables (`*_TOKEN`, `*_API_KEY`, `*_APP_KEY`, `*_SECRET`, etc.) and Vanta tooling variables (Turbo, Oso, npm registry config) are synced without printing values.
+- Validation prints only `VAR=SET`/`VAR=MISSING`, never secret values.
+- Do not import remote machine identity variables such as `HOME`, `USER`,
+  `LOGNAME`, `SHELL`, `PWD`, `OLDPWD`, `SHLVL`, `_`, or `PATH`. Importing the
+  Ona instance's `HOME` (for example `/home/vscode`) breaks local Cloud VM path
+  expansion and causes later commands to look for files under the wrong home
+  directory.
+- `GH_TOKEN`, `NPM_TASKFORCESH_TOKEN`, `NPM_LEVEL_CI_TOKEN`,
+  `CLOUDSMITH_NPM_TOKEN`, `LANGSMITH_API_KEY`, `OPENAI_API_KEY`, and
+  `ANTHROPIC_API_KEY` are present in a fresh zsh after sync. If they are
+  missing, treat the Ona sync or shell-source step as failed even if cached
+  packages let `yarn install` succeed.
+
+`~/.ona_env` must be sourced by interactive and non-interactive shells. Bash
+startup files and zsh startup files should source it; for zsh specifically,
+`~/.zshenv` must source `~/.ona_env` so `zsh -lc` sees the same variables as an
+interactive shell. Preserve `HOME=/home/ubuntu`; do not replace it with the Ona
+instance home. Ensure `~/.zshrc` has a guarded source stanza for `~/.ona_env` and
+does not error when optional shell customizations are absent. In Cloud VMs, a
+missing Oh My Zsh install or failing `gitstatus` initialization should not
+prevent env loading.
 
 ## Private npm registries
 
