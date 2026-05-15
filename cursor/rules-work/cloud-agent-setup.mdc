@@ -12,7 +12,21 @@ Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, 
 
 ## Ona env var sync
 
-The startup script pulls env vars from the latest running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- env`) and writes them to `~/.ona_env`. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh should source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment.
+Use the Dotfiles script for the actual sync logic:
+
+```sh
+sync-ona-env-to-cursor-cloud.sh
+```
+
+That script selects the latest running Ona environment for `VantaInc/obsidian` on `main`, pulls its process env via `ona environment exec <id> -- env`, and writes the Cursor Cloud env file at `~/.ona_env`. Keep selection, filtering, quoting, atomic writes, and validation in the script — not in this rule.
+
+Expected invariants after the script runs:
+
+- `GH_TOKEN` is copied from Ona; GitHub CLI and authenticated Git operations depend on it.
+- Secret-like variables (`*_TOKEN`, `*_API_KEY`, `*_APP_KEY`, `*_SECRET`, etc.) and Vanta tooling variables (Turbo, Oso, npm registry config) are synced without printing values.
+- Validation prints only `VAR=SET`/`VAR=MISSING`, never secret values.
+
+`~/.ona_env` must be sourced by interactive and non-interactive shells. Bash startup files and zsh startup files should source it; for zsh specifically, `~/.zshenv` must source `~/.ona_env` so `zsh -lc` sees the same variables as an interactive shell. Preserve `HOME=/home/ubuntu`; do not replace it with the Ona instance home.
 
 ## Private npm registries
 
