@@ -18,5 +18,8 @@
     ui = true
 [core]
 	excludesfile = ~/.gitignore
+[user]
+	name = Yanxi Chen
+	email = 13044821+YanxiChen-gh@users.noreply.github.com
 [pull]
 	rebase = false
