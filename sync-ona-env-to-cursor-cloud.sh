@@ -121,7 +121,7 @@ PY
 fi
 
 REMOTE_ENV="$WORKDIR/remote.env"
-ona environment exec "$ENV_ID" --timeout "$TIMEOUT_SECONDS" -- env >"$REMOTE_ENV"
+ona environment exec "$ENV_ID" --timeout "$TIMEOUT_SECONDS" -- bash -lc env >"$REMOTE_ENV"
 chmod 600 "$REMOTE_ENV"
 
 OUTPUT_DIR=$(dirname "$OUTPUT_FILE")
