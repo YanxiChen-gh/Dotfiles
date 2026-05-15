@@ -12,7 +12,9 @@ Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, 
 
 ## Ona env var sync
 
-The startup script pulls env vars from the latest running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- env`) and writes them to `~/.ona_env`. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh should source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment.
+The startup script pulls env vars from the latest running Ona environment using `scripts/sync_ona_env_from_ona.sh` and writes them to `~/.ona_env` without printing secret values. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh should source this file while preserving local `HOME`, `USER`, `LOGNAME`, `SHELL`, `PWD`, and `PATH`. This includes API keys, npm tokens, Turbo config, Oso config, `GH_TOKEN`, etc., matching the real dev environment.
+
+For work machines only (`WORK_MACHINE=1`), run `scripts/setup_work_github_auth.sh` after syncing `~/.ona_env`. It authenticates the GitHub CLI from `GH_TOKEN`, removes the fallback `cursor` auth if present, runs `gh auth setup-git`, and sets Git identity to Yanxi. Never print `GH_TOKEN`; validate with `gh api user --jq .login`.
 
 ## Private npm registries
 

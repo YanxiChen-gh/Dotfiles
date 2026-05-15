@@ -917,6 +917,32 @@ merge_cursor_work_mcp_entries() {
     fi
 }
 
+# Sync work secrets from Ona into ~/.ona_env without printing values.
+sync_ona_env_from_ona() {
+    if [ "$WORK_MACHINE" != "1" ]; then
+        return 0
+    fi
+
+    script_dir=$(dirname "$(readlink -f "$0")")
+    sync_script="$script_dir/scripts/sync_ona_env_from_ona.sh"
+    if [ -x "$sync_script" ]; then
+        "$sync_script" || true
+    fi
+}
+
+# Configure GitHub CLI and Git identity from the work Ona GH_TOKEN.
+setup_work_github_auth() {
+    if [ "$WORK_MACHINE" != "1" ]; then
+        return 0
+    fi
+
+    script_dir=$(dirname "$(readlink -f "$0")")
+    auth_script="$script_dir/scripts/setup_work_github_auth.sh"
+    if [ -x "$auth_script" ]; then
+        "$auth_script" || true
+    fi
+}
+
 # Install LangSmith CLI
 # Usage: install_langsmith_cli
 install_langsmith_cli() {
@@ -965,6 +991,11 @@ fi
 
 create_symlinks
 setup_cloudev_tasks
+
+if [ "$WORK_MACHINE" = "1" ]; then
+    sync_ona_env_from_ona
+    setup_work_github_auth
+fi
 
 # Install tools from URLs
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
