@@ -1,0 +1,35 @@
+---
+description: Cursor Cloud VM setup instructions for Vanta monorepo
+globs: 
+alwaysApply: true
+---
+
+# Cursor Cloud specific instructions
+
+## Environment overview
+
+Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, Turborepo. Docker required for dev services. Environment fully mirrors `.devcontainer/Dockerfile` and `.devcontainer/lifecycle/` scripts. All 53 env vars are synced from the Ona environment via `ona environment ssh <id> -- env`.
+
+## Ona env var sync
+
+Env vars are pulled from the running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- env`) and written to `~/.ona_env`. Both bash and zsh source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment.
+
+## Private npm registries
+
+`NPM_TASKFORCESH_TOKEN`, `NPM_LEVEL_CI_TOKEN`, and `CLOUDSMITH_NPM_TOKEN` are synced from Ona. These are required for `yarn install`.
+
+## Docker dev services
+
+- Set `DOCKER_CPUSET=0-7` (or match `nproc`) - default `0-11` assumes 12+ cores.
+- Use `sudo` for `docker compose` commands.
+- MongoDB may crash with "Too many open files" on first startup - restart the container.
+- Start infrastructure first, then app services.
+
+## System dependencies
+
+- `redis-memory-server` needs `libstdc++` for the linker: `sudo ln -sf /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /usr/lib/x86_64-linux-gnu/libstdc++.so`
+- Dotfiles gitconfig overrides git credential helper — fix with: `git config credential.helper '!gh auth git-credential'`
+
+## Dotfiles
+
+Cloned from `YanxiChen-gh/Dotfiles` at `~/Dotfiles`. Run `cd ~/Dotfiles && WORK_MACHINE=1 sh install.sh` to set up symlinks, Cursor config, MCP servers, and work tools.
