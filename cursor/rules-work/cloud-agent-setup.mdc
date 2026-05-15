@@ -12,7 +12,7 @@ Large monorepo (~80 apps, ~372 packages) using Yarn 4 (Berry), Node.js 22.22.2, 
 
 ## Ona env var sync
 
-Env vars are pulled from the running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- env`) and written to `~/.ona_env`. Both bash and zsh source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment.
+Env vars are pulled from the latest running Ona environment using the Ona CLI (`ona login --token $GITPOD_PAT && ona environment ssh <id> -- env`) and written to `~/.ona_env`. Select the running environment with the newest `metadata.lastStartedAt` value, falling back to `metadata.createdAt`. Both bash and zsh source this file. This includes API keys, npm tokens, Turbo config, Oso config, etc., matching the real dev environment.
 
 ## Private npm registries
 
