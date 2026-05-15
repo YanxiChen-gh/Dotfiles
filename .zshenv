@@ -1,2 +1,18 @@
-# Source shared Ona-provided environment variables for non-interactive zsh shells.
-[ -f "$HOME/.ona_env" ] && . "$HOME/.ona_env"
+# Source work Ona environment for non-interactive zsh shells.
+# The marker check keeps this scoped to generated Cursor Cloud env files.
+if [ -f "$HOME/.ona_env" ] && command grep -q "Synced from Ona environment .* for Cursor Cloud" "$HOME/.ona_env" 2>/dev/null; then
+    _ona_saved_HOME=$HOME
+    _ona_saved_USER=${USER:-}
+    _ona_saved_LOGNAME=${LOGNAME:-}
+    _ona_saved_SHELL=${SHELL:-}
+    _ona_saved_PWD=$PWD
+    _ona_saved_PATH=$PATH
+    source "$HOME/.ona_env"
+    export HOME=$_ona_saved_HOME
+    [ -n "$_ona_saved_USER" ] && export USER=$_ona_saved_USER
+    [ -n "$_ona_saved_LOGNAME" ] && export LOGNAME=$_ona_saved_LOGNAME
+    [ -n "$_ona_saved_SHELL" ] && export SHELL=$_ona_saved_SHELL
+    export PWD=$_ona_saved_PWD
+    export PATH=$_ona_saved_PATH
+    unset _ona_saved_HOME _ona_saved_USER _ona_saved_LOGNAME _ona_saved_SHELL _ona_saved_PWD _ona_saved_PATH
+fi

@@ -48,6 +48,12 @@ does not error when optional shell customizations are absent. In Cloud VMs, a
 missing Oh My Zsh install or failing `gitstatus` initialization should not
 prevent env loading.
 
+For work machines only (`WORK_MACHINE=1`), run `scripts/setup_work_github_auth.sh`
+after syncing `~/.ona_env`. It authenticates the GitHub CLI from `GH_TOKEN`,
+removes the fallback `cursor` auth if present, configures authenticated Git
+operations through `gh auth git-credential`, and sets Git identity to Yanxi.
+Never print `GH_TOKEN`; validate with `gh api user --jq .login`.
+
 ## Private npm registries
 
 `NPM_TASKFORCESH_TOKEN`, `NPM_LEVEL_CI_TOKEN`, and `CLOUDSMITH_NPM_TOKEN` are synced from Ona. These are required for `yarn install`.
