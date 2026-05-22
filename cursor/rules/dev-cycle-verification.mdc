@@ -1,0 +1,23 @@
+---
+description: Require concrete outcomes, test plans, verification evidence, and review checks for development work
+alwaysApply: true
+---
+
+# Required For Plans And Completion
+
+Every implementation plan or proposal must include:
+- Expected outcome: the concrete behavior, artifact, or state that should exist after the work.
+- Reviewer-visible result: what a human reviewer should inspect after completion.
+- Test plan: exact verification commands, manual checks, or test coverage the agent intends to run.
+- Review step: whether an independent verifier or review subagent is required before final handoff.
+
+Before declaring work done, include verification proof:
+- Commands run and whether they passed or failed.
+- Relevant output summaries, with enough detail for a human to verify the claim.
+- Any skipped checks, why they were skipped, and the residual risk.
+- Do not claim success without this evidence.
+
+For non-trivial code changes:
+- Invoke an independent verifier or review subagent before final handoff.
+- The verifier must inspect both the implementation and the test proof.
+- The verifier must confirm the proof is understandable and reproducible by a human reviewer, not only by an agent.
