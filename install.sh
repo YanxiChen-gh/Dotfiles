@@ -11,6 +11,35 @@ esac
 WORKSPACES_DIR="${WORKSPACES_DIR:-/workspaces/workspaces}"
 mkdir -p "$WORKSPACES_DIR"
 
+SCRIPT_DIR=""
+
+# Resolve the directory containing this installer without relying on GNU readlink.
+resolve_script_dir() {
+    if [ -n "$SCRIPT_DIR" ]; then
+        printf '%s\n' "$SCRIPT_DIR"
+        return 0
+    fi
+
+    script_path=$0
+    case "$script_path" in
+        */*) ;;
+        *)
+            resolved=$(command -v -- "$script_path" 2>/dev/null || true)
+            if [ -n "$resolved" ]; then
+                script_path=$resolved
+            fi
+            ;;
+    esac
+
+    script_dir=$(dirname -- "$script_path")
+    SCRIPT_DIR=$(cd -- "$script_dir" 2>/dev/null && pwd -P)
+    if [ -z "$SCRIPT_DIR" ]; then
+        echo "⚠️  Warning: could not resolve script directory" >&2
+        return 1
+    fi
+    printf '%s\n' "$SCRIPT_DIR"
+}
+
 # Install a package using apt-get
 # Usage: install_from_apt <package_name>
 install_from_apt() {
@@ -161,7 +190,7 @@ servers = frag['mcpServers'] if isinstance(frag, dict) and 'mcpServers' in frag 
 if not isinstance(servers, dict):
     sys.exit('Invalid fragment: expected object or mcpServers object')
 data = {}
-if os.path.isfile(path):
+if os.path.isfile(path) and os.path.getsize(path) > 0:
     with open(path) as f:
         data = json.load(f)
 ms = data.setdefault('mcpServers', {})
@@ -180,7 +209,7 @@ else:
 
 # Merge LangSmith MCP entry for Cursor (from repo fragment).
 merge_cursor_mcp_langsmith() {
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     f="$script_dir/cursor/mcp-servers-personal.json"
     if [ ! -f "$f" ]; then
         return 0
@@ -210,7 +239,7 @@ datadog = {
 }
 os.makedirs(os.path.dirname(path), exist_ok=True)
 data = {}
-if os.path.isfile(path):
+if os.path.isfile(path) and os.path.getsize(path) > 0:
     with open(path) as f:
         data = json.load(f)
 ms = data.setdefault("mcpServers", {})
@@ -236,13 +265,13 @@ sync_cursor_mcp_from_claude() {
     if [ ! -f "$claude_json" ]; then
         return 0
     fi
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     python3 "$script_dir/scripts/sync_cursor_mcp_from_claude.py" || return $?
 }
 
 # Create symlinks to dot files
 create_symlinks() {
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
 
     # Files to symlink (exclude .example files)
     for file in "$script_dir"/.*; do
@@ -263,7 +292,7 @@ create_symlinks() {
 # Setup Claude Dev tasks configuration
 # Symlinks cloudev/tasks.json to ~/.cloudev/tasks.json
 setup_cloudev_tasks() {
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     source_tasks="$script_dir/cloudev/tasks.json"
     target_dir="$HOME/.cloudev"
     target_tasks="$target_dir/tasks.json"
@@ -290,7 +319,7 @@ setup_cursor() {
         return 0
     fi
 
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     cursor_dotfiles="$script_dir/cursor"
 
     if [ ! -d "$cursor_dotfiles" ]; then
@@ -445,7 +474,7 @@ install_extensions_from_file() {
 # Install Cursor extensions from extensions.txt (and extensions-work.txt if WORK_MACHINE=1)
 install_cursor_extensions() {
     echo "Installing Cursor extensions..."
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
 
     # Check if cursor CLI is available
     if ! command -v cursor >/dev/null 2>&1; then
@@ -542,7 +571,7 @@ setup_superpowers_plugin() {
 
 # Setup Claude Code config: user-level CLAUDE.md and skills
 setup_claude_config() {
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     claude_dir="$HOME/.claude"
     mkdir -p "$claude_dir"
 
@@ -610,7 +639,7 @@ PY
         echo "⚠️  Python3 not found; skipping Claude Code plugin enablement"
     fi
 
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     sync_script="$script_dir/cc-sync-to-cursor-workspace.sh"
     if [ -x "$sync_script" ]; then
         "$sync_script" "$obsidian_root" || true
@@ -908,7 +937,7 @@ CONF
     cd - >/dev/null
 
     # Copy board persona file into the Paperclip project and symlink to ~/.claude
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     persona_source="$script_dir/claude/board-persona.md"
     persona_target="$paperclip_dir/.claude/board-persona.md"
     if [ -f "$persona_source" ]; then
@@ -952,7 +981,7 @@ setup_work_tools() {
 
 # Merge work MCP servers into ~/.cursor/mcp.json (Glean, MongoDB, Netlify; Datadog if env vars set).
 merge_cursor_work_mcp_entries() {
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     work_fragment="$script_dir/cursor/mcp-servers-work.json"
     if [ -f "$work_fragment" ]; then
         echo "Merging work MCP servers into Cursor config..."
@@ -971,7 +1000,7 @@ sync_ona_env_from_ona() {
         return 0
     fi
 
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     sync_script="$script_dir/sync-ona-env-to-cursor-cloud.sh"
     if [ -x "$sync_script" ]; then
         "$sync_script" || true
@@ -984,7 +1013,7 @@ setup_work_github_auth() {
         return 0
     fi
 
-    script_dir=$(dirname "$(readlink -f "$0")")
+    script_dir=$(resolve_script_dir) || return 1
     auth_script="$script_dir/scripts/setup_work_github_auth.sh"
     if [ -x "$auth_script" ]; then
         "$auth_script" || true
