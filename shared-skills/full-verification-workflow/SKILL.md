@@ -28,4 +28,4 @@ Use this skill only when the user explicitly invokes `full-verification-workflow
 
 ## Evidence Format
 
-Use `evidence-template.md` as the default shape for PR descriptions, handoff notes, and grader prompts.
+Use `evidence-template.md` as the required evidence checklist for PR descriptions, handoff notes, and grader prompts. Adapt the presentation to the repository's existing PR template.

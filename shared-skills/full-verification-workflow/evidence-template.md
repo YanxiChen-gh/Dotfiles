@@ -1,30 +1,32 @@
 # Verification Evidence
 
-Use this template when running `full-verification-workflow`. Keep it factual and easy for a human reviewer or follow-up agent to audit.
+Use this as a checklist, not a required layout. Preserve the repository's PR template when one exists, and adapt the evidence format so it stays factual and easy for a human reviewer or follow-up agent to audit.
 
-## Summary
+## Required Evidence
 
-- Change:
-- Risk level:
-- Reviewer focus:
+- What changed and what risk it carries.
+- Verification commands or actions run, with results.
+- E2E, browser, or manual evidence when relevant.
+- Independent grading or review summary.
+- Issues fixed from grading.
+- Known gaps or residual risk.
 
-## Verification Run
+## Optional Compact Format
 
-| Check | Command or action | Result | Evidence |
+Use a table when the evidence is short enough to stay readable:
+
+| Area | Command or action | Result | Evidence |
 |---|---|---|---|
 | Static checks |  |  |  |
-| Unit or integration tests |  |  |  |
+| Tests |  |  |  |
 | Build or typecheck |  |  |  |
 | E2E, browser, or manual verification |  |  |  |
 
-## Independent Grading
+For longer evidence, use bullets or short paragraphs instead of forcing a table.
 
-- Grader:
+## Grading Notes
+
+- Independent reviewer or agent:
 - Scope reviewed:
 - Findings fixed:
 - Findings accepted or deferred:
-
-## Residual Risk
-
-- Known gaps:
-- Follow-up needed:
