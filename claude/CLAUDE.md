@@ -14,3 +14,5 @@ When the user mentions Paperclip, agents, the CEO, or wants to manage work acros
 - **Google Drive MCP**: Do NOT use the `google-drive-mcp` tools. Use Glean instead for reading Google Docs and other company documents.
 - **Datadog MCP**: Always available for logs, monitors, dashboards, and incident investigation.
 - **MongoDB MCP**: If not connected, suggest running `/connect-mongo` to set up the connection. Reference the Guru card for troubleshooting: https://app.getguru.com/card/T6jjXGKc/Connect-to-MongoDB-using-MongoDB-Compass
+
+@RTK.md

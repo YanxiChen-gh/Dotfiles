@@ -29,6 +29,18 @@ After pulling changes under `.claude/` in a work repo, re-run the script so Curs
 
 Claude Code hooks (`PostToolUse`, etc.) and Cursor hooks (`postToolUse`, etc.) are different systems. See [cursor/HOOKS_AND_CLAUDE_SETTINGS.md](cursor/HOOKS_AND_CLAUDE_SETTINGS.md).
 
+### RTK (token-optimized shell output)
+
+[RTK](https://github.com/rtk-ai/rtk) rewrites agent shell commands (`git status`, `cargo test`, `rg`, etc.) to compact output — typically 60–90% fewer tokens on dev workflows. `install.sh` installs the binary and enables it for all three agents:
+
+- **Claude Code** — `PreToolUse` hook in `~/.claude/settings.json` (automatic bash rewrite)
+- **OpenAI Codex (GPT)** — [`codex-instructions.md`](codex-instructions.md) + [`codex/RTK.md`](codex/RTK.md) symlinked to `~/.codex/AGENTS.md` and `RTK.md`
+- **Cursor** — `preToolUse` hook in [`cursor/hooks.json`](cursor/hooks.json) (symlinked to `~/.cursor/hooks.json`)
+
+Check savings anytime: `rtk gain`. Telemetry is disabled by default (`RTK_TELEMETRY_DISABLED=1` during install).
+
+**Headroom** ([headroom-ai](https://github.com/chopratejas/headroom)) is not installed by default: it already bundles RTK for shell output, and its Cursor integration routes all model traffic through a local proxy (override API base URL). That conflicts with Cursor’s hosted billing and cloud agents. Install manually if you want MCP/proxy-level compression: `uv tool install 'headroom-ai[proxy,mcp]'`.
+
 ### Shared global skills (Claude + Cursor)
 
 Skills under `shared-skills/` are symlinked to **both** `~/.claude/skills` and `~/.cursor/skills-cursor` when `WORK_MACHINE=1`, so one copy works in both tools. Cursor-only meta-skills stay under `cursor/skills/`.

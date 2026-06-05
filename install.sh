@@ -385,6 +385,14 @@ with open('$cursor_user_dir/settings.json', 'w') as f:
         echo "✅ agent skills linked"
     fi
 
+    # Agent hooks (RTK shell rewrite for Cursor Agent)
+    if [ -f "$cursor_dotfiles/hooks.json" ]; then
+        echo "Linking Cursor hooks.json..."
+        rm -f "$cursor_home_dir/hooks.json"
+        ln -s "$cursor_dotfiles/hooks.json" "$cursor_home_dir/hooks.json"
+        echo "✅ hooks.json linked (RTK preToolUse)"
+    fi
+
     # Symlink rules directory (merge personal + work rules)
     if [ -d "$cursor_dotfiles/rules" ] || [ -d "$cursor_dotfiles/rules-work" ]; then
         echo "Linking Cursor rules..."
@@ -546,11 +554,16 @@ setup_claude_config() {
     claude_dir="$HOME/.claude"
     mkdir -p "$claude_dir"
 
-    # Symlink user-level CLAUDE.md (work scope only)
+    # Symlink user-level CLAUDE.md + RTK.md (work scope only)
     if [ "$WORK_MACHINE" = "1" ] && [ -f "$script_dir/claude/CLAUDE.md" ]; then
         rm -f "$claude_dir/CLAUDE.md"
         ln -s "$script_dir/claude/CLAUDE.md" "$claude_dir/CLAUDE.md"
         echo "✅ Claude Code CLAUDE.md linked (work)"
+    fi
+    if [ "$WORK_MACHINE" = "1" ] && [ -f "$script_dir/claude/RTK.md" ]; then
+        rm -f "$claude_dir/RTK.md"
+        ln -s "$script_dir/claude/RTK.md" "$claude_dir/RTK.md"
+        echo "✅ Claude Code RTK.md linked (work)"
     fi
 
     # Symlink skills (work scope only): claude/skills + shared-skills (both tools via install)
@@ -569,6 +582,77 @@ setup_claude_config() {
         done
         echo "✅ Claude Code skills linked (work)"
     fi
+}
+
+# Symlink Codex global instructions and RTK reference.
+setup_codex_config() {
+    script_dir=$(dirname "$(readlink -f "$0")")
+    codex_dir="$HOME/.codex"
+    mkdir -p "$codex_dir"
+
+    if [ -f "$script_dir/codex-instructions.md" ]; then
+        rm -f "$codex_dir/AGENTS.md"
+        ln -s "$script_dir/codex-instructions.md" "$codex_dir/AGENTS.md"
+        echo "✅ Codex AGENTS.md linked"
+    fi
+
+    rtk_source="$script_dir/codex/RTK.md"
+    if [ ! -f "$rtk_source" ]; then
+        rtk_source="$script_dir/claude/RTK.md"
+    fi
+    if [ -f "$rtk_source" ]; then
+        rm -f "$codex_dir/RTK.md"
+        ln -s "$rtk_source" "$codex_dir/RTK.md"
+        echo "✅ Codex RTK.md linked"
+    fi
+}
+
+# Install RTK and enable for Claude Code, OpenAI Codex (GPT), and Cursor.
+# Claude: PreToolUse hook in ~/.claude/settings.json
+# Cursor: preToolUse hook in cursor/hooks.json (symlinked to ~/.cursor/hooks.json)
+# Codex: AGENTS.md + RTK.md symlinks (~/.codex/); agents prefix shell commands with rtk
+setup_rtk() {
+    echo "Setting up RTK (token-optimized shell output)..."
+
+    install_from_url "RTK" "rtk" "https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh"
+
+    if ! command -v rtk >/dev/null 2>&1; then
+        echo "⚠️  RTK binary not found; skipping agent hook registration"
+        return 1
+    fi
+
+    # Opt out of telemetry unless explicitly enabled by the user.
+    export RTK_TELEMETRY_DISABLED=1
+
+    # Claude Code — automatic bash rewrite via settings.json hook
+    if command -v claude >/dev/null 2>&1; then
+        if rtk init -g --hook-only --auto-patch 2>/dev/null; then
+            echo "✅ RTK hook registered for Claude Code"
+        else
+            echo "⚠️  RTK Claude Code hook registration failed (run: rtk init -g --hook-only --auto-patch)"
+        fi
+    else
+        echo "ℹ️  Claude Code not installed; skipping RTK Claude hook"
+    fi
+
+    # Cursor — automatic shell rewrite via hooks.json (versioned in dotfiles)
+    if rtk init -g --agent cursor --hook-only --auto-patch 2>/dev/null; then
+        echo "✅ RTK hook verified for Cursor"
+    elif [ -f "$HOME/.cursor/hooks.json" ]; then
+        echo "✅ RTK Cursor hook present (cursor/hooks.json)"
+    else
+        echo "⚠️  RTK Cursor hook not configured (re-run install or: rtk init -g --agent cursor --hook-only --auto-patch)"
+    fi
+
+    # OpenAI Codex (GPT) — AGENTS.md + RTK.md (instruction-based; no bash hook API)
+    setup_codex_config
+    if [ -f "$HOME/.codex/AGENTS.md" ] && [ -f "$HOME/.codex/RTK.md" ]; then
+        echo "✅ RTK instructions linked for OpenAI Codex (GPT)"
+    else
+        echo "⚠️  Codex RTK config incomplete (expected ~/.codex/AGENTS.md and RTK.md)"
+    fi
+
+    echo "✅ RTK setup complete (rtk gain for savings stats)"
 }
 
 # Enable Vanta AI Platform Claude Code plugin and sync its skills to Cursor.
@@ -1080,6 +1164,7 @@ fi
 
 # Setup Claude Code config and commands
 setup_claude_config
+setup_rtk
 setup_superpowers_plugin
 setup_vanta_ai_platform_plugin
 

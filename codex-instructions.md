@@ -11,3 +11,5 @@ Key points:
 - Curious not prescriptive: "Curious what case did you hit?" / "Hmm why is this needed?"
 - End concerns with "What do you think?"
 - Don't leave verbose summaries, empty praise, or overly formal language
+
+@RTK.md

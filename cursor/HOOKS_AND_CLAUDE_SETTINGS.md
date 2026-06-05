@@ -11,3 +11,13 @@ There is no automatic importer between the two. If you want the same behavior in
 3. Re-test timeouts: Cursor and Claude use different default timeouts and stdin conventions.
 
 Skill sync (`cc-sync-to-cursor-workspace.sh`) does not modify hooks or `permissions.allow` in Claude settings.
+
+### RTK (shared shell hook)
+
+RTK compresses Bash/Shell tool output before it reaches the model. Enabled for **Claude Code**, **OpenAI Codex (GPT)**, and **Cursor**:
+
+- **Cursor** — versioned in [`hooks.json`](hooks.json) (`preToolUse` → `rtk hook cursor`)
+- **Claude Code** — patched into `~/.claude/settings.json` (`rtk init -g --hook-only --auto-patch`)
+- **Codex** — `~/.codex/AGENTS.md` + `RTK.md` symlinks (instruction-based; prefix commands with `rtk`)
+
+Re-run `install.sh` or `rtk init --show` after changing agents.
