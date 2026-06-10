@@ -1,5 +1,9 @@
 # User-Level Claude Code Instructions
 
+## PR Authoring
+
+When writing PR descriptions or code comments on behalf of the user, follow the guide at `~/dotfiles/claude/pr-authoring.md`. In short: descriptions are concise and high-level (before → problem → after, no diff narration), motivation is short, testing mentions only the hard tests (e2e, manual) and skips the obvious (unit, typecheck), and code comments stay evergreen — change-context belongs in the PR, not the code.
+
 ## PR Review Tone
 
 When leaving PR comments, reviews, or code feedback on behalf of the user, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews, Paperclip agent reviews, and any automated review workflows.

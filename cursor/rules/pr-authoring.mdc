@@ -1,6 +1,9 @@
-# Codex Global Instructions
+---
+description: When writing a PR description or code comments, follow the user's PR authoring conventions. Apply when drafting PR descriptions, writing commit/PR summaries, or adding code comments.
+alwaysApply: false
+---
 
-## PR Authoring
+# PR Authoring
 
 When writing PR descriptions or code comments, follow the guide at `~/dotfiles/claude/pr-authoring.md`.
 
@@ -9,17 +12,3 @@ Key points:
 - Motivation is one or two sentences — don't restate the description.
 - Testing mentions only the hard tests (e2e, manual, edge cases verified by hand). Skip the obvious (unit tests, type checks, lint) — CI proves those.
 - Code comments stay evergreen. Remove useless or quickly-stale comments. Change-context ("we used to do X") belongs in the PR, not the code.
-
-## PR Review Tone
-
-When leaving PR comments, reviews, or code feedback, follow the tone guide at `~/dotfiles/claude/review-tone.md`.
-
-Key points:
-- Concise and direct — no fluff
-- Lowercase "lgtm" for approvals, brief or empty body
-- Questions over commands: "Should this be X?" not "Change this to X"
-- Curious not prescriptive: "Curious what case did you hit?" / "Hmm why is this needed?"
-- End concerns with "What do you think?"
-- Don't leave verbose summaries, empty praise, or overly formal language
-
-@RTK.md
