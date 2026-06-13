@@ -87,9 +87,14 @@ Concise and high-level. Describe the *shape* of the change, not a line-by-line t
   what it looks like now — all at high altitude. Describe intent and outcome, not mechanics.
 - **Don't narrate the diff.** The reviewer can read what each file does. Name the load-bearing
   symbols/packages if it helps orient them, but don't walk through the change file by file.
-- **Scale to the change.** A trivial PR gets one honest sentence; a risky migration gets per-file
-  reviewer guidance and links. Don't pad a small change with a heavy template, and don't under-write
-  a risky one.
+- **Scale to the change, and trust the diff.** Most of what a small change does is readable from
+  the diff, so don't re-narrate it. For a simple or mechanical change the whole `## Changes` section
+  is often *one* high-level line — "Refactor X to Y so that Z", "Remove the unused `userId` field
+  from `ToolContext`", or even just `TIN` when the title and diff say it all. Spend words only on
+  what the diff *can't* show: a subtle behavior change, a non-obvious reason. The mechanics that are
+  right there in the code (the data structures, the duplication you removed, the helper you added)
+  are noise in the description. A risky migration earns per-file guidance and links; a small refactor
+  doesn't — when in doubt, write less and let Motivation carry the why.
 - **For remove / replace / migrate PRs, use a decision table.** One row per item: what happened to
   it, what replaced it, and why. It's the clearest possible before→after.
 - **Fill the template, delete what doesn't apply.** Drop inapplicable sections rather than leaving
