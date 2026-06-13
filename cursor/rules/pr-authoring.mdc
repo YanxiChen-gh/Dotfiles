@@ -9,7 +9,7 @@ When writing code, code comments, or PR descriptions, follow the guide at `~/dot
 
 Key points:
 - Optimize for the reader's time; let effort scale with risk.
-- Code: no `any`/`as`/`!` — model the type instead. Validate untyped boundaries with Zod. Prefer discriminated results over throwing for control flow. Guard clauses, happy path last. Put auth in the service, not the caller. Don't abstract early or micro-optimize cached paths. Every log/metric needs a consumer and an action; never swallow errors silently.
+- Code: no `any`/`as`/`!` (except `as const`) — model the type instead. Validate untyped boundaries with Zod. Prefer discriminated results over throwing for control flow. Guard clauses, happy path last. Put auth in the service, not the caller. Don't abstract early or micro-optimize cached paths. Every log/metric needs a consumer and an action; never swallow errors silently.
 - Comments and tests are where sloppiness hides — hold them to the same bar as code, not nice-to-haves.
 - Comments: prefer self-documenting code; comment only the non-obvious *why* (a load-bearing comment can be long); delete restating/stale/AI-filler comments.
 - Tests: don't test for coverage's sake — no tests of libraries, trivial mappings, or thin control flow. A complex or heavily-mocked test is a red flag at the code or the test; inject deps instead of `as never`/`as any`. Keep tests flat and behavioral.

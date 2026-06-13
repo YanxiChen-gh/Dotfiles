@@ -48,11 +48,11 @@ If good code can already say it, don't write a comment.
 
 - **Comment the non-obvious *why*, never the *what*.** A comment earns its place only when the code
   genuinely can't carry the meaning: a gotcha, a workaround, a surprising data model, an external-
-  library quirk, a deliberate deviation from the house style (link the upstream source when the
-  constraint comes from outside). Restating what the code does is clutter. Length isn't the problem —
-  *value* is: a ten-line note on a genuinely non-obvious data model earns its space; a one-liner
-  restating an obvious assignment doesn't. If you find yourself writing a long comment to explain
-  confusing code, first ask whether the code should be clearer instead.
+  library quirk, or a deliberate deviation from the house style (link the upstream source when the
+  constraint is external). Restating what the code does is clutter. Length isn't the problem; value
+  is. A ten-line note on a genuinely non-obvious data model earns its space. A one-liner restating an
+  obvious assignment doesn't. If you're writing a long comment to explain confusing code, first ask
+  whether the code should be clearer instead.
 - **Comments must be evergreen.** True after the next change lands. Change-narration ("we used to do
   X", "this is now different because…", "Phase 0") and AI-generated step-by-step filler go stale
   immediately and clutter the read — strip them before handing off. That context belongs in the PR
@@ -90,12 +90,12 @@ Concise and high-level. Describe the *shape* of the change, not a line-by-line t
   symbols/packages if it helps orient them, but don't walk through the change file by file.
 - **Scale to the change, and trust the diff.** Most of what a small change does is readable from
   the diff, so don't re-narrate it. For a simple or mechanical change the whole `## Changes` section
-  is often *one* high-level line — "Refactor X to Y so that Z", "Remove the unused `userId` field
+  is often *one* high-level line: "Refactor X to Y so that Z", "Remove the unused `userId` field
   from `ToolContext`", or even just `TIN` when the title and diff say it all. Spend words only on
-  what the diff *can't* show: a subtle behavior change, a non-obvious reason. The mechanics that are
-  right there in the code (the data structures, the duplication you removed, the helper you added)
-  are noise in the description. A risky migration earns per-file guidance and links; a small refactor
-  doesn't — when in doubt, write less and let Motivation carry the why.
+  what the diff *can't* show, like a subtle behavior change or a non-obvious reason. The mechanics
+  that are right there in the code (the data structures, the duplication you removed, the helper you
+  added) are noise in the description. A risky migration earns per-file guidance and links; a small
+  refactor doesn't. When in doubt, write less and let Motivation carry the why.
 - **For remove / replace / migrate PRs, use a decision table.** One row per item: what happened to
   it, what replaced it, and why. It's the clearest possible before→after.
 - **Fill the template, delete what doesn't apply.** Drop inapplicable sections rather than leaving

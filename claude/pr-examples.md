@@ -82,6 +82,23 @@ Remove five of seven custom `vanta.mcp.*` metrics. The two kept carry per-tool n
 When a PR removes/replaces a set of things, one row per item (what happened → replaced by → why) is
 the clearest possible before→after. Far more scannable than the same content in prose.
 
+## 5. AI disclosure as a mini-ADR
+
+[#154286 "Add policy version download endpoint to external REST API"](https://github.com/VantaInc/obsidian/pull/154286) (+446/-23)
+
+```markdown
+## AI Model used and major prompts used
+
+Claude Opus 4.7 via Claude Code. Brainstormed two endpoint shapes — (a) "always download latest
+approved" vs (b) "list versions + download by id" — and landed on a hybrid: a single
+`/versions/{versionId}/download` route that mirrors current MCP behavior but stays extensible for a
+future versions-list endpoint without breaking changes.
+```
+
+When a design decision was actually weighed, the AI-disclosure section is the natural place to record
+the alternatives and why you chose one — so reviewers and future readers don't re-litigate it. Skip
+the ceremony when nothing was decided; "Claude Code, routine refactor" is enough.
+
 ---
 
 ## Bad → Good (same PR, [#159309](https://github.com/VantaInc/obsidian/pull/159309), +73/-88)
