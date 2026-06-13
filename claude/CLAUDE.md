@@ -1,8 +1,8 @@
 # User-Level Claude Code Instructions
 
-## PR Authoring
+## Code & PR Authoring
 
-When writing PR descriptions or code comments on behalf of the user, follow the guide at `~/dotfiles/claude/pr-authoring.md`. In short: descriptions are concise and high-level (before → problem → after, no diff narration), motivation is short, testing mentions only the hard tests (e2e, manual) and skips the obvious (unit, typecheck), and code comments stay evergreen — change-context belongs in the PR, not the code.
+When writing TypeScript code, code comments, or PR descriptions on behalf of the user, follow the guide at `~/dotfiles/claude/pr-authoring.md`. In short: optimize for the reader's time and let effort scale with risk. Code avoids `any`/`as`/`!` (model the type instead), validates untyped boundaries with Zod, prefers discriminated results over throwing for control flow, puts auth in the service not the caller, and never swallows errors silently. Comments and tests get the same bar as code (not nice-to-haves): prefer self-documenting code and comment only the non-obvious *why* (a load-bearing comment can be long; delete restating/stale/AI filler), and never test for coverage's sake — no tests of libraries or trivial mappings, and a complex or heavily-mocked test is a red flag to fix via dependency injection. Descriptions are concise and high-level (before → problem → after, no diff narration), motivation states the root cause in a line, testing shows only the hard stuff as evidence and skips the obvious, and inapplicable template sections get deleted rather than left empty.
 
 ## PR Review Tone
 
