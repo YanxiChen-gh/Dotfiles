@@ -99,6 +99,33 @@ When a design decision was actually weighed, the AI-disclosure section is the na
 the alternatives and why you chose one — so reviewers and future readers don't re-litigate it. Skip
 the ceremony when nothing was decided; "Claude Code, routine refactor" is enough.
 
+## 6. Extraction / prep refactor → TIN Changes, why-now in Motivation, one rationale comment
+
+[#159332 "Extract maybeApplyInputTransform helper"](https://github.com/VantaInc/obsidian/pull/159332) (+71/-6)
+
+```markdown
+## Changes
+TIN
+
+## Motivation
+Prep for AIPLAT-522 — the regional evaluation runner is about to re-paste this transform-and-count
+block, so pull it into a shared helper first. Behavior-preserving.
+```
+
+The extraction is right there in the diff, so Changes is `TIN`. What the diff *can't* show is the
+why-now — that a second caller is about to need it — so that's the one thing Motivation keeps.
+
+The helper carries a one-line comment for the genuinely non-obvious bit:
+
+```ts
+/** Logging is left to the caller so each runner can attach its own context (dataset, region). */
+```
+
+That sentence stops the next person from "helpfully" adding a log call here. **One home for each
+fact:** because that rationale is evergreen, it lives in the code — so the PR description should
+*not* also say "keep the skip logging in the caller." This PR did say it in both; the redundant
+bullet is what to drop, not the comment.
+
 ---
 
 ## Bad → Good (same PR, [#159309](https://github.com/VantaInc/obsidian/pull/159309), +73/-88)
