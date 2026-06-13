@@ -99,6 +99,23 @@ Example:
 > Before, alarms were keyed by raw string IDs, so a renamed rule silently matched nothing.
 > This makes keys structural so a rename is a type error instead of a silent miss.
 
+### Sound like a person
+
+The clearest sign of AI-written prose is that no person talks like that. Write the way you'd
+explain the change to a teammate at your desk — this applies to the description, motivation, and
+any review comment.
+
+- **Vary sentence length; break up run-ons.** If one sentence has a colon, two clauses, and a dash
+  all doing work, split it. People pause for breath.
+- **Plain words over exhaustive precision.** "with an `eslint-disable` for the unsafe cast," not
+  "behind `no-unsafe-type-assertion` escape hatches." Say it how you'd say it out loud.
+- **No formula openers.** "One behavior change a reviewer can't see from the diff:" is template-
+  shaped. "Worth flagging since the diff won't show it" carries the same thing without the scaffolding.
+- **Go easy on em-dashes and colons.** A pile of them in one paragraph is the strongest tell — one
+  per paragraph, tops.
+- **A little informal is fine.** "basically a hand-rolled cache," "nothing changes for callers."
+  Natural beats polished.
+
 ### Motivation
 
 One or two sentences, stating the **root cause or the tradeoff** — not a restatement of the
