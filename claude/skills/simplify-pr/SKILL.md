@@ -42,6 +42,14 @@ it's the single source of truth and may have changed:
 (If that path doesn't resolve, fall back to `pr-authoring.md` two levels up from this skill —
 `../../pr-authoring.md` relative to this file.)
 
+Also read the worked examples alongside it — they calibrate *how short* to go and what the right
+voice sounds like, which is the thing this skill most often overshoots:
+
+    ~/dotfiles/claude/pr-examples.md
+
+Match the **altitude** of the example closest in size/type to the PR you're tightening; don't copy
+its words.
+
 The guide covers the whole PR: a concise before → problem → after **description**, a short
 **motivation**, **testing** notes that mention only the non-obvious, **evergreen code comments**,
 and the code/tests themselves. For this cleanup skill, focus on the description and comments, but

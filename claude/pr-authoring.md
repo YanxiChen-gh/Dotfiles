@@ -6,7 +6,8 @@ understand the change and nothing the diff already says; spend words and care wh
 or a future debugger actually needs them, and stay terse everywhere else.
 
 The lens is backend TypeScript, but the principles are general. This sits *on top of* a repo's
-own conventions and PR template — follow those, and apply this to fill the gaps.
+own conventions and PR template — follow those, and apply this to fill the gaps. For worked
+examples that calibrate altitude and voice, see `pr-examples.md` alongside this file.
 
 ## Writing the Code
 

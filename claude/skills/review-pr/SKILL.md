@@ -35,9 +35,11 @@ Both are the single source of truth and may have changed since this skill was wr
 
 - **Substance** (what to flag): `~/dotfiles/claude/pr-authoring.md`
 - **Voice** (how to phrase it): `~/dotfiles/claude/review-tone.md`
+- **Worked examples** (calibration for what good looks like): `~/dotfiles/claude/pr-examples.md` —
+  use these to judge whether a description is at the right altitude before flagging it as too long.
 
-(If those paths don't resolve, fall back relative to this file: `../../pr-authoring.md` and
-`../../review-tone.md`.)
+(If those paths don't resolve, fall back relative to this file: `../../pr-authoring.md`,
+`../../review-tone.md`, and `../../pr-examples.md`.)
 
 Apply the authoring guide as the review bar — the same things it tells an author to do are the
 things you check for here:
