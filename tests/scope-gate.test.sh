@@ -99,5 +99,26 @@ test_userpromptsubmit(){
 }
 test_userpromptsubmit
 
+# --- Task 5: settings.json hook registration (idempotent, non-clobbering) ---
+test_register(){
+  local tmp; tmp="$(mktemp -d)"
+  local cfg="$tmp/settings.json"
+  cat >"$cfg" <<'JSON'
+{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"rtk hook claude"}]}]},"theme":"dark"}
+JSON
+  bash "$ROOT/scripts/scope-gate-register.sh" "$cfg" >/dev/null 2>&1
+  bash "$ROOT/scripts/scope-gate-register.sh" "$cfg" >/dev/null 2>&1   # second run = idempotent
+
+  assert_eq "rtk Bash hook preserved" "1" \
+    "$(jq '[.hooks.PreToolUse[]|select(.matcher=="Bash")]|length' "$cfg")"
+  assert_eq "pretooluse registered once" "1" \
+    "$(jq '[.hooks.PreToolUse[].hooks[]|select(.command|test("scope-gate-pretooluse"))]|length' "$cfg")"
+  assert_eq "userpromptsubmit registered once" "1" \
+    "$(jq '[.hooks.UserPromptSubmit[].hooks[]|select(.command|test("scope-gate-userpromptsubmit"))]|length' "$cfg")"
+  assert_eq "theme preserved" '"dark"' "$(jq '.theme' "$cfg")"
+  rm -rf "$tmp"
+}
+test_register
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
