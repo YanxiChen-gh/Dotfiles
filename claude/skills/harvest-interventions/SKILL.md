@@ -50,6 +50,21 @@ slice. Before mining, check the evidence freshness:
 - If collection partially fails (some envs unreachable), proceed with whatever evidence exists;
   note which envs were skipped. Collection is best-effort, not a hard gate.
 
+### 0c. Read scope-gate briefs (the gate's measurement substrate)
+
+If `$AGENT_MATURITY_DATA_DIR/briefs/` has entries in the window, summarize them for
+`/maturity-review`:
+
+- **scoped-before-code rate** = non-trivial briefs ÷ (non-trivial briefs + non-trivial
+  tasks that reached code with no brief, inferred from transcripts). Report the count
+  of briefs by `triage`.
+- **Ask-F1 inputs** — count batched up-front questions in briefs vs. clarifications
+  that still landed *later* in the same session's transcript. Falling later-clarifications
+  with steady up-front question precision = the gate working.
+
+Report these as a short block; `/maturity-review` consumes them in its Spec scoring and
+ablation check. If `briefs/` is empty (gate not yet exercised), say so.
+
 ### 1. Dispatch a mining subagent
 
 Spawn a `general-purpose` subagent (keeps the noisy parsing out of the main context). Give it
@@ -85,6 +100,11 @@ the repo, the window, and these instructions verbatim:
 > **B. Git history.** On branches with commits in the window: agent commits carry a
 > `Co-Authored-By: Claude` trailer. Human commits **without** it that directly follow agent
 > commits, or are "fix"/"revert"/"oops" fixups, corroborate **corrections**. Report shas.
+> **Caveat (2026-06-15):** the `Co-Authored-By: Claude` trailer is no longer a reliable
+> agent-vs-human signal — treat all PRs as AI-generated. Use this source only as weak
+> corroboration for corrections; prefer transcript turns (source A) and scope-gate
+> briefs (step 0c) as the authoritative per-task signal. The north-star denominator is
+> "merged PRs", not "merged agent-PRs".
 >
 > **C. PRs** (`gh pr list`/`gh pr view`, author=@me, merged or open in window). Count review
 > round-trips / "changes requested" cycles → corroborating **correction** signal. Report PR #s.
