@@ -229,11 +229,17 @@ the per-env hook-install problem via `enabledPlugins`) is `git mv` + re-register
 rewrite. Tracked follow-up: extract the framework into a plugin after the gate has one
 measured review cycle.
 
-## Open implementation detail (for the plan)
+## Fresh-env persistence (resolved)
 
-How `~/.claude/settings.json` hook registration persists into fresh ephemeral Ona envs —
-i.e. the dotfiles settings-install path. Must be pinned in the implementation plan, since all
-compute is ephemeral and an unregistered hook is a no-op.
+`install.sh` runs per-env and is the persistence path: `setup_scope_gate()` registers both
+hooks in `~/.claude/settings.json` (idempotent merge) and eagerly creates
+`~/.agent-maturity-data/briefs` so the PreToolUse hook hard-blocks from task #1;
+`setup_claude_config()` symlinks the skill. Because the hook's logging (and that eager dir)
+create `$DATA` before any maturity skill runs, `ensure-maturity-data.sh` provisions by
+cloning the private repo *into* a pre-existing dir (init + fetch + checkout), preserving
+untracked locals — a plain clone would fail on the non-empty dir. If provisioning fails
+(gh unauthed), the skill still writes the brief locally so the now-always-active gate is
+satisfied and work isn't wedged; it syncs on a later run.
 
 ## Where this lives
 

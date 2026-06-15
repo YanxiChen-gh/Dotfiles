@@ -38,8 +38,10 @@ a one-line `trivial_reason`, then proceed to code. Do not over-scope trivial wor
 
        bash ~/dotfiles/scripts/ensure-maturity-data.sh
 
-   If it reports gh isn't authenticated / repo inaccessible, tell the user and stop
-   (the brief can't be persisted; the hook will fail open so editing isn't wedged).
+   This creates `$AGENT_MATURITY_DATA_DIR/briefs` even if provisioning fails. If it
+   reports gh isn't authenticated / repo inaccessible, **do not stop** — warn the user
+   that the brief won't sync until that's resolved, then still write the brief locally
+   (step 6) so the gate is satisfied and work isn't wedged. It will sync on a later run.
 
 2. **Restate** the task in one line + **pass-to-pass acceptance checks** — concrete,
    checkable conditions that define done.

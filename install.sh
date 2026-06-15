@@ -660,6 +660,10 @@ setup_scope_gate() {
     echo "Setting up scope-gate hooks..."
     chmod +x "$HOME/dotfiles/scripts/scope-gate-pretooluse.sh" \
              "$HOME/dotfiles/scripts/scope-gate-userpromptsubmit.sh" 2>/dev/null || true
+    # Eagerly create the briefs dir so the PreToolUse hook hard-blocks from task #1 on a
+    # fresh env (without it the hook fails open until a maturity skill provisions the store).
+    # ensure-maturity-data.sh later clones the private repo INTO this pre-existing dir.
+    mkdir -p "${AGENT_MATURITY_DATA_DIR:-$HOME/.agent-maturity-data}/briefs"
     if bash "$HOME/dotfiles/scripts/scope-gate-register.sh" 2>/dev/null; then
         echo "✅ scope-gate hooks registered for Claude Code"
     else
