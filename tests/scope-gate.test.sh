@@ -56,5 +56,35 @@ test_lib(){
 }
 test_lib
 
+# --- Task 3: PreToolUse hard hook ---
+test_pretooluse(){
+  local tmp; tmp="$(mktemp -d)"
+  export AGENT_MATURITY_DATA_DIR="$tmp/data"; mkdir -p "$AGENT_MATURITY_DATA_DIR/briefs"
+  local PRE="$ROOT/scripts/scope-gate-pretooluse.sh"
+
+  echo '{"session_id":"S1","tool_input":{"file_path":"/r/src/app.ts"}}' | "$PRE" >/dev/null 2>&1
+  assert_eq "blocks code edit without brief" 2 "$?"
+
+  echo '{"session_id":"S1","tool_input":{"file_path":"/r/README.md"}}' | "$PRE" >/dev/null 2>&1
+  assert_eq "allows floored path" 0 "$?"
+
+  touch "$AGENT_MATURITY_DATA_DIR/briefs/2026-06-15-S1.json"
+  echo '{"session_id":"S1","tool_input":{"file_path":"/r/src/app.ts"}}' | "$PRE" >/dev/null 2>&1
+  assert_eq "allows code edit with brief" 0 "$?"
+
+  SCOPE_GATE=off bash -c 'echo "{\"session_id\":\"S9\",\"tool_input\":{\"file_path\":\"/r/src/x.ts\"}}" | "$0" >/dev/null 2>&1' "$PRE"
+  assert_eq "kill switch allows" 0 "$?"
+
+  printf 'not json' | "$PRE" >/dev/null 2>&1
+  assert_eq "malformed input fails open" 0 "$?"
+
+  rm -rf "$AGENT_MATURITY_DATA_DIR/briefs"
+  echo '{"session_id":"S2","tool_input":{"file_path":"/r/src/app.ts"}}' | "$PRE" >/dev/null 2>&1
+  assert_eq "unreadable store fails open" 0 "$?"
+
+  rm -rf "$tmp"; unset AGENT_MATURITY_DATA_DIR
+}
+test_pretooluse
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
