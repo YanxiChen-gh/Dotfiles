@@ -100,6 +100,8 @@ alias pip="pip3"
 alias findp="ps aux | grep"
 alias ku="kubectl"
 alias lc="leetcode"
+# Agent-autonomy maturity: log an intervention. li <correction|clarification|unblock> "note" [cost_min]
+alias li="$HOME/dotfiles/scripts/log-intervention.sh"
 
 # Editor - prefer nvim, fall back to vim
 if command -v nvim >/dev/null 2>&1; then
