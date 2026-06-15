@@ -23,6 +23,13 @@ merely exists somewhere.
 
 ## Procedure
 
+0. **Provision the private data store** (always first — the tracker + log live in a private repo,
+   symlinked in lazily at skill time since gh is authed now):
+
+       bash ~/dotfiles/scripts/ensure-maturity-data.sh
+
+   If it reports gh isn't authenticated / repo inaccessible, stop and tell the user.
+
 1. **Read** the three inputs above.
 
 2. **Gather evidence** (pragmatic — this is signal, not an audit). Prefer cheap reads:
@@ -52,6 +59,10 @@ merely exists somewhere.
 7. **Update the tracker**: rewrite the scorecard table + "Last reviewed" date, replace the
    "Recommended next move" section, and append a changelog entry (`date — what changed —
    metric impact: TBD`). Leave `interventions.jsonl` alone (that's logged live, not here).
+
+8. **Sync the private data store** so the updated tracker persists off this ephemeral env:
+
+       bash ~/dotfiles/scripts/sync-maturity-data.sh "review: <date> baseline/update"
 
 ## Output
 

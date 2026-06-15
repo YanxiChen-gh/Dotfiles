@@ -26,7 +26,17 @@ escape hatch for things artifacts can't see.
 
 ## Procedure
 
-### 0. Refresh cross-env evidence if stale
+### 0a. Provision the private data store (always first)
+
+The log + tracker live in a PRIVATE repo, symlinked in lazily at skill time (gh is authed now,
+unlike at env-provisioning time). Run this first — it's a fast no-op once set up:
+
+    bash ~/dotfiles/scripts/ensure-maturity-data.sh
+
+If it reports gh isn't authenticated or the repo is inaccessible, stop and tell the user
+(can't read/write the log without it).
+
+### 0b. Refresh cross-env evidence if stale
 
 Work happens across many ephemeral Ona envs, so the local `~/.claude/projects/` is only a
 slice. Before mining, check the evidence freshness:
@@ -106,11 +116,17 @@ for the lazy path. If they prune, take the list of indices to drop.
 
 ### 3. Write
 
-Append the confirmed proposals to `interventions.jsonl`, one compact JSON line each, preserving
-`source:"auto"`, `evidence`, and `confidence`. Don't rewrite or dedup existing lines. Report
-how many were written and the resulting per-type totals in the log.
+Append the confirmed proposals to `interventions.jsonl` (a symlink into the private repo), one
+compact JSON line each, preserving `source:"auto"`, `evidence`, and `confidence`. Don't rewrite
+or dedup existing lines. Report how many were written and the resulting per-type totals.
 
-### 4. Hand off
+### 4. Sync the private data store
+
+Persist the writes off this ephemeral env:
+
+    bash ~/dotfiles/scripts/sync-maturity-data.sh "harvest: +N interventions"
+
+### 5. Hand off
 
 Tell the user the log is populated and to run **`/maturity-review`** next for the evidence-based
 baseline. Mention the `agent_initiated_questions` count — it feeds the Spec supporting signal

@@ -17,6 +17,10 @@
 
 set -euo pipefail
 
+# Lazily provision the private data store so the log resolves into it (best-effort — if the
+# repo's unreachable, fall back to a local file rather than failing the log call).
+bash "$(dirname "$0")/ensure-maturity-data.sh" 2>/dev/null || true
+
 LOG="${AGENT_MATURITY_LOG:-$HOME/dotfiles/claude/agent-maturity/interventions.jsonl}"
 
 type="${1:-}"

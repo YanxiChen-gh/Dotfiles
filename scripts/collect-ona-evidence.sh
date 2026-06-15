@@ -44,6 +44,10 @@ done
 command -v ona >/dev/null || { echo "error: ona CLI not on PATH" >&2; exit 1; }
 ona whoami >/dev/null 2>&1 || { echo "error: not logged in — run 'ona login'" >&2; exit 1; }
 
+# Lazily provision the private data store so CENTRAL_LOG resolves into it (best-effort).
+bash "$(dirname "$0")/ensure-maturity-data.sh" 2>/dev/null \
+  || echo "note: private data store not provisioned; using local interventions.jsonl" >&2
+
 # Ensure native-ssh host aliases (<id>.ona.environment) exist; idempotent.
 grep -qs "ona.environment" "$HOME/.ssh/ona/config" 2>/dev/null || ona environment ssh-config >/dev/null 2>&1
 
