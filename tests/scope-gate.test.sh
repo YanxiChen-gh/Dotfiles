@@ -131,5 +131,45 @@ JSON
 }
 test_register
 
+# --- Y: ensure-maturity-data provisions into a pre-existing dir (clone-into-existing) ---
+sg_make_remote(){  # $1 = path for the bare "remote"
+  local work; work="$(mktemp -d)"
+  git -C "$work" init -q
+  git -C "$work" config user.email t@t; git -C "$work" config user.name t
+  echo "# tracker" > "$work/tracker.md"; printf '' > "$work/interventions.jsonl"
+  mkdir -p "$work/briefs"; echo '{}' > "$work/briefs/seed.json"
+  git -C "$work" add -A; git -C "$work" commit -q -m init; git -C "$work" branch -M main
+  git clone -q --bare "$work" "$1"; rm -rf "$work"
+}
+test_provision(){
+  local base; base="$(mktemp -d)"
+  local remote="$base/remote.git"; sg_make_remote "$remote"
+
+  # (1) dir already exists with an untracked local file (simulates the hook's log / eager mkdir)
+  local data="$base/data"; mkdir -p "$data"; echo "log" > "$data/scope-gate.log"
+  AGENT_MATURITY_DATA_URL="$remote" AGENT_MATURITY_DATA_REPO="bogus/nonexistent" \
+    AGENT_MATURITY_DATA_DIR="$data" AGENT_MATURITY_DIR="$base/dot" \
+    bash "$ROOT/scripts/ensure-maturity-data.sh" >/dev/null 2>&1
+  [ -d "$data/.git" ] && ok "provision: .git created in existing dir" || no "provision: .git created in existing dir"
+  [ -f "$data/tracker.md" ] && ok "provision: tracked files checked out" || no "provision: tracked files checked out"
+  [ -f "$data/scope-gate.log" ] && ok "provision: untracked local preserved" || no "provision: untracked local preserved"
+  [ -d "$data/briefs" ] && ok "provision: briefs dir present" || no "provision: briefs dir present"
+
+  # (2) idempotent re-run is a clean no-op
+  AGENT_MATURITY_DATA_URL="$remote" AGENT_MATURITY_DATA_DIR="$data" AGENT_MATURITY_DIR="$base/dot" \
+    bash "$ROOT/scripts/ensure-maturity-data.sh" >/dev/null 2>&1
+  assert_eq "provision: idempotent re-run" 0 "$?"
+
+  # (3) absent dir → plain clone path still works
+  local fresh="$base/fresh"   # does not exist yet
+  AGENT_MATURITY_DATA_URL="$remote" AGENT_MATURITY_DATA_REPO="bogus/nonexistent" \
+    AGENT_MATURITY_DATA_DIR="$fresh" AGENT_MATURITY_DIR="$base/dot2" \
+    bash "$ROOT/scripts/ensure-maturity-data.sh" >/dev/null 2>&1
+  [ -d "$fresh/.git" ] && [ -f "$fresh/tracker.md" ] && ok "provision: plain clone when dir absent" || no "provision: plain clone when dir absent"
+
+  rm -rf "$base"
+}
+test_provision
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
