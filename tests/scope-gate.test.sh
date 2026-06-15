@@ -40,7 +40,11 @@ test_lib(){
 
   sg_is_floored_path "/r/README.md" && ok "floor: .md" || no "floor: .md"
   sg_is_floored_path "$AGENT_MATURITY_DATA_DIR/briefs/x.json" && ok "floor: data dir" || no "floor: data dir"
-  sg_is_floored_path "/r/src/app.ts" && no "floor: rejects code" || ok "floor: rejects code"
+  sg_is_floored_path "/tmp/pr-body.XX1234" && ok "floor: /tmp temp file" || no "floor: /tmp temp file"
+  sg_is_floored_path "/r/src/app.ts" && ok "floor: non-existent non-repo path" || no "floor: non-existent non-repo path"
+  local frepo; frepo="$(mktemp -d)"; ( cd "$frepo" && git init -q && mkdir -p src )
+  sg_is_floored_path "$frepo/src/app.ts" && no "floor: gates code inside a repo" || ok "floor: gates code inside a repo"
+  rm -rf "$frepo"
 
   sg_store_readable && ok "store readable when briefs/ exists" || no "store readable when briefs/ exists"
   rm -rf "$AGENT_MATURITY_DATA_DIR/briefs"
@@ -61,8 +65,10 @@ test_pretooluse(){
   local tmp; tmp="$(mktemp -d)"
   export AGENT_MATURITY_DATA_DIR="$tmp/data"; mkdir -p "$AGENT_MATURITY_DATA_DIR/briefs"
   local PRE="$ROOT/scripts/scope-gate-pretooluse.sh"
+  local repo; repo="$(mktemp -d)"; ( cd "$repo" && git init -q && mkdir -p src )
+  local code="$repo/src/app.ts"
 
-  echo '{"session_id":"S1","tool_input":{"file_path":"/r/src/app.ts"}}' | "$PRE" >/dev/null 2>&1
+  echo "{\"session_id\":\"S1\",\"tool_input\":{\"file_path\":\"$code\"}}" | "$PRE" >/dev/null 2>&1
   assert_eq "blocks code edit without brief" 2 "$?"
   grep -q 'block: session=S1' "$AGENT_MATURITY_DATA_DIR/scope-gate.log" 2>/dev/null \
     && ok "block is logged" || no "block is logged"
@@ -70,21 +76,24 @@ test_pretooluse(){
   echo '{"session_id":"S1","tool_input":{"file_path":"/r/README.md"}}' | "$PRE" >/dev/null 2>&1
   assert_eq "allows floored path" 0 "$?"
 
+  echo '{"session_id":"S1","tool_input":{"file_path":"/tmp/pr-body.ZZ"}}' | "$PRE" >/dev/null 2>&1
+  assert_eq "allows /tmp temp write (floor fix)" 0 "$?"
+
   touch "$AGENT_MATURITY_DATA_DIR/briefs/2026-06-15-S1.json"
-  echo '{"session_id":"S1","tool_input":{"file_path":"/r/src/app.ts"}}' | "$PRE" >/dev/null 2>&1
+  echo "{\"session_id\":\"S1\",\"tool_input\":{\"file_path\":\"$code\"}}" | "$PRE" >/dev/null 2>&1
   assert_eq "allows code edit with brief" 0 "$?"
 
-  SCOPE_GATE=off bash -c 'echo "{\"session_id\":\"S9\",\"tool_input\":{\"file_path\":\"/r/src/x.ts\"}}" | "$0" >/dev/null 2>&1' "$PRE"
+  echo "{\"session_id\":\"S9\",\"tool_input\":{\"file_path\":\"$code\"}}" | env SCOPE_GATE=off "$PRE" >/dev/null 2>&1
   assert_eq "kill switch allows" 0 "$?"
 
   printf 'not json' | "$PRE" >/dev/null 2>&1
   assert_eq "malformed input fails open" 0 "$?"
 
   rm -rf "$AGENT_MATURITY_DATA_DIR/briefs"
-  echo '{"session_id":"S2","tool_input":{"file_path":"/r/src/app.ts"}}' | "$PRE" >/dev/null 2>&1
+  echo "{\"session_id\":\"S2\",\"tool_input\":{\"file_path\":\"$code\"}}" | "$PRE" >/dev/null 2>&1
   assert_eq "unreadable store fails open" 0 "$?"
 
-  rm -rf "$tmp"; unset AGENT_MATURITY_DATA_DIR
+  rm -rf "$tmp" "$repo"; unset AGENT_MATURITY_DATA_DIR
 }
 test_pretooluse
 

@@ -17,14 +17,27 @@ sg_json_field() {  # $1=json $2=jq-path
   printf '%s' "$1" | jq -r "$2 // empty" 2>/dev/null
 }
 
-# Floored (cheap-to-be-wrong) path: docs, the gate's own data, scope-gate files.
-sg_is_floored_path() {  # $1=path
+# Floored (cheap-to-be-wrong) path → allow without a brief: docs, the gate's own
+# data/files, and anything OUTSIDE a git work tree. Only code in a repo is worth
+# gating; temp files and scratch paths aren't in a repo, so they floor naturally.
+# Cheap pattern fast-paths first; the git check is last and fails safe (allow).
+sg_is_floored_path() {  # $1=path ; returns 0 = floored (allow)
   case "$1" in
     *.md|*.mdx|*.txt) return 0 ;;
     "$SG_DATA_DIR"/*|*/.agent-maturity-data/*) return 0 ;;
     */scope-gate-*.sh|*/skills/scope-gate/*) return 0 ;;
-    *) return 1 ;;
   esac
+  sg_path_in_git_repo "$1" || return 0   # not in a repo → not code → floor it
+  return 1
+}
+
+# True (0) when the path's nearest existing ancestor dir is inside a git work tree.
+# Walks up so a new file in a not-yet-created subdir of a repo is still gated.
+sg_path_in_git_repo() {  # $1=path
+  local d; d="$(dirname "$1" 2>/dev/null)" || return 1
+  while [ -n "$d" ] && [ "$d" != "/" ] && [ ! -d "$d" ]; do d="$(dirname "$d")"; done
+  [ -d "$d" ] || return 1
+  git -C "$d" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
 # The brief store is provisioned/readable.
