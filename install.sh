@@ -655,6 +655,18 @@ setup_rtk() {
     echo "✅ RTK setup complete (rtk gain for savings stats)"
 }
 
+# Register the scope-gate hooks in ~/.claude/settings.json (idempotent, non-clobbering).
+setup_scope_gate() {
+    echo "Setting up scope-gate hooks..."
+    chmod +x "$HOME/dotfiles/scripts/scope-gate-pretooluse.sh" \
+             "$HOME/dotfiles/scripts/scope-gate-userpromptsubmit.sh" 2>/dev/null || true
+    if bash "$HOME/dotfiles/scripts/scope-gate-register.sh" 2>/dev/null; then
+        echo "✅ scope-gate hooks registered for Claude Code"
+    else
+        echo "⚠️  scope-gate hook registration failed (run: scripts/scope-gate-register.sh)"
+    fi
+}
+
 # Enable Vanta AI Platform Claude Code plugin and sync its skills to Cursor.
 setup_vanta_ai_platform_plugin() {
     if [ "$WORK_MACHINE" != "1" ]; then
@@ -1165,6 +1177,7 @@ fi
 # Setup Claude Code config and commands
 setup_claude_config
 setup_rtk
+setup_scope_gate
 setup_superpowers_plugin
 setup_vanta_ai_platform_plugin
 
