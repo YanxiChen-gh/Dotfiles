@@ -86,5 +86,18 @@ test_pretooluse(){
 }
 test_pretooluse
 
+# --- Task 4: UserPromptSubmit soft hook ---
+test_userpromptsubmit(){
+  local UPS="$ROOT/scripts/scope-gate-userpromptsubmit.sh"
+  local out
+  out="$(echo '{"session_id":"S7","prompt":"add a feature"}' | "$UPS" 2>/dev/null)"
+  case "$out" in *"scope-gate"*) ok "UPS injects rubric" ;; *) no "UPS injects rubric" ;; esac
+  case "$out" in *"S7"*) ok "UPS injects session id" ;; *) no "UPS injects session id" ;; esac
+
+  out="$(SCOPE_GATE=off bash -c 'echo "{\"session_id\":\"S7\"}" | "$0" 2>/dev/null' "$UPS")"
+  assert_eq "UPS silent when disabled" "" "$out"
+}
+test_userpromptsubmit
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
