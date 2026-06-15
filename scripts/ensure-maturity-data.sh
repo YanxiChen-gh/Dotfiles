@@ -21,6 +21,7 @@ if [ ! -d "$DATA/.git" ]; then
 fi
 
 mkdir -p "$DOTDIR"
+mkdir -p "$DATA/briefs"            # scope-gate briefs (marker + measurement artifact)
 for f in interventions.jsonl tracker.md; do
   link="$DOTDIR/$f"; target="$DATA/$f"
   [ -e "$target" ] || : > "$target"            # first run: empty file so the symlink isn't dangling
