@@ -116,3 +116,16 @@ not silently forgotten.
   tool does the autonomy *scoring* — adopting a backend only moves where the raw log lives,
   the rubric + meta-eval stay ours. So this is storage ergonomics, not a capability gap;
   don't adopt preemptively.
+
+- **PR review-thread mining (the async post-handoff loop) — "source D".** Evidence retrieval
+  today captures the in-session human↔agent loop (transcripts), git fixups, and only *coarse*
+  PR review-cycle counts. It does NOT mine PR comment threads: reviewer/bot (Codex/automated)
+  findings, the agent's resolution attempts, and who drove each fix. That loop is almost
+  entirely a **Trust** signal, so the current Trust score is **systematically undercounted** —
+  the real review burden is higher than the in-session correction rate suggests. **Trigger to
+  revisit:** Trust becomes the weakest dimension, or you want a truer interventions/PR number.
+  **How:** `gh pr view <n> --json reviews,reviewThreads,comments` + `gh api .../pulls/{n}/comments`.
+  Two design notes: (1) **dedup** against in-session relays (a comment you then handed to the
+  agent would double-count — reconcile by same-PR/same-day); (2) **classify by resolver** —
+  bot-found-and-agent-fixed-autonomously is a *positive* Trust signal, human-had-to-step-in is
+  the intervention. Deferred because Spec, not Trust, is the current bottleneck.
