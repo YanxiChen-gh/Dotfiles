@@ -64,6 +64,8 @@ test_pretooluse(){
 
   echo '{"session_id":"S1","tool_input":{"file_path":"/r/src/app.ts"}}' | "$PRE" >/dev/null 2>&1
   assert_eq "blocks code edit without brief" 2 "$?"
+  grep -q 'block: session=S1' "$AGENT_MATURITY_DATA_DIR/scope-gate.log" 2>/dev/null \
+    && ok "block is logged" || no "block is logged"
 
   echo '{"session_id":"S1","tool_input":{"file_path":"/r/README.md"}}' | "$PRE" >/dev/null 2>&1
   assert_eq "allows floored path" 0 "$?"

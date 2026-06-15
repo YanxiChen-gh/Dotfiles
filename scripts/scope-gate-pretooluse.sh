@@ -32,6 +32,7 @@ sg_store_readable || { sg_log "fail-open: brief store unreadable"; exit 0; }
 # Brief recorded for this session → allow.
 sg_brief_exists "$session" && exit 0
 
+sg_log "block: session=$session path=$path"
 cat >&2 <<'MSG'
 ⛔ Scope gate: no scoping decision recorded for this task.
 
