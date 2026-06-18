@@ -4,6 +4,10 @@
 
 When writing TypeScript code, comments, or PR descriptions on behalf of the user, follow the guide at `~/dotfiles/claude/pr-authoring.md` (worked examples in `pr-examples.md`). The throughline is to optimize for the reader's time and let effort scale with risk. Code avoids `any`/`as`/`!` (except `as const`) and validates untyped boundaries with Zod. Comments and tests get the same bar as code, not nice-to-haves: self-documenting code over filler comments, and no tests written just for coverage. PR descriptions stay high-level (before → problem → after, no diff narration) and scale to the change, so a simple one is often a single line. And all prose should sound like a person wrote it, not an AI.
 
+## Verifying Red Panda / web-app changes
+
+When I make Red Panda or web-app changes — `apps/web-client`, `packages/client-redpanda`, `apps/web`, `packages/web-ai` — that I'll want to verify visually, stand up the local dev server and exercise the change yourself before handing back to me. Run end-to-end tests against the running app as far as you can, driving it through the exposed (Tailscale MagicDNS) URL, and only hand off once you've confirmed the change actually works. Then expose it for my own browser testing, using whichever access method works in the current CDE — the `vanta-dev-server` skill documents the `--tailscale` path and the Ona native port-forward fallback. Give me the browser URL.
+
 ## PR Review Tone
 
 When leaving PR comments, reviews, or code feedback on behalf of the user, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews, Paperclip agent reviews, and any automated review workflows.
