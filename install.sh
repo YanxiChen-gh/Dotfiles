@@ -279,6 +279,56 @@ setup_cloudev_tasks() {
     echo "✅ Linked Claude Dev tasks: $target_tasks -> $source_tasks"
 }
 
+# Default the interactive shell to zsh in Vanta's Ona remote dev env.
+#
+# Ona CDEs SSH in via `exec -l $SHELL -i` with $SHELL=/bin/bash, and a
+# container's /etc/passwd can reset on rebuild, so `chsh` alone isn't reliable.
+# We add an idempotent, runtime-gated guard to ~/.bashrc that hands interactive
+# bash sessions over to zsh whenever IS_ON_ONA is set (harmless on a personal
+# machine, where the variable is absent), and best-effort `chsh` when this
+# installer is itself running inside Ona.
+setup_ona_default_shell() {
+    bashrc="$HOME/.bashrc"
+    marker="# >>> dotfiles: default to zsh on Ona >>>"
+
+    if [ ! -f "$bashrc" ] || ! grep -qF "$marker" "$bashrc"; then
+        cat >> "$bashrc" <<'EOF'
+
+# >>> dotfiles: default to zsh on Ona >>>
+# In Vanta's Ona CDE, hand interactive bash sessions over to zsh.
+case "$-" in
+    *i*)
+        if [ -n "$IS_ON_ONA" ] && [ -z "$ZSH_VERSION" ]; then
+            _zsh=$(command -v zsh 2>/dev/null)
+            if [ -n "$_zsh" ]; then
+                export SHELL="$_zsh"
+                exec "$_zsh" -l
+            fi
+            unset _zsh
+        fi
+        ;;
+esac
+# <<< dotfiles: default to zsh on Ona <<<
+EOF
+        echo "✅ Added zsh-on-Ona guard to $bashrc"
+    fi
+
+    # When installing inside Ona, ensure zsh exists and set it as the login shell.
+    if [ -n "$IS_ON_ONA" ]; then
+        if ! command -v zsh >/dev/null 2>&1 && [ "$OS" = "linux" ]; then
+            install_from_apt "zsh"
+        fi
+        zsh_path=$(command -v zsh 2>/dev/null)
+        if [ -n "$zsh_path" ] && [ "$(basename "${SHELL:-}")" != "zsh" ]; then
+            if chsh -s "$zsh_path" 2>/dev/null; then
+                echo "✅ Login shell set to $zsh_path"
+            else
+                echo "ℹ️  Could not chsh to zsh; ~/.bashrc will exec zsh on login instead."
+            fi
+        fi
+    fi
+}
+
 # Setup Cursor IDE configuration
 # Symlinks settings, keybindings, snippets, and skills from Dotfiles
 setup_cursor() {
@@ -1139,6 +1189,7 @@ fi
 
 create_symlinks
 setup_cloudev_tasks
+setup_ona_default_shell
 
 if [ "$WORK_MACHINE" = "1" ]; then
     sync_ona_env_from_ona
