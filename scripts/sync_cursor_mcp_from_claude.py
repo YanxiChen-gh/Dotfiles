@@ -51,7 +51,7 @@ def sync(claude_path: str, cursor_path: str) -> int:
 
     os.makedirs(os.path.dirname(cursor_path) or ".", exist_ok=True)
     data: Dict[str, Any] = {}
-    if os.path.isfile(cursor_path):
+    if os.path.isfile(cursor_path) and os.path.getsize(cursor_path) > 0:
         with open(cursor_path, encoding="utf-8") as f:
             data = json.load(f)
 
