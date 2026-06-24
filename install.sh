@@ -320,7 +320,10 @@ EOF
         fi
         zsh_path=$(command -v zsh 2>/dev/null)
         if [ -n "$zsh_path" ] && [ "$(basename "${SHELL:-}")" != "zsh" ]; then
-            if chsh -s "$zsh_path" 2>/dev/null; then
+            # IMPORTANT: chsh prompts for a PAM password; without </dev/null it blocks
+            # forever during non-interactive provisioning (postCreate hang). Fail fast
+            # instead — the ~/.bashrc guard above already hands interactive shells to zsh.
+            if chsh -s "$zsh_path" </dev/null 2>/dev/null; then
                 echo "✅ Login shell set to $zsh_path"
             else
                 echo "ℹ️  Could not chsh to zsh; ~/.bashrc will exec zsh on login instead."
