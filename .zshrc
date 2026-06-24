@@ -100,8 +100,8 @@ alias pip="pip3"
 alias findp="ps aux | grep"
 alias ku="kubectl"
 alias lc="leetcode"
-# Agent-autonomy maturity: log an intervention. li <correction|clarification|unblock> "note" [cost_min]
-alias li="$HOME/dotfiles/scripts/log-intervention.sh"
+# Agent-autonomy maturity: `li` and env come from ~/.agent-maturity.env (sourced below),
+# installed by the standalone agent-maturity engine repo (see setup_agent_maturity in install.sh).
 
 # Editor - prefer nvim, fall back to vim
 if command -v nvim >/dev/null 2>&1; then
@@ -228,3 +228,5 @@ fi
 if [ "$WORK_MACHINE" = "1" ] && [ -n "$DOTFILES_DIR" ] && [ -f "$DOTFILES_DIR/shell/work.sh" ]; then
     source "$DOTFILES_DIR/shell/work.sh"
 fi
+
+[ -f "$HOME/.agent-maturity.env" ] && . "$HOME/.agent-maturity.env"

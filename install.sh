@@ -705,19 +705,19 @@ setup_rtk() {
     echo "✅ RTK setup complete (rtk gain for savings stats)"
 }
 
-# Register the scope-gate hooks in ~/.claude/settings.json (idempotent, non-clobbering).
-setup_scope_gate() {
-    echo "Setting up scope-gate hooks..."
-    chmod +x "$HOME/dotfiles/scripts/scope-gate-pretooluse.sh" \
-             "$HOME/dotfiles/scripts/scope-gate-userpromptsubmit.sh" 2>/dev/null || true
-    # Eagerly create the briefs dir so the PreToolUse hook hard-blocks from task #1 on a
-    # fresh env (without it the hook fails open until a maturity skill provisions the store).
-    # ensure-maturity-data.sh later clones the private repo INTO this pre-existing dir.
-    mkdir -p "${AGENT_MATURITY_DATA_DIR:-$HOME/.agent-maturity-data}/briefs"
-    if bash "$HOME/dotfiles/scripts/scope-gate-register.sh" 2>/dev/null; then
-        echo "✅ scope-gate hooks registered for Claude Code"
+# Install the agent-maturity engine. It lives in its own PUBLIC repo
+# (github.com/YanxiChen-gh/agent-maturity); the engine's bootstrap.sh does all the heavy
+# lifting (clone-or-pull → install.sh → skills + scope-gate hooks + `li` + env). So this is
+# just the one-liner — same line any teammate puts in their own dotfiles. Data stays private.
+setup_agent_maturity() {
+    echo "Setting up agent-maturity engine..."
+    local boot="${AGENT_MATURITY_BOOTSTRAP_URL:-https://raw.githubusercontent.com/YanxiChen-gh/agent-maturity/main/bootstrap.sh}"
+    local data_repo="${AGENT_MATURITY_DATA_REPO:-YanxiChen-gh/agent-maturity-data}"
+    if curl -fsSL "$boot" | bash -s -- --data-repo "$data_repo" \
+         --name "$(git config --global user.name)" --email "$(git config --global user.email)" >/dev/null; then
+        echo "✅ agent-maturity installed (via engine bootstrap)"
     else
-        echo "⚠️  scope-gate hook registration failed (run: scripts/scope-gate-register.sh)"
+        echo "⚠️  agent-maturity install failed (curl $boot | bash)"
     fi
 }
 
@@ -1232,7 +1232,7 @@ fi
 # Setup Claude Code config and commands
 setup_claude_config
 setup_rtk
-setup_scope_gate
+setup_agent_maturity
 setup_superpowers_plugin
 setup_vanta_ai_platform_plugin
 
