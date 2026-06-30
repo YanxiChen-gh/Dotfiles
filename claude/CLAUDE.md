@@ -4,6 +4,8 @@
 
 When writing TypeScript code, comments, or PR descriptions on behalf of the user, follow the guide at `~/dotfiles/claude/pr-authoring.md` (worked examples in `pr-examples.md`). The throughline is to optimize for the reader's time and let effort scale with risk. Code avoids `any`/`as`/`!` (except `as const`) and validates untyped boundaries with Zod. Comments and tests get the same bar as code, not nice-to-haves: self-documenting code over filler comments, and no tests written just for coverage. PR descriptions stay high-level (before → problem → after, no diff narration) and scale to the change, so a simple one is often a single line. And all prose should sound like a person wrote it, not an AI.
 
+**Comment self-check before handoff (current models over-comment by default).** Don't just cite the guide — *act on it* before you consider code done. Re-read every comment and test you added and delete any that: narrate the change ("we used to…", "now does X", "Phase 0"), restate what the code already says, are obvious from the symbol name, or only re-verify a library/type/static mapping. Keep only the non-obvious *why* (gotcha, workaround, external constraint). Default to removing; a comment has to earn its place. This check is calibrated to today's verbose models — when the model stops over-commenting, this paragraph is dead weight and should be cut (see the agent-maturity `verbose-output` tag / model-upgrade re-read).
+
 ## PR Review Tone
 
 When leaving PR comments, reviews, or code feedback on behalf of the user, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews, Paperclip agent reviews, and any automated review workflows.

@@ -635,6 +635,40 @@ setup_claude_config() {
         done
         echo "✅ Claude Code skills linked (work)"
     fi
+
+    # Register the comment-bar PostToolUse hook (work scope): nudges the model to apply the
+    # comment bar after JS/TS edits, since current models over-comment by default. Idempotent
+    # (deduped on the script name). Kill switch + retirement trigger live in the script itself.
+    hook_script="$script_dir/claude/hooks/comment-self-check.sh"
+    if [ "$WORK_MACHINE" = "1" ] && [ -f "$hook_script" ]; then
+        chmod +x "$hook_script" 2>/dev/null || true
+        COMMENT_HOOK_CMD="bash $hook_script" python3 - "$claude_dir/settings.json" <<'PY'
+import json, os, sys
+
+path, cmd = sys.argv[1], os.environ["COMMENT_HOOK_CMD"]
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    cfg = {}
+
+post = cfg.setdefault("hooks", {}).setdefault("PostToolUse", [])
+present = any(
+    "comment-self-check.sh" in h.get("command", "")
+    for entry in post
+    for h in entry.get("hooks", [])
+)
+if not present:
+    post.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": cmd}]})
+    with open(path, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+    print("registered comment-bar PostToolUse hook")
+else:
+    print("comment-bar hook already registered")
+PY
+        echo "✅ Claude Code comment-bar hook registered (work)"
+    fi
 }
 
 # Symlink Codex global instructions and RTK reference.

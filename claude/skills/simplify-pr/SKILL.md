@@ -55,8 +55,18 @@ The guide covers the whole PR: a concise before → problem → after **descript
 and the code/tests themselves. For this cleanup skill, focus on the description and comments, but
 also **flag** (don't rewrite) any test smells the guide calls out in the diff — coverage-theater
 (tests of libraries or trivial mappings) and complex/over-mocked tests that should use dependency
-injection. The two operational points the guide can't know about, which this skill adds:
+injection. The operational points the guide can't know about, which this skill adds:
 
+- **Be aggressive on comments — default to cutting, not flagging.** Current models (Opus 4.8)
+  over-comment badly, and this skill's failure mode is leaving too much. For *every* added
+  comment, the default is **remove** unless it carries a non-obvious *why* (gotcha, workaround,
+  external-library quirk, surprising data model). Remove on sight: change-narration ("we used
+  to…", "now X", "Phase 0"), restatements of what the code says, comments obvious from the
+  symbol name, and step-by-step "first… then…" filler. Same for tests: a test that only
+  re-verifies a library/type/static mapping is negative value — call it out for deletion, don't
+  preserve it. When in doubt, cut it; the user would rather re-add a rare needed comment than
+  hand-strip ten. _(This aggressiveness is tuned to today's verbose models; revisit on a model
+  upgrade — see the agent-maturity `verbose-output` tag.)_
 - **Respect the repo's PR template.** The guide complements it — keep every required
   `## Section` (Vanta's `pr-template-guard` hook blocks a PR that drops one); just make each
   one tight. Don't delete sections to "simplify."
