@@ -42,7 +42,10 @@ Both are the single source of truth and may have changed since this skill was wr
 `../../review-tone.md`, and `../../pr-examples.md`.)
 
 Apply the authoring guide as the review bar — the same things it tells an author to do are the
-things you check for here:
+things you check for here. **The default stance is minimal:** comments, tests, and description
+lines are additions that must earn their place, not defaults — flag anything present for its own
+sake (a comment restating the code, a coverage-theater test, a description narrating the diff) as
+removable, the way `simplify-pr` would. Then the specific areas:
 
 - **Code** — `any`/`as`/`!` escape hatches, unvalidated boundaries, throwing where a discriminated
   result fits, auth bolted onto the caller instead of the service, premature abstraction or

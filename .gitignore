@@ -7,3 +7,7 @@ claude/agent-maturity/evidence/
 # (interventions reference internal PRs/tickets/tools). Keep in a private store.
 claude/agent-maturity/interventions.jsonl
 claude/agent-maturity/tracker.md
+
+# Python bytecode
+__pycache__/
+*.pyc

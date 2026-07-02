@@ -669,6 +669,41 @@ else:
 PY
         echo "✅ Claude Code comment-bar hook registered (work)"
     fi
+
+    # Register the verify-gate PreToolUse(Bash) hook (work scope): blocks `gh pr create`
+    # when the PR body lacks verification evidence + an independent-review/grading section
+    # (Trust L2→L3 lever). Idempotent (deduped on the script name). Fail-open + kill switch
+    # (VERIFY_GATE=off) + retirement trigger live in the script itself.
+    vg_hook="$script_dir/claude/hooks/verify-gate-pretooluse.sh"
+    if [ "$WORK_MACHINE" = "1" ] && [ -f "$vg_hook" ]; then
+        chmod +x "$vg_hook" "$script_dir/claude/hooks/verify-gate-check.py" 2>/dev/null || true
+        VERIFY_HOOK_CMD="bash $vg_hook" python3 - "$claude_dir/settings.json" <<'PY'
+import json, os, sys
+
+path, cmd = sys.argv[1], os.environ["VERIFY_HOOK_CMD"]
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    cfg = {}
+
+pre = cfg.setdefault("hooks", {}).setdefault("PreToolUse", [])
+present = any(
+    "verify-gate-pretooluse.sh" in h.get("command", "")
+    for entry in pre
+    for h in entry.get("hooks", [])
+)
+if not present:
+    pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]})
+    with open(path, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+    print("registered verify-gate PreToolUse hook")
+else:
+    print("verify-gate hook already registered")
+PY
+        echo "✅ Claude Code verify-gate hook registered (work)"
+    fi
 }
 
 # Symlink Codex global instructions and RTK reference.

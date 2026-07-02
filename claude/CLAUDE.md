@@ -6,6 +6,16 @@ When writing TypeScript code, comments, or PR descriptions on behalf of the user
 
 **Comment self-check before handoff (current models over-comment by default).** Don't just cite the guide — *act on it* before you consider code done. Re-read every comment and test you added and delete any that: narrate the change ("we used to…", "now does X", "Phase 0"), restate what the code already says, are obvious from the symbol name, or only re-verify a library/type/static mapping. Keep only the non-obvious *why* (gotcha, workaround, external constraint). Default to removing; a comment has to earn its place. This check is calibrated to today's verbose models — when the model stops over-commenting, this paragraph is dead weight and should be cut (see the agent-maturity `verbose-output` tag / model-upgrade re-read).
 
+## Verification & PR Handoff
+
+Treat verification as part of the deliverable, not a step after it. Before opening a PR (`gh pr create`):
+
+- **Exercise the running change end-to-end** — drive the actual user-facing path (browser/API/CLI as fits), not just unit tests, and record what you ran and what you saw as a short verification/evidence section in the PR body (`~/dotfiles/shared-skills/full-verification-workflow` + its `evidence-template.md`). A docs-only change just says "docs only, no runtime".
+- **Get an independent review before I see it.** Dispatch a clean-context review subagent over the diff + evidence — it didn't write the code, so it catches what you rationalized, and it vets the evidence itself ("did the e2e actually run, or is this a hollow claim?"), re-running a cheap check when the evidence looks thin. Fold its verdict + findings-fixed into the body as a grading section. Grading your own work doesn't count.
+- **Minimal by default — comments, tests, and descriptions.** The standing bar (`pr-authoring.md`): add a comment, a test, or a description line only when it earns its place — a non-obvious *why*, real coverage of business logic, motivation the diff can't show. Default is to leave it out. The reviewer checks this explicitly and flags anything present for its own sake.
+
+The `verify-gate` hook enforces this at `gh pr create` (it blocks a PR body with no verification + grading section). It's a backstop, not the mechanism — do the above and it never fires. Escape hatch: `export VERIFY_GATE=off`.
+
 ## PR Review Tone
 
 When leaving PR comments, reviews, or code feedback on behalf of the user, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews, Paperclip agent reviews, and any automated review workflows.
