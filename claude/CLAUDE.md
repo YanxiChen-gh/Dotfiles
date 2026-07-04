@@ -10,6 +10,10 @@ When writing TypeScript code, comments, or PR descriptions on behalf of the user
 
 **Comment self-check before handoff (current models over-comment by default).** Don't just cite the guide — *act on it* before you consider code done. Re-read every comment and test you added and delete any that: narrate the change ("we used to…", "now does X", "Phase 0"), restate what the code already says, are obvious from the symbol name, or only re-verify a library/type/static mapping. Keep only the non-obvious *why* (gotcha, workaround, external constraint). Default to removing; a comment has to earn its place. This check is calibrated to today's verbose models — when the model stops over-commenting, this paragraph is dead weight and should be cut (see the agent-maturity `verbose-output` tag / model-upgrade re-read).
 
+## Planning Artifacts
+
+When you produce a plan, design doc, or anything meant for me to review before you implement, default to a **Lavish HTML artifact** I open in the browser (`lavish-axi <file>`) — not a markdown file. Build it as a rich, interactive page (sections, diagrams, comparisons, decision inputs), open it with Lavish so I can annotate elements or selected text and send feedback back through `lavish-axi poll`, then iterate on what I flag. Plan mode's written plan is the same — render it as a Lavish artifact, not a `.md`. Fall back to markdown only when Lavish isn't available or the "plan" is a throwaway one-liner.
+
 ## Verification & PR Handoff
 
 Treat verification as part of the deliverable, not a step after it. Before opening a PR (`gh pr create`):
@@ -33,6 +37,16 @@ When the user mentions Paperclip, agents, the CEO, or wants to manage work acros
 After creating a git worktree (any repo), provision it with `~/dotfiles/scripts/provision-worktree.sh <worktree-path>`. It hardlink-seeds `node_modules` from the main checkout (instant, ~0 extra disk) and copies git-ignored local config (`.claude/settings.local.json`, `.dd-agent.env`, `.env*`). It's idempotent and a no-op for anything absent. Don't run `yarn install` / `turbo generate-types` in the worktree unless you'll actually build there — reading and searching need neither.
 
 In Zed remote sessions, worktree *creation* is Zed's job: only worktrees the Zed client creates appear in the sidebar's "Open Worktrees" list (it tracks its own open workspaces, not `git worktree list`). Agent-created worktrees won't show there, but they DO appear in the `git: worktree` picker (`cmd-shift-P`), which lists every `git worktree list` entry — so creating one with `git worktree add` is fine; the user opens it from that picker. There is no ACP path for an external agent to register a worktree into the sidebar.
+
+## Exposing Local Dev Servers (Port Forwarding)
+
+To reach a local server (dev server, review UI, etc.) running on a remote CDE from my laptop, prefer these in order:
+
+1. **Tailscale `serve` (preferred)** — tailnet-private, no public URL. On an Ona CDE, join the tailnet via the repo's Workload Identity Federation flow (in obsidian: start `tailscaled` in userspace-networking mode, then `scripts/dev/tailscale-up-ona.sh <env-id>`), then `tailscale serve --bg --http=<port> http://localhost:<local-port>` and open `http://<node>.<tailnet>.ts.net:<port>/…`. Works for loopback-bound servers; confirm the app tolerates the proxied `Host` header.
+2. **Editor port-forward** — VS Code/Cursor Ports panel → forward the port. Fine, but needs my manual click.
+3. **Public tunnel (ngrok) — last resort** — exposes to anyone with the URL; use only when the tailnet isn't an option, and tear it down when done.
+
+Don't use a static "share/publish/export" (uploading a snapshot to a hosting service) when you need a *live* server — it drops the interactive connection back to the agent.
 
 ## MCP Server Preferences
 
