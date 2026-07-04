@@ -704,6 +704,42 @@ else:
 PY
         echo "✅ Claude Code verify-gate hook registered (work)"
     fi
+
+    # Register the pr-authoring gate PreToolUse(Bash) hook (work scope): blocks `gh pr create`
+    # / `gh pr edit --body` when an LLM judge (claude -p) grades the body as bloated against
+    # pr-authoring.md, so the guide lands on the first draft instead of a post-hoc /simplify-pr
+    # cleanup (Spec lever). Idempotent (deduped on the script name). Fail-open + kill switch
+    # (PR_AUTHORING_GATE=off) + retirement trigger live in the script itself.
+    pag_hook="$script_dir/claude/hooks/pr-authoring-gate-pretooluse.sh"
+    if [ "$WORK_MACHINE" = "1" ] && [ -f "$pag_hook" ]; then
+        chmod +x "$pag_hook" "$script_dir/claude/hooks/pr-authoring-gate-check.py" 2>/dev/null || true
+        PAG_HOOK_CMD="bash $pag_hook" python3 - "$claude_dir/settings.json" <<'PY'
+import json, os, sys
+
+path, cmd = sys.argv[1], os.environ["PAG_HOOK_CMD"]
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    cfg = {}
+
+pre = cfg.setdefault("hooks", {}).setdefault("PreToolUse", [])
+present = any(
+    "pr-authoring-gate-pretooluse.sh" in h.get("command", "")
+    for entry in pre
+    for h in entry.get("hooks", [])
+)
+if not present:
+    pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]})
+    with open(path, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+    print("registered pr-authoring gate PreToolUse hook")
+else:
+    print("pr-authoring gate hook already registered")
+PY
+        echo "✅ Claude Code pr-authoring gate hook registered (work)"
+    fi
 }
 
 # Symlink Codex global instructions and RTK reference.
@@ -1253,6 +1289,39 @@ install_langsmith_cli() {
     return 1
 }
 
+# Install the Statsig CLI (siggy) and lock in the console API key.
+# Work machines only. Reads the console key from STATSIG_CONSOLE_API_KEYS.
+install_siggy_cli() {
+    echo "Checking for Statsig CLI (siggy)..."
+
+    if command -v siggy >/dev/null 2>&1; then
+        echo "✅ Statsig CLI already installed"
+    else
+        install_node_if_missing || return 1
+        echo "Installing Statsig CLI with npm..."
+        if npm install -g @statsig/siggy; then
+            echo "✅ Statsig CLI installed successfully"
+        else
+            echo "⚠️  Warning: Failed to install Statsig CLI"
+            echo "   Try manually: npm install -g @statsig/siggy"
+            return 1
+        fi
+    fi
+
+    if [ -n "${STATSIG_CONSOLE_API_KEYS:-}" ]; then
+        echo "Configuring Statsig console API key from STATSIG_CONSOLE_API_KEYS..."
+        # Redirect output so the key never lands in logs.
+        if siggy config -c "$STATSIG_CONSOLE_API_KEYS" >/dev/null 2>&1; then
+            echo "✅ Statsig console API key configured"
+        else
+            echo "⚠️  Warning: Failed to configure Statsig console API key"
+        fi
+    else
+        echo "⚠️  No STATSIG_CONSOLE_API_KEYS found in environment; skipping siggy auth"
+        echo "   Set it and re-run, or configure manually: siggy config -c <console-api-key>"
+    fi
+}
+
 # Install an AXI agent skill (github.com/kunchenguid/*) for Claude Code and Cursor.
 # Usage: install_axi_skill <github_repo> <skill_name>
 install_axi_skill() {
@@ -1294,6 +1363,7 @@ install_langsmith_cli
 if [ "$WORK_MACHINE" = "1" ]; then
     install_pup_cli
     install_gastown
+    install_siggy_cli
     install_from_url "Cortex Code" "cortex" "https://ai.snowflake.com/static/cc-scripts/install.sh"
 fi
 

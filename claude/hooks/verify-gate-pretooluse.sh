@@ -25,6 +25,10 @@ vg_disabled && exit 0                                # kill switch
 
 command -v python3 >/dev/null 2>&1 || { vg_log "fail-open: python3 missing"; exit 0; }
 
+# `python3 <missing-file>` exits 2, which Claude Code reads as a BLOCK — a missing check.py
+# would wedge PR creation. Guard it: absent script → fail open.
+[ -f "$DIR/verify-gate-check.py" ] || { vg_log "fail-open: check.py missing"; exit 0; }
+
 input="$(cat 2>/dev/null)" || exit 0
 
 # check.py decides: exit 2 + stderr message to block, exit 0 to allow. It fails open
