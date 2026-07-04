@@ -89,5 +89,13 @@ run_cmd 'gh pr create --fill' 0 'fill allow'
 # --- --body-file that doesn't exist → fail open (can't inspect) → allow ---
 run_cmd "gh pr create --title t --body-file $TMP/does-not-exist.md" 0 'unreadable body-file allow'
 
+# --- check.py missing (lib present) → fail open, not a block from `python3 <missing>` exiting 2 ---
+mkdir -p "$TMP/lone"
+cp "$ROOT/claude/hooks/verify-gate-pretooluse.sh" "$ROOT/claude/hooks/verify-gate-lib.sh" "$TMP/lone/"
+set +e
+printf '%s' '{"tool_input":{"command":"gh pr create --title t"}}' | bash "$TMP/lone/verify-gate-pretooluse.sh" >/dev/null 2>&1
+[ $? -eq 0 ] || fail "[missing check.py] expected fail-open exit 0"
+set -e
+
 echo "verify-gate: all cases passed"
 exit 0
