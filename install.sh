@@ -704,6 +704,42 @@ else:
 PY
         echo "✅ Claude Code verify-gate hook registered (work)"
     fi
+
+    # Register the pr-authoring gate PreToolUse(Bash) hook (work scope): blocks `gh pr create`
+    # / `gh pr edit --body` when an LLM judge (claude -p) grades the body as bloated against
+    # pr-authoring.md, so the guide lands on the first draft instead of a post-hoc /simplify-pr
+    # cleanup (Spec lever). Idempotent (deduped on the script name). Fail-open + kill switch
+    # (PR_AUTHORING_GATE=off) + retirement trigger live in the script itself.
+    pag_hook="$script_dir/claude/hooks/pr-authoring-gate-pretooluse.sh"
+    if [ "$WORK_MACHINE" = "1" ] && [ -f "$pag_hook" ]; then
+        chmod +x "$pag_hook" "$script_dir/claude/hooks/pr-authoring-gate-check.py" 2>/dev/null || true
+        PAG_HOOK_CMD="bash $pag_hook" python3 - "$claude_dir/settings.json" <<'PY'
+import json, os, sys
+
+path, cmd = sys.argv[1], os.environ["PAG_HOOK_CMD"]
+try:
+    with open(path) as f:
+        cfg = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    cfg = {}
+
+pre = cfg.setdefault("hooks", {}).setdefault("PreToolUse", [])
+present = any(
+    "pr-authoring-gate-pretooluse.sh" in h.get("command", "")
+    for entry in pre
+    for h in entry.get("hooks", [])
+)
+if not present:
+    pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]})
+    with open(path, "w") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
+    print("registered pr-authoring gate PreToolUse hook")
+else:
+    print("pr-authoring gate hook already registered")
+PY
+        echo "✅ Claude Code pr-authoring gate hook registered (work)"
+    fi
 }
 
 # Symlink Codex global instructions and RTK reference.
