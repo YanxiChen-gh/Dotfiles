@@ -1253,6 +1253,39 @@ install_langsmith_cli() {
     return 1
 }
 
+# Install the Statsig CLI (siggy) and lock in the console API key.
+# Work machines only. Reads the console key from STATSIG_CONSOLE_API_KEYS.
+install_siggy_cli() {
+    echo "Checking for Statsig CLI (siggy)..."
+
+    if command -v siggy >/dev/null 2>&1; then
+        echo "✅ Statsig CLI already installed"
+    else
+        install_node_if_missing || return 1
+        echo "Installing Statsig CLI with npm..."
+        if npm install -g @statsig/siggy; then
+            echo "✅ Statsig CLI installed successfully"
+        else
+            echo "⚠️  Warning: Failed to install Statsig CLI"
+            echo "   Try manually: npm install -g @statsig/siggy"
+            return 1
+        fi
+    fi
+
+    if [ -n "${STATSIG_CONSOLE_API_KEYS:-}" ]; then
+        echo "Configuring Statsig console API key from STATSIG_CONSOLE_API_KEYS..."
+        # Redirect output so the key never lands in logs.
+        if siggy config -c "$STATSIG_CONSOLE_API_KEYS" >/dev/null 2>&1; then
+            echo "✅ Statsig console API key configured"
+        else
+            echo "⚠️  Warning: Failed to configure Statsig console API key"
+        fi
+    else
+        echo "⚠️  No STATSIG_CONSOLE_API_KEYS found in environment; skipping siggy auth"
+        echo "   Set it and re-run, or configure manually: siggy config -c <console-api-key>"
+    fi
+}
+
 # Install packages (Linux only)
 if [ "$OS" = "linux" ]; then
     install_from_apt "lua5.4"
@@ -1275,6 +1308,7 @@ install_langsmith_cli
 if [ "$WORK_MACHINE" = "1" ]; then
     install_pup_cli
     install_gastown
+    install_siggy_cli
     install_from_url "Cortex Code" "cortex" "https://ai.snowflake.com/static/cc-scripts/install.sh"
 fi
 
