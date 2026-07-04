@@ -24,6 +24,10 @@ Treat verification as part of the deliverable, not a step after it. Before openi
 
 The `verify-gate` hook enforces this at `gh pr create` (it blocks a PR body with no verification + grading section). It's a backstop, not the mechanism — do the above and it never fires. Escape hatch: `export VERIFY_GATE=off`.
 
+## Verifying Red Panda / web-app changes
+
+When I make Red Panda or web-app changes — `apps/web-client`, `packages/client-redpanda`, `apps/web`, `packages/web-ai` — that I'll want to verify visually, stand up the local dev server and exercise the change yourself before handing back to me. Run end-to-end tests against the running app as far as you can, driving it through the exposed (Tailscale MagicDNS) URL, and only hand off once you've confirmed the change actually works. Then expose it for my own browser testing, using whichever access method works in the current CDE — the `vanta-dev-server` skill documents the `--tailscale` path and the Ona native port-forward fallback. Give me the browser URL.
+
 ## PR Review Tone
 
 When leaving PR comments, reviews, or code feedback on behalf of the user, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews, Paperclip agent reviews, and any automated review workflows.
