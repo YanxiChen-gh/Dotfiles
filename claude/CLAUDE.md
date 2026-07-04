@@ -46,7 +46,9 @@ In Zed remote sessions, worktree *creation* is Zed's job: only worktrees the Zed
 
 To reach a local server (dev server, review UI, etc.) running on a remote CDE from my laptop, prefer these in order:
 
-1. **Tailscale `serve` (preferred)** — tailnet-private, no public URL. On an Ona CDE, join the tailnet via the repo's Workload Identity Federation flow (in obsidian: start `tailscaled` in userspace-networking mode, then `scripts/dev/tailscale-up-ona.sh <env-id>`), then `tailscale serve --bg --http=<port> http://localhost:<local-port>` and open `http://<node>.<tailnet>.ts.net:<port>/…`. Works for loopback-bound servers; confirm the app tolerates the proxied `Host` header.
+1. **Tailscale `serve` via the paved-path script (preferred)** — run `~/dotfiles/scripts/expose-port-tailscale.sh <local-port> [verify-path]`. It handles the whole chain on an Ona CDE (userspace `tailscaled` with a SOCKS proxy, WIF tailnet join, `tailscale serve`, e2e verification through the tailnet path) and prints the URL to open. Two hard-won constraints it encodes — don't work around them by hand:
+   - **Serve on tailnet port 8080 only.** ACLs for `tag:ona-dev` nodes admit only the Vanta dev-flow port; any other port hangs forever from a laptop while self-tests still pass.
+   - **A localhost curl is not verification.** Test through the tailnet path (the script curls via the daemon's SOCKS proxy); even that can't exercise ACLs, which is exactly why the port must stay 8080.
 2. **Editor port-forward** — VS Code/Cursor Ports panel → forward the port. Fine, but needs my manual click.
 3. **Public tunnel (ngrok) — last resort** — exposes to anyone with the URL; use only when the tailnet isn't an option, and tear it down when done.
 
