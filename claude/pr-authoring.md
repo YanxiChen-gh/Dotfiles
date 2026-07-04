@@ -57,6 +57,10 @@ If good code can already say it, don't write a comment.
   X", "this is now different because…", "Phase 0") and AI-generated step-by-step filler go stale
   immediately and clutter the read — strip them before handing off. That context belongs in the PR
   or an inline review note, not the code.
+- **One home for each fact.** Evergreen rationale (why the code is shaped this way) lives in the
+  code; change-context and the why-now live in the PR. Don't say the same thing in both. If a code
+  comment already explains a design decision, the PR description shouldn't re-explain it — pick the
+  right home and say it once.
 
 Good comments look like: *"Use string keys — ObjectId instances don't compare by value"*,
 *"http-proxy-middleware, not express-http-proxy, because the latter buffers the full body and would
