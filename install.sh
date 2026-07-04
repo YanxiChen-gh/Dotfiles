@@ -1253,6 +1253,25 @@ install_langsmith_cli() {
     return 1
 }
 
+# Install an AXI agent skill (github.com/kunchenguid/*) for Claude Code and Cursor.
+# Usage: install_axi_skill <github_repo> <skill_name>
+install_axi_skill() {
+    local repo="$1"
+    local skill="$2"
+    if command -v claude >/dev/null 2>&1; then
+        echo "Installing ${skill} skill for Claude Code..."
+        npx skills add "$repo" --agent claude-code --skill "$skill" --yes --global 2>/dev/null \
+            && echo "✅ ${skill} skill installed (Claude Code)" \
+            || echo "⚠️  ${skill} skill installation failed for Claude Code (can retry manually)"
+    fi
+    if command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -d "$HOME/.cursor" ]; then
+        echo "Installing ${skill} skill for Cursor..."
+        npx skills add "$repo" --agent cursor --skill "$skill" --yes --global 2>/dev/null \
+            && echo "✅ ${skill} skill installed (Cursor)" \
+            || echo "⚠️  ${skill} skill installation failed for Cursor (can retry manually)"
+    fi
+}
+
 # Install packages (Linux only)
 if [ "$OS" = "linux" ]; then
     install_from_apt "lua5.4"
@@ -1300,6 +1319,10 @@ if command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -
         && echo "✅ LangSmith skills installed (Cursor)" \
         || echo "⚠️  LangSmith skills installation failed for Cursor (can retry manually)"
 fi
+
+# Install AXI agent skills: Lavish (HTML artifact review) + Chrome DevTools automation
+install_axi_skill "kunchenguid/lavish-axi" "lavish"
+install_axi_skill "kunchenguid/chrome-devtools-axi" "chrome-devtools-axi"
 
 # Setup Claude Code config and commands
 setup_claude_config
