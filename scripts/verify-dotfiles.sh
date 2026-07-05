@@ -37,6 +37,7 @@ pass() {
 printf '\n== sh -n (syntax) ==\n'
 for f in \
     install.sh \
+    install.d/*.sh \
     sync-claude-skills-to-repo.sh \
     sync-cursor-app-to-dotfiles.sh \
     sync-ona-env-to-cursor-cloud.sh \
@@ -74,7 +75,7 @@ fi
 
 if command -v shellcheck >/dev/null 2>&1; then
     printf '\n== shellcheck (-S error) ==\n'
-    for f in install.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh scripts/setup_work_github_auth.sh shell/work.sh scripts/verify-dotfiles.sh; do
+    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh scripts/setup_work_github_auth.sh shell/work.sh scripts/verify-dotfiles.sh; do
         if out=$(shellcheck -S error -x "$f" 2>&1); then
             pass "shellcheck $f"
         else
