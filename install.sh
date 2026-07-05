@@ -771,6 +771,39 @@ PY
     fi
 }
 
+# Advisor system (github.com/YanxiChen-gh/advisors): clone the context/skill repos and
+# link the /advisor + /advisor-setup skills. The work root holds work-specific advisor
+# contexts (real project names), so it is cloned on work machines only.
+setup_advisors() {
+    advisors_clone_or_pull() {
+        # GIT_TERMINAL_PROMPT=0: on an unauthenticated machine, fail into the warning
+        # path instead of stalling the install on a credential prompt.
+        if [ -d "$2/.git" ]; then
+            GIT_TERMINAL_PROMPT=0 git -C "$2" pull --ff-only --quiet 2>/dev/null || true
+        else
+            GIT_TERMINAL_PROMPT=0 git clone --quiet "$1" "$2" 2>/dev/null
+        fi
+    }
+
+    if ! advisors_clone_or_pull https://github.com/YanxiChen-gh/advisors.git "$HOME/advisors"; then
+        echo "⚠️  advisors repo not accessible — skipping advisor setup"
+        return 0
+    fi
+    if [ "$WORK_MACHINE" = "1" ]; then
+        advisors_clone_or_pull https://github.com/VantaInc/yanxi-vanta-advisor.git "$HOME/advisors-vanta" \
+            || echo "⚠️  work advisor root not accessible — vanta advisor unavailable"
+    fi
+
+    mkdir -p "$HOME/.claude/skills"
+    for skill_dir in "$HOME/advisors/skills"/*/; do
+        [ -d "$skill_dir" ] || continue
+        name=$(basename "$skill_dir")
+        rm -rf "$HOME/.claude/skills/$name"
+        ln -s "$skill_dir" "$HOME/.claude/skills/$name"
+    done
+    echo "✅ advisor skills linked"
+}
+
 # Symlink Codex global instructions and RTK reference.
 setup_codex_config() {
     script_dir=$(dirname "$(readlink -f "$0")")
@@ -1331,6 +1364,7 @@ install_axi_skill "kunchenguid/chrome-devtools-axi" "chrome-devtools-axi"
 
 # Setup Claude Code config and commands
 setup_claude_config
+setup_advisors
 setup_rtk
 setup_agent_maturity
 setup_superpowers_plugin
