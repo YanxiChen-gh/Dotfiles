@@ -52,7 +52,7 @@ do
 done
 
 printf '\n== python3 -m py_compile ==\n'
-for f in scripts/sync_cursor_mcp_from_claude.py; do
+for f in scripts/sync_cursor_mcp_from_claude.py agent-rules/build.py; do
     if [ -f "$f" ]; then
         if ! python3 -m py_compile "$f"; then
             fail "py_compile $f"
@@ -61,6 +61,16 @@ for f in scripts/sync_cursor_mcp_from_claude.py; do
         fi
     fi
 done
+
+printf '\n== agent-rules generator (no drift) ==\n'
+if [ -f agent-rules/build.py ]; then
+    if out=$(python3 agent-rules/build.py --check 2>&1); then
+        pass "agent-rules up to date"
+    else
+        printf '%s\n' "$out"
+        fail "agent-rules drift (run: python3 agent-rules/build.py)"
+    fi
+fi
 
 if command -v shellcheck >/dev/null 2>&1; then
     printf '\n== shellcheck (-S error) ==\n'

@@ -1,0 +1,24 @@
+{
+  "pr-authoring": {
+    "body": "pr-authoring.md",
+    "targets": {
+      "cursor": {
+        "file": "pr-authoring.mdc",
+        "scope": "both",
+        "description": "When writing or reviewing TypeScript code, code comments, or PR descriptions, follow the user's authoring conventions. Apply when writing/refactoring code, adding comments, or drafting PR descriptions and commit summaries.",
+        "alwaysApply": false
+      }
+    }
+  },
+  "pr-review-tone": {
+    "body": "pr-review-tone.md",
+    "targets": {
+      "cursor": {
+        "file": "pr-review-tone.mdc",
+        "scope": "both",
+        "description": "When writing PR reviews, code review comments, or any feedback on pull requests, follow the user's personal review tone. Apply when reviewing PRs, leaving inline comments, or approving/requesting changes.",
+        "alwaysApply": false
+      }
+    }
+  }
+}
