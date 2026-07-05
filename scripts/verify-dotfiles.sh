@@ -7,7 +7,7 @@ usage() {
 Run cheap checks on this Dotfiles repo:
   - sh -n on shell entrypoints
   - shellcheck on those files (if shellcheck is on PATH)
-  - cc-sync-to-cursor-workspace.sh on a temp copy of test-fixtures/minimal-claude-workspace
+  - sync-claude-skills-to-repo.sh on a temp copy of test-fixtures/minimal-claude-workspace
 
 --quick   Skip integration sync and e2e (syntax + shellcheck + py_compile only)"
 }
@@ -37,8 +37,8 @@ pass() {
 printf '\n== sh -n (syntax) ==\n'
 for f in \
     install.sh \
-    cc-sync-to-cursor-workspace.sh \
-    cursor-sync.sh \
+    sync-claude-skills-to-repo.sh \
+    sync-cursor-app-to-dotfiles.sh \
     sync-ona-env-to-cursor-cloud.sh \
     scripts/setup_work_github_auth.sh \
     shell/work.sh \
@@ -74,7 +74,7 @@ fi
 
 if command -v shellcheck >/dev/null 2>&1; then
     printf '\n== shellcheck (-S error) ==\n'
-    for f in install.sh cc-sync-to-cursor-workspace.sh cursor-sync.sh sync-ona-env-to-cursor-cloud.sh scripts/setup_work_github_auth.sh shell/work.sh scripts/verify-dotfiles.sh; do
+    for f in install.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh scripts/setup_work_github_auth.sh shell/work.sh scripts/verify-dotfiles.sh; do
         if out=$(shellcheck -S error -x "$f" 2>&1); then
             pass "shellcheck $f"
         else
@@ -94,7 +94,7 @@ elif [ "$errors" -ne 0 ]; then
     printf '\n== integration (skipped: fix syntax/shellcheck failures first) ==\n'
     printf '\n== e2e (skipped: fix failures above first) ==\n'
 else
-    printf '\n== integration (cc-sync on fixture copy) ==\n'
+    printf '\n== integration (sync-claude-skills-to-repo on fixture copy) ==\n'
     FIXTURE="$ROOT/test-fixtures/minimal-claude-workspace"
     if ! command -v python3 >/dev/null 2>&1; then
         fail "python3 required for integration (SKILL.md @-transform)"
@@ -104,9 +104,9 @@ else
         WORK=$(mktemp -d)
         trap 'rm -rf "$WORK"' EXIT INT TERM
         cp -R "$FIXTURE/." "$WORK/"
-        if ! "$ROOT/cc-sync-to-cursor-workspace.sh" "$WORK" >/tmp/cc-sync-verify.log 2>&1; then
-            cat /tmp/cc-sync-verify.log >&2
-            fail "cc-sync-to-cursor-workspace.sh $WORK"
+        if ! "$ROOT/sync-claude-skills-to-repo.sh" "$WORK" >/tmp/sync-claude-skills-verify.log 2>&1; then
+            cat /tmp/sync-claude-skills-verify.log >&2
+            fail "sync-claude-skills-to-repo.sh $WORK"
         else
             OUT="$WORK/.cursor/skills/_cc_sync/skills-demo-skill/SKILL.md"
             if [ ! -f "$OUT" ]; then

@@ -203,13 +203,13 @@ fi
 [ -f ~/.zshrc.local ] && source ~/.zshrc.local
 
 # ------------------- Dotfiles on PATH ------------------------
-# Picks up cc-sync-to-cursor-workspace.sh and other repo-root scripts.
+# Picks up sync-claude-skills-to-repo.sh and other repo-root scripts.
 # 1) If this .zshrc is symlinked from the repo (install.sh), use that directory.
 # 2) Else common clone locations (Gitpod uses ~/.dotfiles).
 # Override in ~/.zshrc.local: export DOTFILES_DIR=/your/path
 if [ -z "$DOTFILES_DIR" ]; then
     _df_from_zshrc="${${(%):-%x}:A:h}"
-    if [ -f "$_df_from_zshrc/cc-sync-to-cursor-workspace.sh" ]; then
+    if [ -f "$_df_from_zshrc/sync-claude-skills-to-repo.sh" ]; then
         DOTFILES_DIR="$_df_from_zshrc"
     fi
     unset _df_from_zshrc

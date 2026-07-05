@@ -8,21 +8,21 @@ In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells def
 
 ## Claude Code → Cursor workspace skill sync
 
-`cc-sync-to-cursor-workspace.sh` copies skills from a repository’s `.claude/skills` and `.claude/plugins/*/skills` into that repo’s `.cursor/skills/_cc_sync/`, rewriting Claude `@file` include lines into explicit “read these paths” instructions for Cursor.
+`sync-claude-skills-to-repo.sh` copies skills from a repository’s `.claude/skills` and `.claude/plugins/*/skills` into that repo’s `.cursor/skills/_cc_sync/`, rewriting Claude `@file` include lines into explicit “read these paths” instructions for Cursor.
 
-This is **not** `cursor-sync.sh`, which exports your local Cursor app settings **into** this Dotfiles repo.
+This is **not** `sync-cursor-app-to-dotfiles.sh`, which exports your local Cursor app settings **into** this Dotfiles repo.
 
 ### Usage
 
 ```sh
 # Script resolves its own directory when run via PATH (command -v); README in _cc_sync embeds that path.
-cc-sync-to-cursor-workspace.sh /path/to/work/repo
+sync-claude-skills-to-repo.sh /path/to/work/repo
 
 # Preview
-cc-sync-to-cursor-workspace.sh --dry-run /path/to/obsidian
+sync-claude-skills-to-repo.sh --dry-run /path/to/obsidian
 
 # Also copy plugin agents to `.cursor/commands/`
-cc-sync-to-cursor-workspace.sh --agents /path/to/obsidian
+sync-claude-skills-to-repo.sh --agents /path/to/obsidian
 
 # Optional JSON at repo root or --config FILE: { "ignore_targets": ["skills-noisy-thing"] }
 ```
@@ -55,7 +55,7 @@ Skills under `shared-skills/` are symlinked to **both** `~/.claude/skills` and `
 
 ### Work monorepo clone
 
-Point the script at your local checkout (no repo changes required there): `cc-sync-to-cursor-workspace.sh ~/path/to/obsidian`. Generated files under that clone’s `.cursor/skills/_cc_sync/` are local-only unless you choose to commit them later as a team decision.
+Point the script at your local checkout (no repo changes required there): `sync-claude-skills-to-repo.sh ~/path/to/obsidian`. Generated files under that clone’s `.cursor/skills/_cc_sync/` are local-only unless you choose to commit them later as a team decision.
 
 ## Verifying changes
 
@@ -67,10 +67,10 @@ From the repo root:
 
 This runs:
 
-1. **`sh -n`** on `install.sh`, `cc-sync-to-cursor-workspace.sh`, `cursor-sync.sh`, `shell/work.sh`, and the verify script itself.
+1. **`sh -n`** on `install.sh`, `sync-claude-skills-to-repo.sh`, `sync-cursor-app-to-dotfiles.sh`, `shell/work.sh`, and the verify script itself.
 2. **`python3 -m py_compile`** on [`scripts/sync_cursor_mcp_from_claude.py`](scripts/sync_cursor_mcp_from_claude.py) when present (syntax check).
 3. **`shellcheck -S error`** on those shell files when `shellcheck` is installed (warnings are ignored so existing style nits do not fail the run).
-4. **Integration:** copies [`test-fixtures/minimal-claude-workspace/`](test-fixtures/minimal-claude-workspace/) to a temp directory, runs `cc-sync-to-cursor-workspace.sh` on it, and checks that `SKILL.md` was rewritten (`## Required context` and the former `@` path). **Requires `python3`** for that transform.
+4. **Integration:** copies [`test-fixtures/minimal-claude-workspace/`](test-fixtures/minimal-claude-workspace/) to a temp directory, runs `sync-claude-skills-to-repo.sh` on it, and checks that `SKILL.md` was rewritten (`## Required context` and the former `@` path). **Requires `python3`** for that transform.
 5. **E2E:** [`tests/e2e/run.sh`](tests/e2e/run.sh) (MCP Claude → Cursor sync script; isolated temp dirs, does not touch your real `~/.cursor`). **Requires `python3`.**
 
 Fast check without integration or e2e:
