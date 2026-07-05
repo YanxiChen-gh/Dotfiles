@@ -181,6 +181,8 @@ if [ "$DRY_RUN" -eq 0 ]; then
     mkdir -p "$OUT_ROOT"
     rm -rf "$OUT_ROOT"/*
     mkdir -p "$OUT_ROOT"
+    # Generated output is local-only; keep it out of the target repo's git status.
+    printf '*\n' > "$OUT_ROOT/.gitignore"
 fi
 
 cat > /tmp/cc_sync_readme_$$ <<EOF

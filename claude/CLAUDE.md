@@ -12,7 +12,7 @@ When writing TypeScript code, comments, or PR descriptions on behalf of the user
 
 ## Planning Artifacts
 
-When you produce a plan, design doc, or anything meant for me to review before you implement, default to a **Lavish HTML artifact** I open in the browser (`lavish-axi <file>`) — not a markdown file. Build it as a rich, interactive page (sections, diagrams, comparisons, decision inputs), open it with Lavish so I can annotate elements or selected text and send feedback back through `lavish-axi poll`, then iterate on what I flag. Plan mode's written plan is the same — render it as a Lavish artifact, not a `.md`. Fall back to markdown only when Lavish isn't available or the "plan" is a throwaway one-liner.
+When you produce a plan, design doc, or anything meant for me to review before you implement, default to a **Lavish HTML artifact** I open in the browser (`npx -y lavish-axi <file>`) — not a markdown file. Build it as a rich, interactive page (sections, diagrams, comparisons, decision inputs), open it with Lavish so I can annotate elements or selected text and send feedback back through `npx -y lavish-axi poll`, then iterate on what I flag. Plan mode's written plan is the same — render it as a Lavish artifact, not a `.md`. Fall back to markdown only when Lavish isn't available or the "plan" is a throwaway one-liner.
 
 ## Verification & PR Handoff
 

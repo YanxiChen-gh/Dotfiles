@@ -38,7 +38,7 @@ Claude Code hooks (`PostToolUse`, etc.) and Cursor hooks (`postToolUse`, etc.) a
 [RTK](https://github.com/rtk-ai/rtk) rewrites agent shell commands (`git status`, `cargo test`, `rg`, etc.) to compact output — typically 60–90% fewer tokens on dev workflows. `install.sh` installs the binary and enables it for all three agents:
 
 - **Claude Code** — `PreToolUse` hook in `~/.claude/settings.json` (automatic bash rewrite)
-- **OpenAI Codex (GPT)** — [`codex-instructions.md`](codex-instructions.md) + [`codex/RTK.md`](codex/RTK.md) symlinked to `~/.codex/AGENTS.md` and `RTK.md`
+- **OpenAI Codex (GPT)** — [`codex/AGENTS.md`](codex/AGENTS.md) + [`codex/RTK.md`](codex/RTK.md) symlinked to `~/.codex/AGENTS.md` and `RTK.md`
 - **Cursor** — `preToolUse` hook in [`cursor/hooks.json`](cursor/hooks.json) (symlinked to `~/.cursor/hooks.json`)
 
 Check savings anytime: `rtk gain`. Telemetry is disabled by default (`RTK_TELEMETRY_DISABLED=1` during install).
