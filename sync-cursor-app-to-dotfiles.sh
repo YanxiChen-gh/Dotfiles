@@ -4,8 +4,8 @@
 # Exports current Cursor configuration to Dotfiles for version control
 #
 # Usage:
-#   ./cursor-sync.sh          # Export current config
-#   ./cursor-sync.sh --commit # Export and commit changes
+#   ./sync-cursor-app-to-dotfiles.sh          # Export current config
+#   ./sync-cursor-app-to-dotfiles.sh --commit # Export and commit changes
 #
 
 set -e

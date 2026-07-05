@@ -931,7 +931,7 @@ PY
     fi
 
     script_dir=$(resolve_script_dir) || return 1
-    sync_script="$script_dir/cc-sync-to-cursor-workspace.sh"
+    sync_script="$script_dir/sync-claude-skills-to-repo.sh"
     if [ -x "$sync_script" ]; then
         "$sync_script" "$obsidian_root" || true
     else

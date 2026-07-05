@@ -10,7 +10,7 @@ There is no automatic importer between the two. If you want the same behavior in
 2. Register that script separately in each product’s hook JSON.
 3. Re-test timeouts: Cursor and Claude use different default timeouts and stdin conventions.
 
-Skill sync (`cc-sync-to-cursor-workspace.sh`) does not modify hooks or `permissions.allow` in Claude settings.
+Skill sync (`sync-claude-skills-to-repo.sh`) does not modify hooks or `permissions.allow` in Claude settings.
 
 ### RTK (shared shell hook)
 
