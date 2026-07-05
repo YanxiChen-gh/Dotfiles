@@ -6,27 +6,26 @@ My Dotfiles repo lives at https://github.com/YanxiChen-gh/Dotfiles. When I menti
 
 ## Code & PR Authoring
 
-When writing TypeScript code, comments, or PR descriptions on behalf of the user, follow the guide at `~/dotfiles/claude/pr-authoring.md` (worked examples in `pr-examples.md`). The throughline is to optimize for the reader's time and let effort scale with risk. Code avoids `any`/`as`/`!` (except `as const`) and validates untyped boundaries with Zod. Comments and tests get the same bar as code, not nice-to-haves: self-documenting code over filler comments, and no tests written just for coverage. Each fact gets one home — evergreen rationale in the code, change-context in the PR, never both. PR descriptions stay high-level (before → problem → after, no diff narration) and scale to the change, so a simple one is often a single line. And all prose should sound like a person wrote it, not an AI.
+When writing TypeScript code, comments, or PR descriptions on my behalf, follow `~/dotfiles/claude/pr-authoring.md` (worked examples in `pr-examples.md`). Throughline: optimize for the reader's time, let effort scale with risk.
 
-**Comment self-check before handoff (current models over-comment by default).** Don't just cite the guide — *act on it* before you consider code done. Re-read every comment and test you added and delete any that: narrate the change ("we used to…", "now does X", "Phase 0"), restate what the code already says, are obvious from the symbol name, or only re-verify a library/type/static mapping. Keep only the non-obvious *why* (gotcha, workaround, external constraint). Default to removing; a comment has to earn its place. This check is calibrated to today's verbose models — when the model stops over-commenting, this paragraph is dead weight and should be cut (see the agent-maturity `verbose-output` tag / model-upgrade re-read).
+**Comment self-check before handoff** — current models over-comment, so act on the guide's comment bar, don't just cite it: after writing, re-read every comment and test you added and delete any that narrate the change, restate the code, are obvious from the name, or only re-verify a type/mapping; keep only the non-obvious *why*. (A `comment-self-check.sh` PostToolUse hook also nudges this; retire this note when models stop over-commenting — the agent-maturity `verbose-output` tag.)
 
 ## Planning Artifacts
 
-When you produce a plan, design doc, or anything meant for me to review before you implement, default to a **Lavish HTML artifact** I open in the browser (`npx -y lavish-axi <file>`) — not a markdown file. Build it as a rich, interactive page (sections, diagrams, comparisons, decision inputs), open it with Lavish so I can annotate elements or selected text and send feedback back through `npx -y lavish-axi poll`, then iterate on what I flag. Plan mode's written plan is the same — render it as a Lavish artifact, not a `.md`. Fall back to markdown only when Lavish isn't available or the "plan" is a throwaway one-liner.
+For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** I open and annotate in the browser (`npx -y lavish-axi <file>`), not a markdown file — make it rich (sections, diagrams, comparisons, decision inputs), then `npx -y lavish-axi poll` for my feedback and iterate. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
 
 ## Verification & PR Handoff
 
-Treat verification as part of the deliverable, not a step after it. Before opening a PR (`gh pr create`):
+Verification is part of the deliverable. Before `gh pr create`, run the workflow in `~/dotfiles/shared-skills/full-verification-workflow` (+ `evidence-template.md`) and put the results in the PR body. Two things it's easy to skip but I care about:
 
-- **Exercise the running change end-to-end** — drive the actual user-facing path (browser/API/CLI as fits), not just unit tests, and record what you ran and what you saw as a short verification/evidence section in the PR body (`~/dotfiles/shared-skills/full-verification-workflow` + its `evidence-template.md`). A docs-only change just says "docs only, no runtime".
-- **Get an independent review before I see it.** Dispatch a clean-context review subagent over the diff + evidence — it didn't write the code, so it catches what you rationalized, and it vets the evidence itself ("did the e2e actually run, or is this a hollow claim?"), re-running a cheap check when the evidence looks thin. Fold its verdict + findings-fixed into the body as a grading section. Grading your own work doesn't count.
-- **Minimal by default — comments, tests, and descriptions.** The standing bar (`pr-authoring.md`): add a comment, a test, or a description line only when it earns its place — a non-obvious *why*, real coverage of business logic, motivation the diff can't show. Default is to leave it out. The reviewer checks this explicitly and flags anything present for its own sake.
+- **Exercise the running change end-to-end** (the actual browser/API/CLI path, not just unit tests) and record what you ran — a docs-only change just says "docs only, no runtime".
+- **Independent review before I see it** — a clean-context subagent over the diff + evidence: it catches what you rationalized and vets whether the e2e actually ran. Fold its verdict + fixes into a grading section; grading your own work doesn't count. It also enforces the `pr-authoring.md` minimal bar (a comment/test/description line only if it earns its place).
 
-The `verify-gate` hook enforces this at `gh pr create` (it blocks a PR body with no verification + grading section). It's a backstop, not the mechanism — do the above and it never fires. Escape hatch: `export VERIFY_GATE=off`.
+The `verify-gate` hook backstops this at `gh pr create` (blocks a body missing the verification + grading section); do the above and it never fires. Escape hatch: `export VERIFY_GATE=off`.
 
 ## Verifying Red Panda / web-app changes
 
-When I make Red Panda or web-app changes — `apps/web-client`, `packages/client-redpanda`, `apps/web`, `packages/web-ai` — that I'll want to verify visually, stand up the local dev server and exercise the change yourself before handing back to me. Run end-to-end tests against the running app as far as you can, driving it through the exposed (Tailscale MagicDNS) URL, and only hand off once you've confirmed the change actually works. Then expose it for my own browser testing, using whichever access method works in the current CDE — the `vanta-dev-server` skill documents the `--tailscale` path and the Ona native port-forward fallback. Give me the browser URL.
+For Red Panda / web-app changes (`apps/web-client`, `packages/client-redpanda`, `apps/web`, `packages/web-ai`) I'll want to see: stand up the local dev server, exercise the change end-to-end yourself, and only hand off once it actually works. Then expose it for my own browser testing (see Exposing Local Dev Servers below; the `vanta-dev-server` skill covers the `--tailscale` path) and give me the URL.
 
 ## PR Review Tone
 
@@ -34,21 +33,19 @@ When leaving PR comments, reviews, or code feedback on behalf of the user, follo
 
 ## Git Worktrees
 
-After creating a git worktree (any repo), provision it with `~/dotfiles/scripts/provision-worktree.sh <worktree-path>`. It hardlink-seeds `node_modules` from the main checkout (instant, ~0 extra disk) and copies git-ignored local config (`.claude/settings.local.json`, `.dd-agent.env`, `.env*`). It's idempotent and a no-op for anything absent. Don't run `yarn install` / `turbo generate-types` in the worktree unless you'll actually build there — reading and searching need neither.
+After creating a git worktree (any repo), provision it with `~/dotfiles/scripts/provision-worktree.sh <path>` — it hardlink-seeds `node_modules` and copies git-ignored local config (`.claude/settings.local.json`, `.dd-agent.env`, `.env*`); idempotent, no-op for anything absent. Don't run `yarn install` / `turbo generate-types` in a worktree unless you'll actually build there.
 
-In Zed remote sessions, worktree *creation* is Zed's job: only worktrees the Zed client creates appear in the sidebar's "Open Worktrees" list (it tracks its own open workspaces, not `git worktree list`). Agent-created worktrees won't show there, but they DO appear in the `git: worktree` picker (`cmd-shift-P`), which lists every `git worktree list` entry — so creating one with `git worktree add` is fine; the user opens it from that picker. There is no ACP path for an external agent to register a worktree into the sidebar.
+In Zed remote sessions, agent-created worktrees don't appear in the sidebar's "Open Worktrees" list, but they do show in the `git: worktree` picker (`cmd-shift-P`) — so `git worktree add` is fine; I open it from there.
 
 ## Exposing Local Dev Servers (Port Forwarding)
 
-To reach a local server (dev server, review UI, etc.) running on a remote CDE from my laptop, prefer these in order:
+To reach a local server on a remote CDE from my laptop, prefer in order:
 
-1. **Tailscale `serve` via the paved-path script (preferred)** — run `~/dotfiles/scripts/expose-port-tailscale.sh <local-port> [verify-path]`. It handles the whole chain on an Ona CDE (userspace `tailscaled` with a SOCKS proxy, WIF tailnet join, `tailscale serve`, e2e verification through the tailnet path) and prints the URL to open. Two hard-won constraints it encodes — don't work around them by hand:
-   - **Serve on tailnet port 8080 only.** ACLs for `tag:ona-dev` nodes admit only the Vanta dev-flow port; any other port hangs forever from a laptop while self-tests still pass.
-   - **A localhost curl is not verification.** Test through the tailnet path (the script curls via the daemon's SOCKS proxy); even that can't exercise ACLs, which is exactly why the port must stay 8080.
-2. **Editor port-forward** — VS Code/Cursor Ports panel → forward the port. Fine, but needs my manual click.
-3. **Public tunnel (ngrok) — last resort** — exposes to anyone with the URL; use only when the tailnet isn't an option, and tear it down when done.
+1. **`~/dotfiles/scripts/expose-port-tailscale.sh <local-port> [verify-path]`** (preferred) — handles the whole Ona/tailnet chain and verifies through the tailnet path. It encodes two hard-won constraints; don't work around them by hand: serve on **tailnet port 8080 only** (ACLs for `tag:ona-dev` admit only that port — others hang from a laptop while self-tests still pass), and **verify through the tailnet path, not a localhost curl**.
+2. **Editor port-forward** — VS Code/Cursor Ports panel (needs my click).
+3. **ngrok** — last resort (public URL; tear it down when done).
 
-Don't use a static "share/publish/export" (uploading a snapshot to a hosting service) when you need a *live* server — it drops the interactive connection back to the agent.
+Don't use a static share/publish/export when you need a *live* server — it drops the interactive connection back to the agent.
 
 ## MCP Server Preferences
 
