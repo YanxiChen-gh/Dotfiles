@@ -2,17 +2,19 @@
 """Compile tool-agnostic agent rules into each tool's native format.
 
 `agent-rules/` is the single source of truth for rules that several agent tools
-share. Each rule has a tool-agnostic body (`<name>.md`) plus per-tool settings in
-`rules.json`. This script renders the tool-specific files (today: Cursor `.mdc`
-into both `cursor/rules/` and `cursor/rules-work/` per each rule's scope).
+share. Each rule has a tool-agnostic body (`<name>.md`); `rules.json` says how it
+maps to each tool. Today this renders Cursor `.mdc` files (into both
+`cursor/rules/` and `cursor/rules-work/` per each rule's scope) and the aggregated
+Codex `AGENTS.md`.
 
 Generated files are committed so the tools work without a build step; `--check`
-re-renders in memory and fails if any committed file drifts from its source, so
-the copies can't silently diverge. Adding a tool means adding an emitter here;
-adding a rule means adding a source file and a `rules.json` entry.
+re-renders in memory and fails if any committed file drifts, so the copies can't
+silently diverge. Adding a tool means adding an emitter here; adding a rule means
+a source file + a `rules.json` entry.
 """
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -42,16 +44,33 @@ def cursor_dests(scope):
     raise ValueError(f"unknown cursor scope: {scope!r} (expected both|personal|work)")
 
 
+def render_codex(codex, rules):
+    """Aggregate several rule bodies into one AGENTS.md under a doc title.
+
+    Bodies lead with an H1 title (used verbatim by the frontmatter-less Cursor
+    .mdc); demote it to H2 so it nests under the AGENTS.md title.
+    """
+    sections = []
+    for name in codex["rules"]:
+        body = (ROOT / rules[name]["body"]).read_text()
+        sections.append(re.sub(r"^# ", "## ", body, count=1))
+    return f"# {codex['title']}\n\n" + "\n".join(sections) + f"\n{codex['footer']}\n"
+
+
 def outputs(manifest):
     """Yield (path, content) for every file the manifest says to generate."""
-    for name, rule in manifest.items():
+    rules = manifest["rules"]
+    for name, rule in rules.items():
         body = (ROOT / rule["body"]).read_text()
         for target, settings in rule["targets"].items():
             if target != "cursor":
-                raise ValueError(f"{name}: unsupported target {target!r} (only 'cursor' so far)")
+                raise ValueError(f"{name}: unsupported target {target!r}")
             content = render_cursor(settings, body)
             for dest_dir in cursor_dests(settings.get("scope", "both")):
                 yield dest_dir / settings["file"], content
+    codex = manifest.get("codex")
+    if codex:
+        yield REPO / codex["file"], render_codex(codex, rules)
 
 
 def main():
