@@ -777,9 +777,9 @@ setup_codex_config() {
     codex_dir="$HOME/.codex"
     mkdir -p "$codex_dir"
 
-    if [ -f "$script_dir/codex-instructions.md" ]; then
+    if [ -f "$script_dir/codex/AGENTS.md" ]; then
         rm -f "$codex_dir/AGENTS.md"
-        ln -s "$script_dir/codex-instructions.md" "$codex_dir/AGENTS.md"
+        ln -s "$script_dir/codex/AGENTS.md" "$codex_dir/AGENTS.md"
         echo "✅ Codex AGENTS.md linked"
     fi
 
