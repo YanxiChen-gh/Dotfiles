@@ -39,6 +39,11 @@ install_neovim() {
         return 0
     fi
 
+    if [ "$OS" != "linux" ]; then
+        echo "⚠️  Neovim auto-install unsupported on OS '$OS'; install manually"
+        return 0
+    fi
+
     case "$(uname -m)" in
         x86_64)        release="nvim-linux-x86_64" ;;
         aarch64|arm64) release="nvim-linux-arm64" ;;
