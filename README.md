@@ -10,6 +10,16 @@ Personal shell, Cursor, and Claude Code configuration.
 
 In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells default to zsh. `install.sh` adds a runtime-gated guard to `~/.bashrc` that hands interactive bash sessions over to zsh, and best-effort `chsh`'s the login shell when run inside Ona. The guard is a no-op on a personal machine (where `IS_ON_ONA` is unset) — `chsh` alone isn't enough because Ona SSHs in via `exec -l $SHELL -i` with `$SHELL=/bin/bash` and a container's `/etc/passwd` can reset on rebuild.
 
+## Editor (Vim / Neovim)
+
+`.vimrc` at the repo root is symlinked to `~/.vimrc` by `create_symlinks` (vim-plug bootstraps plugins on first launch). Neovim reads `~/.config/nvim/init.vim` rather than `~/.vimrc`, so `setup_nvim_config` links `nvim/init.vim` (which sources `~/.vimrc`) there, and links `nvim/coc-settings.json` into both `~/.config/nvim/` and `~/.vim/` for `coc.nvim`. Edit the single `~/.vimrc` and both editors stay in sync.
+
+If you already keep a hand-managed `~/.config/nvim/init.vim`, note that `install.sh` replaces it with this symlink (same declarative-clobber behavior as the other dotfile links).
+
+## Terminal colors (iTerm2)
+
+`terminal/gruvbox-dark.itermcolors` is the iTerm2 color preset. iTerm imports presets through its GUI, not a symlink: **Settings → Profiles → Colors → Color Presets → Import…**, pick the file, then select it from the same menu.
+
 ## Claude Code → Cursor workspace skill sync
 
 `sync-claude-skills-to-repo.sh` copies skills from a repository’s `.claude/skills` and `.claude/plugins/*/skills` into that repo’s `.cursor/skills/_cc_sync/`, rewriting Claude `@file` include lines into explicit “read these paths” instructions for Cursor.
