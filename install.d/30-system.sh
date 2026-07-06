@@ -21,6 +21,46 @@ create_symlinks() {
     done
 }
 
+# Install the Neovim binary if missing. create_symlinks/setup_nvim_config only
+# link config — without this a fresh CDE has the config but no `nvim` to run it.
+# Uses the official static build (distro apt lags); Homebrew on macOS.
+install_neovim() {
+    if command -v nvim >/dev/null 2>&1; then
+        echo "✅ Neovim already installed ($(nvim --version | head -1))"
+        return 0
+    fi
+
+    if [ "$OS" = "macos" ]; then
+        if command -v brew >/dev/null 2>&1; then
+            brew install neovim && echo "✅ Neovim installed" || echo "⚠️  Warning: brew install neovim failed"
+        else
+            echo "⚠️  Neovim missing and Homebrew unavailable; install manually: brew install neovim"
+        fi
+        return 0
+    fi
+
+    if [ "$OS" != "linux" ]; then
+        echo "⚠️  Neovim auto-install unsupported on OS '$OS'; install manually"
+        return 0
+    fi
+
+    case "$(uname -m)" in
+        x86_64)        release="nvim-linux-x86_64" ;;
+        aarch64|arm64) release="nvim-linux-arm64" ;;
+        *) echo "⚠️  Unsupported arch for Neovim auto-install: $(uname -m)"; return 0 ;;
+    esac
+
+    url="https://github.com/neovim/neovim/releases/download/stable/${release}.tar.gz"
+    mkdir -p "$HOME/.local/bin"
+    if curl -fsSL "$url" | tar -xz -C "$HOME/.local"; then
+        ln -sf "$HOME/.local/$release/bin/nvim" "$HOME/.local/bin/nvim"
+        echo "✅ Neovim installed ($("$HOME/.local/bin/nvim" --version | head -1))"
+    else
+        echo "⚠️  Warning: Neovim installation failed"
+        echo "   Try manually: curl -fsSL $url | tar -xz -C \$HOME/.local"
+    fi
+}
+
 # Setup Neovim/Vim config.
 # .vimrc at the repo root is already linked to ~/.vimrc by create_symlinks. Neovim
 # reads ~/.config/nvim/init.vim instead, so link our init.vim (which sources ~/.vimrc)
