@@ -56,6 +56,8 @@ create_symlinks
 install_neovim
 setup_nvim_config
 setup_cloudev_tasks
+setup_herdr_config
+setup_wezterm_config
 setup_ona_default_shell
 
 if [ "$WORK_MACHINE" = "1" ]; then
@@ -66,6 +68,7 @@ fi
 # Install tools from URLs
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
+install_from_url "herdr" "herdr" "https://herdr.dev/install.sh"
 install_langsmith_cli
 if [ "$WORK_MACHINE" = "1" ]; then
     install_pup_cli
@@ -97,9 +100,11 @@ if command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -
         || echo "⚠️  LangSmith skills installation failed for Cursor (can retry manually)"
 fi
 
-# Install AXI agent skills: Lavish (HTML artifact review) + Chrome DevTools automation
-install_axi_skill "kunchenguid/lavish-axi" "lavish"
-install_axi_skill "kunchenguid/chrome-devtools-axi" "chrome-devtools-axi"
+# Install agent skills: Lavish (HTML artifact review), Chrome DevTools automation,
+# herdr (terminal agent multiplexer).
+install_agent_skill "kunchenguid/lavish-axi" "lavish"
+install_agent_skill "kunchenguid/chrome-devtools-axi" "chrome-devtools-axi"
+install_agent_skill "ogulcancelik/herdr" "herdr"
 
 # Setup Claude Code config and commands
 setup_claude_config

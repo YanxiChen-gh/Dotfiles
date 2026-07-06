@@ -217,8 +217,9 @@ install_siggy_cli() {
 }
 
 # Install an AXI agent skill (github.com/kunchenguid/*) for Claude Code and Cursor.
-# Usage: install_axi_skill <github_repo> <skill_name>
-install_axi_skill() {
+# Install an agent skill for Claude Code and/or Cursor from a GitHub repo.
+# Usage: install_agent_skill <github_repo> <skill_name>
+install_agent_skill() {
     local repo="$1"
     local skill="$2"
     if command -v claude >/dev/null 2>&1; then

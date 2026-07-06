@@ -1,0 +1,4 @@
+# herdr config — https://herdr.dev/docs/configuration/
+[keys]
+# Leader key; herdr's default is ctrl+b.
+prefix = "cmd+r"
