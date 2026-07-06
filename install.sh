@@ -53,6 +53,7 @@ if [ "$OS" = "linux" ]; then
 fi
 
 create_symlinks
+setup_nvim_config
 setup_cloudev_tasks
 setup_ona_default_shell
 

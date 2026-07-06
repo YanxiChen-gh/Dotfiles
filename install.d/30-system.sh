@@ -21,6 +21,29 @@ create_symlinks() {
     done
 }
 
+# Setup Neovim/Vim config.
+# .vimrc at the repo root is already linked to ~/.vimrc by create_symlinks. Neovim
+# reads ~/.config/nvim/init.vim instead, so link our init.vim (which sources ~/.vimrc)
+# there, and link coc-settings.json into both ~/.config/nvim (nvim) and ~/.vim (vim).
+setup_nvim_config() {
+    script_dir=$(resolve_script_dir) || return 1
+
+    nvim_dir="$HOME/.config/nvim"
+    mkdir -p "$nvim_dir" "$HOME/.vim"
+
+    for pair in \
+        "$script_dir/nvim/init.vim:$nvim_dir/init.vim" \
+        "$script_dir/nvim/coc-settings.json:$nvim_dir/coc-settings.json" \
+        "$script_dir/nvim/coc-settings.json:$HOME/.vim/coc-settings.json"; do
+        src=${pair%%:*}
+        dest=${pair#*:}
+        [ -f "$src" ] || continue
+        rm -f "$dest"
+        ln -s "$src" "$dest"
+    done
+    echo "✅ Linked Neovim/Vim config (init.vim, coc-settings.json)"
+}
+
 # Setup Claude Dev tasks configuration
 # Symlinks cloudev/tasks.json to ~/.cloudev/tasks.json
 setup_cloudev_tasks() {
