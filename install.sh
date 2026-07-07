@@ -57,6 +57,7 @@ install_neovim
 setup_nvim_config
 setup_cloudev_tasks
 setup_herdr_config
+setup_treehouse_config
 setup_wezterm_config
 setup_ona_default_shell
 
@@ -69,6 +70,7 @@ fi
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_from_url "herdr" "herdr" "https://herdr.dev/install.sh"
+install_from_url "treehouse" "treehouse" "https://kunchenguid.github.io/treehouse/install.sh"
 install_langsmith_cli
 if [ "$WORK_MACHINE" = "1" ]; then
     install_pup_cli
