@@ -104,8 +104,10 @@ PY
 
     # Register the verify-gate PreToolUse(Bash) hook (work scope): blocks `gh pr create`
     # when the PR body lacks verification evidence + an independent-review/grading section
-    # (Trust L2→L3 lever). Idempotent (deduped on the script name). Fail-open + kill switch
-    # (VERIFY_GATE=off) + retirement trigger live in the script itself.
+    # (Trust L2→L3 lever). Runtime-scoped to work-org repos (default VantaInc) so it doesn't
+    # gate personal repos; override with VERIFY_GATE_WORK_ORGS. Idempotent (deduped on the
+    # script name). Fail-open + kill switch (VERIFY_GATE=off) + retirement trigger live in the
+    # script itself.
     vg_hook="$script_dir/claude/hooks/verify-gate-pretooluse.sh"
     if [ "$WORK_MACHINE" = "1" ] && [ -f "$vg_hook" ]; then
         chmod +x "$vg_hook" "$script_dir/claude/hooks/verify-gate-check.py" 2>/dev/null || true

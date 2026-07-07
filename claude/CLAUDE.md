@@ -41,7 +41,7 @@ Verification is part of the deliverable. Before `gh pr create`, run the workflow
 - **Exercise the running change end-to-end** (the actual browser/API/CLI path, not just unit tests) and record what you ran - a docs-only change just says "docs only, no runtime".
 - **Independent review before I see it** - a clean-context subagent over the diff + evidence: it catches what you rationalized and vets whether the e2e actually ran. Fold its verdict + fixes into a grading section; grading your own work doesn't count. It also enforces the `pr-authoring.md` minimal bar (a comment/test/description line only if it earns its place).
 
-The `verify-gate` hook backstops this at `gh pr create` (blocks a body missing the verification + grading section); do the above and it never fires. Escape hatch: `export VERIFY_GATE=off`.
+The `verify-gate` hook backstops this at `gh pr create` (blocks a body missing the verification + grading section); do the above and it never fires. It only fires on work-org repos (default `VantaInc`), so personal repos are never gated. Escape hatch: `export VERIFY_GATE=off`.
 
 ## Verifying Red Panda / web-app changes
 

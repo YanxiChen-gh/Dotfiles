@@ -9,8 +9,12 @@
 # Exit 0 = allow; exit 2 = block (Claude Code feeds stderr back to the agent).
 # Fails OPEN on any error - a broken gate must never wedge PR creation.
 #
+# Work-scoped at runtime: the verification+grading ceremony is the Vanta PR handoff, so
+# check.py only fires on work-org repos (default VantaInc). Personal repos - where the flow
+# is push-to-main once verified - are skipped. Override the org list with VERIFY_GATE_WORK_ORGS.
+#
 # Personal harness lever. Assets it points at: ~/dotfiles/shared-skills/full-verification-workflow.
-# Kill switch:  export VERIFY_GATE=off
+# Kill switch:  export VERIFY_GATE=off  (or VERIFY_GATE_WORK_ORGS= to disable everywhere)
 # Retirement:   when /maturity-review's ablation shows verify-fail/quality-noise
 #               interventions flat-at-floor without the gate (the model self-verifies
 #               and self-reviews by default), delete this hook + its install.sh

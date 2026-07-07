@@ -4,11 +4,15 @@
 Reads the hook JSON on stdin. Exit 2 (with a stderr message) blocks the call;
 exit 0 allows it. Fails OPEN (exit 0) on anything unexpected - the gate must only
 ever block a deliberate, inspectable miss, never wedge on a parse error.
+
+Work-scoped: the verification+grading ceremony is the Vanta PR handoff, so the gate
+only fires on work-org repos. Personal repos (push-to-main once verified) are skipped.
 """
 import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 
 
@@ -69,6 +73,53 @@ GRADING = re.compile(
 )
 
 
+# The gate is the Vanta PR handoff ceremony, so it only fires on work-org repos.
+# Default org is Vanta; override with a comma-separated VERIFY_GATE_WORK_ORGS.
+def work_orgs():
+    return [o.strip() for o in os.environ.get("VERIFY_GATE_WORK_ORGS", "VantaInc").split(",") if o.strip()]
+
+
+def _org_matches(text, orgs):
+    return any(re.search(r"github\.com[:/]" + re.escape(o) + r"/", text, re.I) for o in orgs)
+
+
+def is_work_repo(tokens, cwd):
+    """True when the PR targets a work-org repo. Any uncertainty → False (skip the gate)."""
+    orgs = work_orgs()
+    if not orgs:
+        return False
+
+    # An explicit `gh -R <owner>/<repo>` (or a `--repo` URL) overrides cwd, so honor it first.
+    repo_flag = extract_repo_flag(tokens)
+    if repo_flag is not None:
+        owner = repo_flag.split("/")[0]
+        return owner.lower() in {o.lower() for o in orgs} or _org_matches(repo_flag, orgs)
+
+    try:
+        proc = subprocess.run(
+            ["git", "-C", cwd or ".", "remote", "-v"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        return False
+    if proc.returncode != 0:
+        return False
+    return _org_matches(proc.stdout, orgs)
+
+
+def extract_repo_flag(tokens):
+    """Return the value of gh's `-R`/`--repo` flag, or None."""
+    i = 0
+    while i < len(tokens):
+        t = tokens[i]
+        if t in ("-R", "--repo") and i + 1 < len(tokens):
+            return tokens[i + 1]
+        if t.startswith("--repo="):
+            return t[len("--repo="):]
+        i += 1
+    return None
+
+
 def is_gh_pr_create(tokens):
     for i in range(len(tokens) - 2):
         t = tokens[i]
@@ -115,6 +166,9 @@ def main():
     tokens = shlex.split(cmd)  # may raise on unbalanced quotes → allow
     if not is_gh_pr_create(tokens):
         allow("not gh pr create")
+
+    if not is_work_repo(tokens, data.get("cwd") or os.getcwd()):
+        allow("non-work repo - verify gate is work-scoped")
 
     body, note = extract_body(tokens)
 
