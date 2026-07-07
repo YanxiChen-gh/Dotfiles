@@ -9,6 +9,11 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 mkdir -p "$TMP"
 export VERIFY_GATE_LOG="$TMP/gate.log"
 
+# The gate only fires on work-org repos, so pin the org list and target a work-org repo
+# via `-R` - otherwise the result depends on whatever remote this checkout happens to have.
+export VERIFY_GATE_WORK_ORGS=VantaInc
+WORK_REPO="VantaInc/obsidian"
+
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 # Feed a hook JSON whose tool_input.command is $1; assert exit code $2.
@@ -48,19 +53,22 @@ run_cmd 'ls -la' 0 'plain ls'
 run_cmd 'git status && echo done' 0 'compound non-pr'
 
 # --- gh pr create WITH both sections → allow ---
-run_cmd "gh pr create --title t --body '$GOOD_BODY'" 0 'full body inline'
+run_cmd "gh pr create -R $WORK_REPO --title t --body '$GOOD_BODY'" 0 'full body inline'
 
 # --- missing grading → block ---
-run_cmd "gh pr create --title t --body '$NO_GRADE_BODY'" 2 'missing grading'
+run_cmd "gh pr create -R $WORK_REPO --title t --body '$NO_GRADE_BODY'" 2 'missing grading'
 
 # --- missing verification → block ---
-run_cmd "gh pr create --title t --body '$NO_VERIFY_BODY'" 2 'missing verification'
+run_cmd "gh pr create -R $WORK_REPO --title t --body '$NO_VERIFY_BODY'" 2 'missing verification'
 
 # --- no body at all → block ---
-run_cmd 'gh pr create --title t' 2 'no body'
+run_cmd "gh pr create -R $WORK_REPO --title t" 2 'no body'
 
 # --- docs-only body satisfies (scaled bar) → allow ---
-run_cmd "gh pr create --body '$DOCS_BODY'" 0 'docs-only body'
+run_cmd "gh pr create -R $WORK_REPO --body '$DOCS_BODY'" 0 'docs-only body'
+
+# --- non-work-org repo → gate skips entirely, even with a bad body → allow ---
+run_cmd "gh pr create -R octocat/personal --title t" 0 'personal repo skips gate'
 
 # --- kill switch: bad body but VERIFY_GATE=off → allow ---
 _json=$(CMD="gh pr create --title t" python3 -c 'import json,os;print(json.dumps({"tool_input":{"command":os.environ["CMD"]}}))')
@@ -77,17 +85,17 @@ set -e
 
 # --- --body-file with both sections → allow ---
 printf '%s' "$GOOD_BODY" >"$TMP/body.md"
-run_cmd "gh pr create --title t --body-file $TMP/body.md" 0 'body-file allow'
+run_cmd "gh pr create -R $WORK_REPO --title t --body-file $TMP/body.md" 0 'body-file allow'
 
 # --- --body-file missing grading → block ---
 printf '%s' "$NO_GRADE_BODY" >"$TMP/body2.md"
-run_cmd "gh pr create --title t --body-file $TMP/body2.md" 2 'body-file missing grading'
+run_cmd "gh pr create -R $WORK_REPO --title t --body-file $TMP/body2.md" 2 'body-file missing grading'
 
 # --- --fill (un-inspectable) → fail open (allow), don't false-block ---
-run_cmd 'gh pr create --fill' 0 'fill allow'
+run_cmd "gh pr create -R $WORK_REPO --fill" 0 'fill allow'
 
 # --- --body-file that doesn't exist → fail open (can't inspect) → allow ---
-run_cmd "gh pr create --title t --body-file $TMP/does-not-exist.md" 0 'unreadable body-file allow'
+run_cmd "gh pr create -R $WORK_REPO --title t --body-file $TMP/does-not-exist.md" 0 'unreadable body-file allow'
 
 # --- check.py missing (lib present) → fail open, not a block from `python3 <missing>` exiting 2 ---
 mkdir -p "$TMP/lone"

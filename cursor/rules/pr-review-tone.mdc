@@ -5,7 +5,7 @@ alwaysApply: false
 
 # PR Review Tone
 
-When leaving PR comments, reviews, or code feedback, follow the tone guide at `~/dotfiles/claude/review-tone.md`.
+When leaving PR comments, reviews, or code feedback, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews and any automated review workflows.
 
 Key points:
 - Concise and direct - no fluff
