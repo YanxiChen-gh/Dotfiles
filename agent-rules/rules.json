@@ -54,12 +54,60 @@
           "alwaysApply": true
         }
       }
+    },
+    "scope-before-code": {
+      "body": "scope-before-code.md",
+      "targets": {
+        "cursor": {
+          "file": "scope-before-code.mdc",
+          "scope": "both",
+          "description": "Before writing code on a non-trivial task, scope it first: acceptance checks, declared implementation choices, PR-decomposition, and batched scope questions. Apply before starting any multi-file, interface-changing, or approach-forking work.",
+          "alwaysApply": false
+        }
+      }
+    },
+    "verification-and-handoff": {
+      "body": "verification-and-handoff.md",
+      "comment": "Codex-only: Cursor already carries this via the hand-authored dev-cycle-verification.mdc.",
+      "targets": {}
+    },
+    "doc-and-planning": {
+      "body": "doc-and-planning.md",
+      "targets": {
+        "cursor": {
+          "file": "doc-and-planning.mdc",
+          "scope": "both",
+          "description": "When writing a design doc, RFC, spec, runbook, or playbook, or producing a plan/pre-implementation review artifact. Covers the doc-style rubric and defaulting plans to a Lavish HTML artifact.",
+          "alwaysApply": false
+        }
+      }
+    },
+    "local-dev-environment": {
+      "body": "local-dev-environment.md",
+      "targets": {
+        "cursor": {
+          "file": "local-dev-environment.mdc",
+          "scope": "work",
+          "description": "Local dev environment ops: provisioning git worktrees and exposing a local dev server on a remote CDE (tailscale > editor forward > ngrok). Apply when creating worktrees or port-forwarding a dev server for browser testing.",
+          "alwaysApply": false
+        }
+      }
+    },
+    "mcp-preferences": {
+      "body": "mcp-preferences.md",
+      "comment": "Codex-only: Cursor already carries the Glean bit via the hand-authored use-glean-mcp-for-google-docs.mdc.",
+      "targets": {}
+    },
+    "codex-skills": {
+      "body": "codex-skills.md",
+      "comment": "Codex-only: tells Codex where its symlinked skills live, since it has no native skill auto-load.",
+      "targets": {}
     }
   },
   "codex": {
     "file": "codex/AGENTS.md",
     "title": "Codex Global Instructions",
-    "rules": ["pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "engineering-principles"],
+    "rules": ["pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "engineering-principles", "scope-before-code", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences", "codex-skills"],
     "footer": "@RTK.md"
   }
 }

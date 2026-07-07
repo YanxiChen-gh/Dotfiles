@@ -48,12 +48,14 @@ def render_codex(codex, rules):
     """Aggregate several rule bodies into one AGENTS.md under a doc title.
 
     Bodies lead with an H1 title (used verbatim by the frontmatter-less Cursor
-    .mdc); demote it to H2 so it nests under the AGENTS.md title.
+    .mdc); demote every heading one level so the body's H1 title becomes an H2
+    under the AGENTS.md title and any subsections nest beneath it. Headings
+    already at H6 are left alone (Markdown has no H7).
     """
     sections = []
     for name in codex["rules"]:
         body = (ROOT / rules[name]["body"]).read_text()
-        sections.append(re.sub(r"^# ", "## ", body, count=1))
+        sections.append(re.sub(r"^(#{1,5}) ", r"#\1 ", body, flags=re.MULTILINE))
     return f"# {codex['title']}\n\n" + "\n".join(sections) + f"\n{codex['footer']}\n"
 
 
