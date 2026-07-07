@@ -73,9 +73,11 @@ Same bar as comments: a test is real engineering, not a box to tick. Most sloppy
 these two checks.
 
 - **Don't test for the sake of it.** A test that only re-verifies a library (a Zod schema, an SDK
-  call), a static mapping, or thin control flow with no real logic is *negative* value - it gives
+  call), a static mapping, thin control flow, or that only asserts an observability signal fired (a
+  metric emitted, a log written) rather than exercising branch logic is *negative* value - it gives
   false coverage and drags CI. Test where the business logic actually is. ("Better than nothing?"
-  is not the bar.)
+  is not the bar.) The same applies inside a test: an assertion that re-checks what another
+  assertion already proves is noise - keep the one that pins the behavior, cut the rest.
 - **A complex test is a red flag - at the code or the test.** If a test is hard to follow or mocks
   half the world, the signal usually points at the production code: the unit needs its dependencies
   injected so they can be overridden cleanly. Reaching for `as never` / `as any` to build the

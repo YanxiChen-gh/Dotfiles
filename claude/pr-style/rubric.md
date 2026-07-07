@@ -67,6 +67,12 @@ What to flag, by target:
   snapshot-vs-reference between two vendored libs). A migration being a no-op is proven by the
   code, not by a test that pins two libraries together. Delete it - the invariant guard feels
   valuable but exercises no Vanta logic. (Calibration miss #1: this is the one the cleaner keeps.)
+- **Only asserts an observability signal fired** (a metric emitted, a log written) rather than
+  exercising branch logic. Instrumentation plumbing, not Vanta logic - delete. Keep the test that
+  covers the real branch (e.g. an abort/error-classification guard). (Held-out gap, ex6.)
+- **Redundant assertion within a test** - re-checks what another assertion in the same test already
+  proves (a `status === 200` next to a metric assertion that pins `statusClass: "2xx"`). Cut the
+  redundant one; keep the assertion that pins the behavior. (Held-out gap, ex8.)
 - Complex / mocks half the world - the smell points at the code (inject deps), not more mocking.
 
 **PR description** (trim):

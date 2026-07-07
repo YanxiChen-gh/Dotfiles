@@ -55,8 +55,11 @@ Run Mode B for flow '$2'. Output ONLY the JSON."
 }
 
 # Feed each cleanup example's BEFORE to the cleaner, then grade recall against its AFTER.
+# Optional $1: a corpus file to calibrate on (default the seed set); use a held-out batch to
+# measure generalization instead of the circular seed score.
 simplify_calibrate() {
-  local ex="$CORPUS/simplify/human/cleanup-examples.md"
+  local ex="${1:-$CORPUS/simplify/human/cleanup-examples.md}"
+  [ -f "$ex" ] || ex="$CORPUS/simplify/human/$ex"
   ask "$(cat "$JUDGE")
 
 You are running Mode C over every example in the calibration set below. For each example: read its
@@ -80,6 +83,6 @@ case "${1:-}" in
     file="${2:?usage: run-eval.sh score FILE --flow FLOW}"; flow="authoring"
     [ "${3:-}" = "--flow" ] && flow="${4:?flow required}"
     score "$file" "$flow" ;;
-  simplify-calibrate) simplify_calibrate ;;
+  simplify-calibrate) simplify_calibrate "${2:-}" ;;
   *) echo "usage: run-eval.sh {clean FILE | score FILE --flow FLOW | simplify-calibrate}"; exit 1 ;;
 esac
