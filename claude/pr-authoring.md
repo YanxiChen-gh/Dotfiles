@@ -77,7 +77,9 @@ these two checks.
   metric emitted, a log written) rather than exercising branch logic is *negative* value - it gives
   false coverage and drags CI. Test where the business logic actually is. ("Better than nothing?"
   is not the bar.) The same applies inside a test: an assertion that re-checks what another
-  assertion already proves is noise - keep the one that pins the behavior, cut the rest.
+  assertion already proves is noise - keep the one that pins the behavior, cut the rest. And across
+  a suite: a test whose scenario a sibling already proves (an empty-result case when the filter test
+  already covers exclusion) is redundant - keep one.
 - **A complex test is a red flag - at the code or the test.** If a test is hard to follow or mocks
   half the world, the signal usually points at the production code: the unit needs its dependencies
   injected so they can be overridden cleanly. Reaching for `as never` / `as any` to build the

@@ -73,6 +73,9 @@ What to flag, by target:
 - **Redundant assertion within a test** - re-checks what another assertion in the same test already
   proves (a `status === 200` next to a metric assertion that pins `statusClass: "2xx"`). Cut the
   redundant one; keep the assertion that pins the behavior. (Held-out gap, ex8.)
+- **Redundant test within a suite** - a test whose scenario a sibling test already proves (an
+  empty-result case when the filter test already covers exclusion). Keep one, delete the other.
+  (Held-out batch-2 gap, ex5 - the only full miss.)
 - Complex / mocks half the world - the smell points at the code (inject deps), not more mocking.
 
 **PR description** (trim):
