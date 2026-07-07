@@ -7,6 +7,11 @@
 # command and exports the HERDR_ACTIVE_* context vars we read below.
 set -euo pipefail
 
+# herdr runs custom commands via a non-interactive shell that inherits the
+# server's PATH, not a login shell's, so ensure the dirs our tools live in
+# (treehouse, claude, nvim, git) are searchable regardless of how it was launched.
+export PATH="$HOME/.local/bin:$HOME/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
 herdr="${HERDR_BIN_PATH:-herdr}"
 src_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
 workspace="${HERDR_ACTIVE_WORKSPACE_ID:-}"
