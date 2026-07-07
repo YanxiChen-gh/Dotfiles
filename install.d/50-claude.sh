@@ -1,7 +1,7 @@
 # shellcheck shell=sh
-# Sourced by ../install.sh — function definitions only.
+# Sourced by ../install.sh - function definitions only.
 
-# Install superpowers plugin for Claude Code (user scope — always available)
+# Install superpowers plugin for Claude Code (user scope - always available)
 setup_superpowers_plugin() {
     echo "Setting up superpowers plugin for Claude Code..."
 
@@ -189,12 +189,12 @@ setup_advisors() {
     }
 
     if ! advisors_clone_or_pull https://github.com/YanxiChen-gh/advisors.git "$HOME/advisors"; then
-        echo "⚠️  advisors repo not accessible — skipping advisor setup"
+        echo "⚠️  advisors repo not accessible - skipping advisor setup"
         return 0
     fi
     if [ "$WORK_MACHINE" = "1" ]; then
         advisors_clone_or_pull https://github.com/VantaInc/yanxi-vanta-advisor.git "$HOME/advisors-vanta" \
-            || echo "⚠️  work advisor root not accessible — vanta advisor unavailable"
+            || echo "⚠️  work advisor root not accessible - vanta advisor unavailable"
     fi
 
     mkdir -p "$HOME/.claude/skills"
@@ -210,7 +210,7 @@ setup_advisors() {
 # Install the agent-maturity engine. It lives in its own PUBLIC repo
 # (github.com/YanxiChen-gh/agent-maturity); the engine's bootstrap.sh does all the heavy
 # lifting (clone-or-pull → install.sh → skills + scope-gate hooks + `li` + env). So this is
-# just the one-liner — same line any teammate puts in their own dotfiles. Data stays private.
+# just the one-liner - same line any teammate puts in their own dotfiles. Data stays private.
 setup_agent_maturity() {
     echo "Setting up agent-maturity engine..."
     local boot="${AGENT_MATURITY_BOOTSTRAP_URL:-https://raw.githubusercontent.com/YanxiChen-gh/agent-maturity/main/bootstrap.sh}"

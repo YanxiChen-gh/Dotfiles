@@ -3,7 +3,7 @@
 
 # agent-maturity: raw transcripts pulled from Ona envs (bulky, may contain code)
 claude/agent-maturity/evidence/
-# agent-maturity: personal/internal DATA — must NOT go to this PUBLIC repo
+# agent-maturity: personal/internal DATA - must NOT go to this PUBLIC repo
 # (interventions reference internal PRs/tickets/tools). Keep in a private store.
 claude/agent-maturity/interventions.jsonl
 claude/agent-maturity/tracker.md

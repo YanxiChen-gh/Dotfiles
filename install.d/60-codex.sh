@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# Sourced by ../install.sh — function definitions only.
+# Sourced by ../install.sh - function definitions only.
 
 # Symlink Codex global instructions and RTK reference.
 setup_codex_config() {

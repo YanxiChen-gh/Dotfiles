@@ -81,7 +81,7 @@ def main():
     if check:
         drift = [p for p, c in planned if (not p.exists()) or p.read_text() != c]
         if drift:
-            sys.stderr.write("agent-rules: generated files are stale — run `python3 agent-rules/build.py`:\n")
+            sys.stderr.write("agent-rules: generated files are stale - run `python3 agent-rules/build.py`:\n")
             for p in drift:
                 sys.stderr.write(f"  - {p.relative_to(REPO)}\n")
             return 1

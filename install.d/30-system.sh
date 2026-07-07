@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# Sourced by ../install.sh — function definitions only.
+# Sourced by ../install.sh - function definitions only.
 
 # Create symlinks to dot files
 create_symlinks() {
@@ -22,7 +22,7 @@ create_symlinks() {
 }
 
 # Install the Neovim binary if missing. create_symlinks/setup_nvim_config only
-# link config — without this a fresh CDE has the config but no `nvim` to run it.
+# link config - without this a fresh CDE has the config but no `nvim` to run it.
 # Uses the official static build (distro apt lags); Homebrew on macOS.
 install_neovim() {
     if command -v nvim >/dev/null 2>&1; then
@@ -182,7 +182,7 @@ EOF
         if [ -n "$zsh_path" ] && [ "$(basename "${SHELL:-}")" != "zsh" ]; then
             # IMPORTANT: chsh prompts for a PAM password; without </dev/null it blocks
             # forever during non-interactive provisioning (postCreate hang). Fail fast
-            # instead — the ~/.bashrc guard above already hands interactive shells to zsh.
+            # instead - the ~/.bashrc guard above already hands interactive shells to zsh.
             if chsh -s "$zsh_path" </dev/null 2>/dev/null; then
                 echo "✅ Login shell set to $zsh_path"
             else

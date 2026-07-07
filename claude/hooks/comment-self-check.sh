@@ -6,7 +6,7 @@
 #
 # Personal harness lever. Full bar: ~/dotfiles/claude/pr-authoring.md.
 # Kill switch:  export COMMENT_BAR_HOOK=off
-# Retirement:   model-specific — when the model stops over-commenting (verify via the
+# Retirement:   model-specific - when the model stops over-commenting (verify via the
 #               agent-maturity `verbose-output` tag at a model upgrade), delete this hook
 #               and its install.sh registration. A harness that only grows is one you've
 #               stopped reading.
@@ -27,5 +27,5 @@ body=$(printf '%s' "$input" | jq -r '.tool_input.content // .tool_input.new_stri
 printf '%s' "$body" | grep -qE '//|/\*|^[[:space:]]*\*' || exit 0
 
 cat <<'JSON'
-{"suppressOutput":true,"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Comment self-check (current models over-comment by default): re-read the comments in the edit you just made and delete any that narrate the change ('we used to…', 'now X', 'Phase 0'), restate what the code already says, are obvious from the symbol name, or only re-verify a library/type. Keep only the non-obvious *why* (gotcha, workaround, external constraint). Same bar for tests — no coverage-only tests. Full guide: ~/dotfiles/claude/pr-authoring.md."}}
+{"suppressOutput":true,"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Comment self-check (current models over-comment by default): re-read the comments in the edit you just made and delete any that narrate the change ('we used to…', 'now X', 'Phase 0'), restate what the code already says, are obvious from the symbol name, or only re-verify a library/type. Keep only the non-obvious *why* (gotcha, workaround, external constraint). Same bar for tests - no coverage-only tests. Full guide: ~/dotfiles/claude/pr-authoring.md."}}
 JSON

@@ -13,8 +13,8 @@ Sourced from real PR reviews on VantaInc/obsidian (pre-April 2026, excluding age
 - **"Hmm" is a thinking signal.** Use it naturally when raising a concern you're still forming an opinion on: "Hmm should it be 4XX?", "Hmm curious why env over dynamic config here?"
 - **Play devil's advocate explicitly.** "just to play devil's advocates here: what's the benefit of..."
 - **Challenge scope and approach, not just code.** Push back on PR size, question whether the right abstraction is being built, debate build-vs-not-build.
-- **End with "What do you think?"** when raising concerns — invites dialogue rather than demanding changes.
-- **Strategic thinking.** Go beyond the code — think about adoption, maintainability, operational impact: "I am worried that this implicit default might bring us more trouble than the convenience value that it provides."
+- **End with "What do you think?"** when raising concerns - invites dialogue rather than demanding changes.
+- **Strategic thinking.** Go beyond the code - think about adoption, maintainability, operational impact: "I am worried that this implicit default might bring us more trouble than the convenience value that it provides."
 - **Approve to unblock, with caveats.** "Approve to unblock. We could technically use X. If that doesn't work out then we can go with this."
 
 ## Comment Patterns
@@ -107,7 +107,7 @@ A lot of these are about "what" is the automation but not "how" to do stuffs. Th
 nit: Date.now() is called per-iteration so siblings from the same batch get slightly different timestamps. fine as-is since ordering is still correct
 ```
 ```
-the example here defaults to "is_enabled": true — the setup-trace-automation skill uses false for safety. might be worth defaulting to false here too so copy-pasters don't accidentally enable rules?
+the example here defaults to "is_enabled": true - the setup-trace-automation skill uses false for safety. might be worth defaulting to false here too so copy-pasters don't accidentally enable rules?
 ```
 
 ### Asking for context
@@ -148,7 +148,7 @@ stale?
 
 ### Spotting real bugs
 ```
-Should `evaluatorIds` on [here](link) be `validEvaluatorIds`? Looks like the follow-up jobs still get the unfiltered list — `compositeScoreFollowUpHandler` calls `getEvaluatorById` on each one, so an unknown ID would just crash downstream instead of here.
+Should `evaluatorIds` on [here](link) be `validEvaluatorIds`? Looks like the follow-up jobs still get the unfiltered list - `compositeScoreFollowUpHandler` calls `getEvaluatorById` on each one, so an unknown ID would just crash downstream instead of here.
 ```
 ```
 This will be spammy since every trace will trigger a webhook call right?
@@ -160,9 +160,9 @@ This will be spammy since every trace will trigger a webhook call right?
 - Don't leave empty praise ("Great work!", "Nice job on this!", "Excellent implementation!")
 - Don't over-explain when a short question suffices
 - Don't use bullet points for a one-line comment
-- Don't prefix with "Nit:" unless it genuinely is a minor observation — most comments are questions
-- Don't leave verbose "What I checked" summaries on the PR — those belong in internal docs
-- Don't write `/fp` or "Fixed in <sha>" style comments — those are for bot interactions, not human reviews
-- Don't use "LGTM" in caps — always lowercase "lgtm"
-- Don't approve with long explanations — "looks good" or empty body is fine
+- Don't prefix with "Nit:" unless it genuinely is a minor observation - most comments are questions
+- Don't leave verbose "What I checked" summaries on the PR - those belong in internal docs
+- Don't write `/fp` or "Fixed in <sha>" style comments - those are for bot interactions, not human reviews
+- Don't use "LGTM" in caps - always lowercase "lgtm"
+- Don't approve with long explanations - "looks good" or empty body is fine
 - Don't be afraid to say "I am not a big fan of X" directly

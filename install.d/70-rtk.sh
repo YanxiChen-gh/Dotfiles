@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# Sourced by ../install.sh — function definitions only.
+# Sourced by ../install.sh - function definitions only.
 
 # Install RTK and enable for Claude Code, OpenAI Codex (GPT), and Cursor.
 # Claude: PreToolUse hook in ~/.claude/settings.json
@@ -18,7 +18,7 @@ setup_rtk() {
     # Opt out of telemetry unless explicitly enabled by the user.
     export RTK_TELEMETRY_DISABLED=1
 
-    # Claude Code — automatic bash rewrite via settings.json hook
+    # Claude Code - automatic bash rewrite via settings.json hook
     if command -v claude >/dev/null 2>&1; then
         if rtk init -g --hook-only --auto-patch 2>/dev/null; then
             echo "✅ RTK hook registered for Claude Code"
@@ -29,7 +29,7 @@ setup_rtk() {
         echo "ℹ️  Claude Code not installed; skipping RTK Claude hook"
     fi
 
-    # Cursor — automatic shell rewrite via hooks.json (versioned in dotfiles)
+    # Cursor - automatic shell rewrite via hooks.json (versioned in dotfiles)
     if rtk init -g --agent cursor --hook-only --auto-patch 2>/dev/null; then
         echo "✅ RTK hook verified for Cursor"
     elif [ -f "$HOME/.cursor/hooks.json" ]; then
@@ -38,7 +38,7 @@ setup_rtk() {
         echo "⚠️  RTK Cursor hook not configured (re-run install or: rtk init -g --agent cursor --hook-only --auto-patch)"
     fi
 
-    # OpenAI Codex (GPT) — AGENTS.md + RTK.md (instruction-based; no bash hook API)
+    # OpenAI Codex (GPT) - AGENTS.md + RTK.md (instruction-based; no bash hook API)
     setup_codex_config
     if [ -f "$HOME/.codex/AGENTS.md" ] && [ -f "$HOME/.codex/RTK.md" ]; then
         echo "✅ RTK instructions linked for OpenAI Codex (GPT)"

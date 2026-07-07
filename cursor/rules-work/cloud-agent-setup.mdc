@@ -21,7 +21,7 @@ sync-ona-env-to-cursor-cloud.sh
 That script selects the latest running Ona environment for `VantaInc/obsidian`
 on `main`, pulls its login-shell process env, and writes the Cursor Cloud env
 file at `~/.ona_env`. Keep selection, filtering, quoting, atomic writes, and
-validation in the script — not in this rule.
+validation in the script - not in this rule.
 
 Expected invariants after the script runs:
 

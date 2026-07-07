@@ -2,7 +2,7 @@
 """Decide whether a PreToolUse(Bash) call is a `gh pr create` missing evidence.
 
 Reads the hook JSON on stdin. Exit 2 (with a stderr message) blocks the call;
-exit 0 allows it. Fails OPEN (exit 0) on anything unexpected — the gate must only
+exit 0 allows it. Fails OPEN (exit 0) on anything unexpected - the gate must only
 ever block a deliberate, inspectable miss, never wedge on a parse error.
 """
 import json
@@ -44,7 +44,7 @@ Before `gh pr create`, run the verification + independent-review workflow
 (~/dotfiles/shared-skills/full-verification-workflow) and put the results in the body:
   - a Verification/Evidence section (commands run + results; e2e/browser/manual when the
     change warrants it), and
-  - a Grading section from an INDEPENDENT review — dispatch a clean-context review subagent
+  - a Grading section from an INDEPENDENT review - dispatch a clean-context review subagent
     over the diff + evidence, then record its verdict + findings-fixed.
 
 The evidence bar scales to the change: a docs-only PR just needs "docs only, no runtime".
@@ -90,7 +90,7 @@ def extract_body(tokens):
             return read_file(tokens[i + 1]), "file"
         if t.startswith("--body-file="):
             return read_file(t[len("--body-file="):]), "file"
-        # --fill / --fill-first / --fillverbose: body derived from commits — not inspectable.
+        # --fill / --fill-first / --fillverbose: body derived from commits - not inspectable.
         if t.startswith("--fill"):
             return None, "fill"
         i += 1
@@ -122,10 +122,10 @@ def main():
         # Legitimate but un-inspectable; don't false-block. Primed behavior won't use --fill.
         allow("--fill body not inspectable")
     if body is None and note == "file":
-        allow("--body-file unreadable — can't inspect, so can't fairly block")
+        allow("--body-file unreadable - can't inspect, so can't fairly block")
     if body is None:
         block([
-            "no PR body found (use --body / --body-file) — so no verification evidence",
+            "no PR body found (use --body / --body-file) - so no verification evidence",
             "an independent-review/grading section",
         ])
 

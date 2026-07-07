@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# provision-worktree.sh — make a freshly-created git worktree usable without a cold install.
+# provision-worktree.sh - make a freshly-created git worktree usable without a cold install.
 #
 # Hardlinks node_modules from the repo's main worktree (instant, ~0 extra disk) and copies
 # git-ignored local config that a linked worktree doesn't inherit. Repo-agnostic, idempotent,
-# and a no-op for anything that's absent — safe to run after any `git worktree add`.
+# and a no-op for anything that's absent - safe to run after any `git worktree add`.
 #
 # Usage: provision-worktree.sh <worktree-path>
 set -euo pipefail
@@ -14,7 +14,7 @@ WT="$(cd "$WT" && pwd -P)"
 # Main worktree = the first entry of `git worktree list` (the primary checkout).
 MAIN="$(git -C "$WT" worktree list --porcelain | awk '/^worktree /{print $2; exit}')"
 if [[ -z "${MAIN:-}" || "$MAIN" == "$WT" ]]; then
-  echo "provision-worktree: no separate main worktree resolved for $WT — nothing to do." >&2
+  echo "provision-worktree: no separate main worktree resolved for $WT - nothing to do." >&2
   exit 0
 fi
 
@@ -35,5 +35,5 @@ for rel in .claude/settings.local.json .dd-agent.env .env .env.local; do
 done
 
 echo "provision-worktree: done."
-echo "  (Run 'yarn install && turbo generate-types' in the worktree only if you'll build there —"
+echo "  (Run 'yarn install && turbo generate-types' in the worktree only if you'll build there -"
 echo "   reading and searching need neither.)"

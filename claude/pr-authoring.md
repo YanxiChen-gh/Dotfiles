@@ -6,17 +6,17 @@ understand the change and nothing the diff already says; spend words and care wh
 or a future debugger actually needs them, and stay terse everywhere else.
 
 The lens is backend TypeScript, but the principles are general. This sits *on top of* a repo's
-own conventions and PR template — follow those, and apply this to fill the gaps. For worked
+own conventions and PR template - follow those, and apply this to fill the gaps. For worked
 examples that calibrate altitude and voice, see `pr-examples.md` alongside this file.
 
 ## Writing the Code
 
 - **No escape hatches.** Avoid `any`, `as` (except `as const`), and `!`. A cast usually means
-  the design is wrong — fix the seam instead. Model the type with `satisfies`, discriminated
+  the design is wrong - fix the seam instead. Model the type with `satisfies`, discriminated
   unions, null checks, or optional chaining. In tests, casts like `as never` or undefined-returning
   mocks are the same smell: inject the dependency so the test can override it honestly.
 - **Validate at the boundary.** Parse untyped input (`JSON.parse`, request bodies, third-party
-  responses) with Zod `safeParse` and fail explicitly — don't cast trust into the system. Use
+  responses) with Zod `safeParse` and fail explicitly - don't cast trust into the system. Use
   assertion functions to narrow `unknown` from library callbacks rather than asserting with `as`.
 - **Make illegal states unrepresentable.** Prefer tagged unions over boolean flags, and return a
   discriminated result (`{ ok: true, ... } | { ok: false, reason }`) over throwing for expected
@@ -24,16 +24,16 @@ examples that calibrate altitude and voice, see `pr-examples.md` alongside this 
 - **Guard clauses, happy path last.** Return early for auth/validation/error cases so the main
   logic sits at the lowest indentation.
 - **Put auth where it can't be skipped.** Authorization and audit logging belong *inside* the
-  service/underlying API, not bolted onto each caller — so every consumer (resolver, REST route,
+  service/underlying API, not bolted onto each caller - so every consumer (resolver, REST route,
   agent tool, job) is protected by default. Selective or caller-side auth is a bug, not a shortcut.
 - **Don't abstract early.** Inline a helper used in one place; factor out only genuine duplication.
-  Don't micro-optimize paths that are already cached or dataloaded. Justify any cleverness — if it
+  Don't micro-optimize paths that are already cached or dataloaded. Justify any cleverness - if it
   hurts readability without a strong reason, it's not worth it. Prefer the simplest deterministic
   version and ship incrementally.
-- **Observe with intent.** Every log, metric, and monitor needs a consumer and an action — don't
+- **Observe with intent.** Every log, metric, and monitor needs a consumer and an action - don't
   add one that duplicates what APM/Datadog/LangSmith already capture, and don't log in hot or shadow
   paths where it's just noise. Keep metric tags low-cardinality; high-cardinality IDs go to logs.
-  **Never swallow errors in an empty `catch`** — failures should surface loudly so we can fix them
+  **Never swallow errors in an empty `catch`** - failures should surface loudly so we can fix them
   (the rare deliberate swallow needs a comment saying why).
 - **Prefer additive over mutating shared state.** Create a new template/key/version rather than
   editing a shared prod resource in place; it's cheaper to revert and harder to break.
@@ -41,7 +41,7 @@ examples that calibrate altitude and voice, see `pr-examples.md` alongside this 
 ## Code Comments
 
 Comments and tests are where sloppiness hides. They get rushed as "nice-to-haves" after the real
-work, and they rot faster than code — so hold them to the *same* bar as the code, or cut them.
+work, and they rot faster than code - so hold them to the *same* bar as the code, or cut them.
 
 **Prefer self-documenting code first.** Clear names and structure remove the need for most comments.
 If good code can already say it, don't write a comment.
@@ -55,14 +55,14 @@ If good code can already say it, don't write a comment.
   whether the code should be clearer instead.
 - **Comments must be evergreen.** True after the next change lands. Change-narration ("we used to do
   X", "this is now different because…", "Phase 0") and AI-generated step-by-step filler go stale
-  immediately and clutter the read — strip them before handing off. That context belongs in the PR
+  immediately and clutter the read - strip them before handing off. That context belongs in the PR
   or an inline review note, not the code.
 - **One home for each fact.** Evergreen rationale (why the code is shaped this way) lives in the
   code; change-context and the why-now live in the PR. Don't say the same thing in both. If a code
-  comment already explains a design decision, the PR description shouldn't re-explain it — pick the
+  comment already explains a design decision, the PR description shouldn't re-explain it - pick the
   right home and say it once.
 
-Good comments look like: *"Use string keys — ObjectId instances don't compare by value"*,
+Good comments look like: *"Use string keys - ObjectId instances don't compare by value"*,
 *"http-proxy-middleware, not express-http-proxy, because the latter buffers the full body and would
 break SSE streaming"*, *"domainId is logged below, not tagged on the metric, to keep cardinality
 bounded"*. Each explains a decision you'd otherwise be tempted to "simplify" into a bug.
@@ -73,23 +73,23 @@ Same bar as comments: a test is real engineering, not a box to tick. Most sloppy
 these two checks.
 
 - **Don't test for the sake of it.** A test that only re-verifies a library (a Zod schema, an SDK
-  call), a static mapping, or thin control flow with no real logic is *negative* value — it gives
+  call), a static mapping, or thin control flow with no real logic is *negative* value - it gives
   false coverage and drags CI. Test where the business logic actually is. ("Better than nothing?"
   is not the bar.)
-- **A complex test is a red flag — at the code or the test.** If a test is hard to follow or mocks
+- **A complex test is a red flag - at the code or the test.** If a test is hard to follow or mocks
   half the world, the signal usually points at the production code: the unit needs its dependencies
   injected so they can be overridden cleanly. Reaching for `as never` / `as any` to build the
-  unit under test means you're not building it correctly. Aim for flat, behavioral tests — real
+  unit under test means you're not building it correctly. Aim for flat, behavioral tests - real
   fixtures, descriptive names, small assertion clusters.
 - **Verify what units can't prove.** For agent/runtime/integration code, typecheck and unit tests
-  aren't enough — run it end to end and confirm before merge.
+  aren't enough - run it end to end and confirm before merge.
 
 ## PR Descriptions
 
 Concise and high-level. Describe the *shape* of the change, not a line-by-line tour.
 
 - **Frame it as before → problem → after.** What the world looked like, what was wrong with it, and
-  what it looks like now — all at high altitude. Describe intent and outcome, not mechanics.
+  what it looks like now - all at high altitude. Describe intent and outcome, not mechanics.
 - **Don't narrate the diff.** The reviewer can read what each file does. Name the load-bearing
   symbols/packages if it helps orient them, but don't walk through the change file by file.
 - **Scale to the change, and trust the diff.** Most of what a small change does is readable from
@@ -103,7 +103,7 @@ Concise and high-level. Describe the *shape* of the change, not a line-by-line t
 - **For remove / replace / migrate PRs, use a decision table.** One row per item: what happened to
   it, what replaced it, and why. It's the clearest possible before→after.
 - **Fill the template, delete what doesn't apply.** Drop inapplicable sections rather than leaving
-  empty placeholder comments — a half-filled template reads as "I didn't bother."
+  empty placeholder comments - a half-filled template reads as "I didn't bother."
 
 Example:
 > Before, alarms were keyed by raw string IDs, so a renamed rule silently matched nothing.
@@ -112,7 +112,7 @@ Example:
 ### Sound like a person
 
 The clearest sign of AI-written prose is that no person talks like that. Write the way you'd
-explain the change to a teammate at your desk — this applies to the description, motivation, and
+explain the change to a teammate at your desk - this applies to the description, motivation, and
 any review comment.
 
 - **Vary sentence length; break up run-ons.** If one sentence has a colon, two clauses, and a dash
@@ -121,14 +121,14 @@ any review comment.
   "behind `no-unsafe-type-assertion` escape hatches." Say it how you'd say it out loud.
 - **No formula openers.** "One behavior change a reviewer can't see from the diff:" is template-
   shaped. "Worth flagging since the diff won't show it" carries the same thing without the scaffolding.
-- **Go easy on em-dashes and colons.** A pile of them in one paragraph is the strongest tell — one
+- **Go easy on em-dashes and colons.** A pile of them in one paragraph is the strongest tell - one
   per paragraph, tops.
 - **A little informal is fine.** "basically a hand-rolled cache," "nothing changes for callers."
   Natural beats polished.
 
 ### Motivation
 
-One or two sentences, stating the **root cause or the tradeoff** — not a restatement of the
+One or two sentences, stating the **root cause or the tradeoff** - not a restatement of the
 description. Answer "why now / what was blocked." If a ticket is linked, still give the one-line
 gist inline so the reviewer doesn't have to open it.
 
@@ -136,7 +136,7 @@ gist inline so the reviewer doesn't have to open it.
 
 Only call out what a reviewer can't safely assume.
 
-- **Skip the obvious.** Unit tests, type checks, and lint are table stakes — CI proves them.
+- **Skip the obvious.** Unit tests, type checks, and lint are table stakes - CI proves them.
 - **Show the hard stuff as evidence.** Name the failure modes a test covers, paste the reproducible
   command (with real output), or attach the screenshot. Say what you actually did so the reviewer
   doesn't re-do it. If there's genuinely nothing beyond the obvious, one short line is fine.

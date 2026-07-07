@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# Sourced by ../install.sh — function definitions only.
+# Sourced by ../install.sh - function definitions only.
 
 # Setup work-specific tools (Glean MCP, Datadog MCP, MongoDB MCP, etc.)
 # Only runs if WORK_MACHINE=1 or user confirms interactively

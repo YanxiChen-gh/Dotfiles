@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# Sourced by ../install.sh — function definitions only.
+# Sourced by ../install.sh - function definitions only.
 
 # Setup Cursor IDE configuration
 # Symlinks settings, keybindings, snippets, and skills from Dotfiles

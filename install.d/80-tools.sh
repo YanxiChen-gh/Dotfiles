@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# Sourced by ../install.sh — function definitions only.
+# Sourced by ../install.sh - function definitions only.
 
 # Install Datadog pup CLI from GitHub releases
 # Downloads the latest pre-built binary for the current OS/arch

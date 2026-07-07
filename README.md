@@ -8,7 +8,7 @@ Personal shell, Cursor, and Claude Code configuration.
 
 ## Default shell on Ona
 
-In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells default to zsh. `install.sh` adds a runtime-gated guard to `~/.bashrc` that hands interactive bash sessions over to zsh, and best-effort `chsh`'s the login shell when run inside Ona. The guard is a no-op on a personal machine (where `IS_ON_ONA` is unset) — `chsh` alone isn't enough because Ona SSHs in via `exec -l $SHELL -i` with `$SHELL=/bin/bash` and a container's `/etc/passwd` can reset on rebuild.
+In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells default to zsh. `install.sh` adds a runtime-gated guard to `~/.bashrc` that hands interactive bash sessions over to zsh, and best-effort `chsh`'s the login shell when run inside Ona. The guard is a no-op on a personal machine (where `IS_ON_ONA` is unset) - `chsh` alone isn't enough because Ona SSHs in via `exec -l $SHELL -i` with `$SHELL=/bin/bash` and a container's `/etc/passwd` can reset on rebuild.
 
 ## Editor (Vim / Neovim)
 
@@ -49,11 +49,11 @@ Claude Code hooks (`PostToolUse`, etc.) and Cursor hooks (`postToolUse`, etc.) a
 
 ### RTK (token-optimized shell output)
 
-[RTK](https://github.com/rtk-ai/rtk) rewrites agent shell commands (`git status`, `cargo test`, `rg`, etc.) to compact output — typically 60–90% fewer tokens on dev workflows. `install.sh` installs the binary and enables it for all three agents:
+[RTK](https://github.com/rtk-ai/rtk) rewrites agent shell commands (`git status`, `cargo test`, `rg`, etc.) to compact output - typically 60–90% fewer tokens on dev workflows. `install.sh` installs the binary and enables it for all three agents:
 
-- **Claude Code** — `PreToolUse` hook in `~/.claude/settings.json` (automatic bash rewrite)
-- **OpenAI Codex (GPT)** — [`codex/AGENTS.md`](codex/AGENTS.md) + [`codex/RTK.md`](codex/RTK.md) symlinked to `~/.codex/AGENTS.md` and `RTK.md`
-- **Cursor** — `preToolUse` hook in [`cursor/hooks.json`](cursor/hooks.json) (symlinked to `~/.cursor/hooks.json`)
+- **Claude Code** - `PreToolUse` hook in `~/.claude/settings.json` (automatic bash rewrite)
+- **OpenAI Codex (GPT)** - [`codex/AGENTS.md`](codex/AGENTS.md) + [`codex/RTK.md`](codex/RTK.md) symlinked to `~/.codex/AGENTS.md` and `RTK.md`
+- **Cursor** - `preToolUse` hook in [`cursor/hooks.json`](cursor/hooks.json) (symlinked to `~/.cursor/hooks.json`)
 
 Check savings anytime: `rtk gain`. Telemetry is disabled by default (`RTK_TELEMETRY_DISABLED=1` during install).
 
@@ -61,7 +61,7 @@ Check savings anytime: `rtk gain`. Telemetry is disabled by default (`RTK_TELEME
 
 ### Shared agent rules (single source)
 
-Rules that more than one tool shares live once under `agent-rules/`: a tool-agnostic body (`<name>.md`) plus per-tool settings in `rules.json`. `agent-rules/build.py` compiles them into each tool's native format — today the Cursor `.mdc` files in **both** `cursor/rules/` (personal) and `cursor/rules-work/` (work), per each rule's `scope`. Edit the source and re-run `python3 agent-rules/build.py`; never hand-edit a generated `.mdc`. `verify-dotfiles.sh` runs `build.py --check` and fails on drift, so the copies can't diverge. Adding a tool is a new emitter in `build.py`; adding a rule is a new source file plus a `rules.json` entry.
+Rules that more than one tool shares live once under `agent-rules/`: a tool-agnostic body (`<name>.md`) plus per-tool settings in `rules.json`. `agent-rules/build.py` compiles them into each tool's native format - today the Cursor `.mdc` files in **both** `cursor/rules/` (personal) and `cursor/rules-work/` (work), per each rule's `scope`. Edit the source and re-run `python3 agent-rules/build.py`; never hand-edit a generated `.mdc`. `verify-dotfiles.sh` runs `build.py --check` and fails on drift, so the copies can't diverge. Adding a tool is a new emitter in `build.py`; adding a rule is a new source file plus a `rules.json` entry.
 
 ### Shared global skills (Claude + Cursor)
 

@@ -11,8 +11,8 @@ The **[`ci` workflow](.github/workflows/ci.yml)** must stay green before merging
 
 When you add or change:
 
-- **Shell entrypoints** used by installers or sync — extend `scripts/verify-dotfiles.sh` (`sh -n` / shellcheck lists) if you introduce a new top-level script.
-- **Behavior covered by e2e** — add or update cases under `tests/e2e/test_*.sh` and ensure `tests/e2e/run.sh` still passes.
-- **New Python helpers** invoked from shell — add a `py_compile` line in `verify-dotfiles.sh` (or fold them into e2e) so broken syntax fails locally and in CI.
+- **Shell entrypoints** used by installers or sync - extend `scripts/verify-dotfiles.sh` (`sh -n` / shellcheck lists) if you introduce a new top-level script.
+- **Behavior covered by e2e** - add or update cases under `tests/e2e/test_*.sh` and ensure `tests/e2e/run.sh` still passes.
+- **New Python helpers** invoked from shell - add a `py_compile` line in `verify-dotfiles.sh` (or fold them into e2e) so broken syntax fails locally and in CI.
 
 Keep **one** primary verify entrypoint (`verify-dotfiles.sh`) so local runs and CI stay aligned.

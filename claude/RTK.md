@@ -26,4 +26,4 @@ which rtk             # Verify correct binary
 Shell commands are automatically rewritten by the agent hook.
 Example: `git status` → `rtk git status` (transparent, zero instruction overhead)
 
-Built-in Read/Grep/Glob tools are not rewritten — prefer shell commands or explicit `rtk read` / `rtk grep` when compact output matters.
+Built-in Read/Grep/Glob tools are not rewritten - prefer shell commands or explicit `rtk read` / `rtk grep` when compact output matters.

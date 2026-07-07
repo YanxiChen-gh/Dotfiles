@@ -16,8 +16,8 @@ Skill sync (`sync-claude-skills-to-repo.sh`) does not modify hooks or `permissio
 
 RTK compresses Bash/Shell tool output before it reaches the model. Enabled for **Claude Code**, **OpenAI Codex (GPT)**, and **Cursor**:
 
-- **Cursor** — versioned in [`hooks.json`](hooks.json) (`preToolUse` → `rtk hook cursor`)
-- **Claude Code** — patched into `~/.claude/settings.json` (`rtk init -g --hook-only --auto-patch`)
-- **Codex** — `~/.codex/AGENTS.md` + `RTK.md` symlinks (instruction-based; prefix commands with `rtk`)
+- **Cursor** - versioned in [`hooks.json`](hooks.json) (`preToolUse` → `rtk hook cursor`)
+- **Claude Code** - patched into `~/.claude/settings.json` (`rtk init -g --hook-only --auto-patch`)
+- **Codex** - `~/.codex/AGENTS.md` + `RTK.md` symlinks (instruction-based; prefix commands with `rtk`)
 
 Re-run `install.sh` or `rtk init --show` after changing agents.

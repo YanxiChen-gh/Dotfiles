@@ -8,7 +8,7 @@
 # self-verification), WIF tailnet join, `tailscale serve` on :8080, and an
 # end-to-end curl through the tailnet path. Prints the URL to open.
 #
-# Why always :8080 — tailnet ACLs for tag:ona-dev nodes only admit the port
+# Why always :8080 - tailnet ACLs for tag:ona-dev nodes only admit the port
 # the Vanta dev flow uses (NGINX_PORT, 8080). Serving on any other port makes
 # the URL hang forever from a laptop while self-tests still pass.
 
@@ -20,16 +20,16 @@ TAILNET_PORT=8080
 SOCKS_PORT=1055
 
 if [[ "${IS_ON_ONA:-}" != "true" ]]; then
-    echo "Not an Ona CDE (IS_ON_ONA != true) — use 'tailscale serve' directly or the editor port-forward." >&2
+    echo "Not an Ona CDE (IS_ON_ONA != true) - use 'tailscale serve' directly or the editor port-forward." >&2
     exit 1
 fi
 
 # 1. tailscaled: userspace networking (no TUN in the CDE). The SOCKS flag is
-# what lets this node test its own tailnet URL later — if the daemon is up
+# what lets this node test its own tailnet URL later - if the daemon is up
 # without it, restart it (login state persists in --state; no re-join needed).
 if pgrep -x tailscaled >/dev/null \
         && ! (exec 3<>"/dev/tcp/localhost/${SOCKS_PORT}") 2>/dev/null; then
-    echo "[expose-port] tailscaled running without SOCKS proxy — restarting it"
+    echo "[expose-port] tailscaled running without SOCKS proxy - restarting it"
     sudo pkill -x tailscaled
     for _ in $(seq 20); do pgrep -x tailscaled >/dev/null || break; sleep 0.5; done
 fi
@@ -54,7 +54,7 @@ fi
 if ! tailscale status --self --peers=false >/dev/null 2>&1; then
     JOIN_SCRIPT="/workspaces/obsidian/scripts/dev/tailscale-up-ona.sh"
     if [[ ! -x "$JOIN_SCRIPT" ]]; then
-        echo "[expose-port] join script not found at $JOIN_SCRIPT — join the tailnet manually first." >&2
+        echo "[expose-port] join script not found at $JOIN_SCRIPT - join the tailnet manually first." >&2
         exit 1
     fi
     # Default hostname derivation in the script can return every env id; pass one.
@@ -73,7 +73,7 @@ sudo tailscale serve --bg --http="${TAILNET_PORT}" "http://localhost:${LOCAL_POR
 URL="http://${HOST}:${TAILNET_PORT}"
 
 # 4. Verify e2e through the tailnet path (DNS + serve + app; ACLs can't be
-# self-tested — self-traffic bypasses them, which is why only :8080 is safe).
+# self-tested - self-traffic bypasses them, which is why only :8080 is safe).
 STATUS=$(curl -s --max-time 15 --proxy "socks5h://localhost:${SOCKS_PORT}" \
     -o /dev/null -w '%{http_code}' "${URL}${VERIFY_PATH}") || STATUS="unreachable"
 if [[ "$STATUS" != 2* && "$STATUS" != 3* ]]; then

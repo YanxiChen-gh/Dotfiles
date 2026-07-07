@@ -1,7 +1,7 @@
 #!/bin/sh
 # E2E: claude/hooks/pr-authoring-gate-pretooluse.sh (+ pr-authoring-gate-check.py)
 #
-# The gate judges the PR body with `claude -p`, which is non-deterministic and needs auth —
+# The gate judges the PR body with `claude -p`, which is non-deterministic and needs auth -
 # unusable in CI. So we shim a fake `claude` on PATH that returns a canned verdict envelope
 # keyed off a sentinel in the prompt. That makes every path here deterministic and offline;
 # the real judge is verified manually (see the PR). We assert the plumbing: which commands

@@ -1,5 +1,5 @@
 # shellcheck shell=sh
-# Sourced by ../install.sh — function definitions only.
+# Sourced by ../install.sh - function definitions only.
 
 # Setup LangSmith MCP server configuration
 # Usage: setup_langsmith_mcp
@@ -189,7 +189,7 @@ sync_cursor_mcp_from_claude() {
     python3 "$script_dir/scripts/sync_cursor_mcp_from_claude.py" || return $?
 }
 
-# Setup Datadog MCP server configuration (user scope — always available)
+# Setup Datadog MCP server configuration (user scope - always available)
 # Reads API keys from environment variables (DATADOG_LOCAL_DEVELOPMENT_KEY_2, DATADOG_APP_KEY)
 setup_datadog_mcp() {
     echo "Setting up Datadog MCP server..."
@@ -227,7 +227,7 @@ setup_datadog_mcp() {
     fi
 }
 
-# Setup Netlify MCP server (user scope — work only)
+# Setup Netlify MCP server (user scope - work only)
 setup_netlify_mcp() {
     echo "Setting up Netlify MCP server..."
 
@@ -251,7 +251,7 @@ setup_netlify_mcp() {
     fi
 }
 
-# Setup MongoDB MCP server (user scope — always available, connect at runtime via /connect-mongo)
+# Setup MongoDB MCP server (user scope - always available, connect at runtime via /connect-mongo)
 setup_mongodb_mcp() {
     echo "Setting up MongoDB MCP server..."
 
