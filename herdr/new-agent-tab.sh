@@ -22,9 +22,16 @@ workspace="${HERDR_ACTIVE_WORKSPACE_ID:-}"
 agent_cmd="claude --permission-mode auto"
 editor_cmd="nvim"
 
-# Detached shells have no visible stderr, so surface failures as a herdr toast.
+# Detached shells have no visible stderr, so surface failures as a herdr toast,
+# and - once the panes exist - in the panes too, so a failure never leaves them
+# frozen on the "preparing" line.
 toast() { "$herdr" notification show "$1" ${2:+--body "$2"} >/dev/null 2>&1 || true; }
-die() { toast "New agent tab failed" "$1"; echo "$1" >&2; exit 1; }
+die() {
+  if [ -n "${left:-}" ]; then
+    "$herdr" pane run "$left" "clear; echo '✗ new agent tab failed: $1'; echo '(diagnose: treehouse status)'" >/dev/null 2>&1 || true
+  fi
+  toast "New agent tab failed" "$1"; echo "$1" >&2; exit 1
+}
 
 command -v treehouse >/dev/null 2>&1 \
   || die "treehouse not installed (go install github.com/kunchenguid/treehouse@latest)"
@@ -49,6 +56,10 @@ if [ -z "$right" ] || [ "$right" = "null" ]; then die "could not read split pane
 "$herdr" pane run "$left"  "clear; echo '🌳 preparing treehouse worktree...'" || true
 "$herdr" pane run "$right" "clear; echo '🌳 preparing treehouse worktree...'" || true
 
+# Self-heal any stale worktree registrations (a pool dir removed out-of-band)
+# so the lease can't wedge on a "missing but already registered worktree" error.
+git -C "$repo_root" worktree prune 2>/dev/null || true
+
 # Lease a pre-warmed, provisioned worktree. --lease prints only the path to
 # stdout (banners go to stderr) and reserves it until `treehouse return`.
 wt=$(cd "$repo_root" && treehouse get --lease --lease-holder herdr) \
@@ -59,5 +70,9 @@ if [ -z "$wt" ] || [ ! -d "$wt" ]; then
 fi
 
 # Move both panes into the worktree and launch the tools (exec replaces the shell).
+# Clear the input line first (ctrl+u) so a stray keystroke typed into the pane
+# during the "preparing" window can't corrupt the launch command.
+"$herdr" pane send-keys "$left" ctrl+u >/dev/null 2>&1 || true
 "$herdr" pane run "$left"  "cd '$wt' && exec $agent_cmd"  || die "failed to launch agent in left pane"
+"$herdr" pane send-keys "$right" ctrl+u >/dev/null 2>&1 || true
 "$herdr" pane run "$right" "cd '$wt' && exec $editor_cmd" || die "failed to launch editor in right pane"
