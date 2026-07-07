@@ -15,7 +15,15 @@ ROOT="$HERE/.."
 JUDGE="$HERE/judge.md"
 CLEANER="$ROOT/simplify-cleaner.md"
 RUBRIC="$ROOT/rubric.md"
-CORPUS="$HERE/corpus"
+# Corpus + results hold internal content and live in the PRIVATE data repo, not here.
+DATA="${STYLE_HARNESS_DATA:-$HOME/style-harness-data}"
+CORPUS="$DATA/pr-style/corpus"
+RESULTS="$DATA/pr-style/results"
+if [ ! -d "$CORPUS" ]; then
+  echo "corpus not found at $CORPUS - clone the private data repo (see ../rubric.md) or set STYLE_HARNESS_DATA" >&2
+  exit 1
+fi
+mkdir -p "$RESULTS"
 
 ask() { claude -p "$1" --output-format text; }
 

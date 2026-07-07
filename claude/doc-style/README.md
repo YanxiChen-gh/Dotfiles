@@ -15,12 +15,23 @@ choice.
   draft-then-cut pass. Fires when I ask an agent to write a doc.
 - `reviewer.md` - read-only pre-`gsync` gate. Scores a draft and returns a ranked fix list in my
   review-tone. Run it before syncing a `.md` to a Google Doc.
-- `eval/` - local eval.
+- `eval/` - local eval (code only; data is in the private repo, see below).
   - `judge.md` - the judge prompt (pairwise + single-doc modes).
   - `run-eval.sh calibrate` - blind pairwise: does the judge prefer the human doc? Uses `claude -p`.
   - `run-eval.sh score FILE` - rubric-score one doc.
-  - `corpus/human/` - my real docs (positive examples). `corpus/agent/` - agent counterparts
-    (negative). `ground-truth-comments.md` - my real review comments, the calibration answer key.
+
+## Data (private)
+
+Corpus and results reference internal content, so they live in a PRIVATE repo, not here. The evals
+read `$STYLE_HARNESS_DATA` (default `~/style-harness-data`):
+
+```bash
+git clone git@github.com:YanxiChen-gh/style-harness-data.git ~/style-harness-data
+```
+
+Then `run-eval.sh` works. Corpus layout there: `doc-style/corpus/human/` (my real docs, positive),
+`doc-style/corpus/agent/` (counterparts, negative), `ground-truth-comments.md` (my real review
+comments = the calibration answer key). Results land in `doc-style/results/`.
 
 ## The two-layer eval
 

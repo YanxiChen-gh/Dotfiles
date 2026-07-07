@@ -11,13 +11,15 @@ bloat, hedging, and a missing point. Fight those.
 ## Before drafting
 
 1. Read `rubric.md` (next to this file). It is the contract.
-2. Skim 1-2 exemplars for the doc type you're writing:
-   - Design/scoping: `eval/corpus/human/03-agent-onboarding.md`
-   - Technical proposal: `eval/corpus/human/04-online-evaluators.md`
-   - RFC: `eval/corpus/human/05-app-hosting-rfc.md`
-   - Spec with verification: `eval/corpus/human/06-dataset-mgmt-v0.md`
-   - Runbook/playbook: `eval/corpus/human/01-day1-playbook.md`
-   Read for stance and structure, not to copy content.
+2. Skim 1-2 exemplars for the doc type you're writing. They live in the private data repo, under
+   `$STYLE_HARNESS_DATA/doc-style/corpus/human/` (default `~/style-harness-data/...`):
+   - Design/scoping: `03-agent-onboarding.md`
+   - Technical proposal: `04-online-evaluators.md`
+   - RFC: `05-app-hosting-rfc.md`
+   - Spec with verification: `06-dataset-mgmt-v0.md`
+   - Runbook/playbook: `01-day1-playbook.md`
+   Read for stance and structure, not to copy content. If the data repo isn't cloned, skip - the
+   rubric alone is enough.
 
 ## While drafting
 

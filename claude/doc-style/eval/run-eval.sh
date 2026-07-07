@@ -11,7 +11,15 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUBRIC="$HERE/../rubric.md"
 JUDGE="$HERE/judge.md"
-CORPUS="$HERE/corpus"
+# Corpus + results hold internal content and live in the PRIVATE data repo, not here.
+DATA="${STYLE_HARNESS_DATA:-$HOME/style-harness-data}"
+CORPUS="$DATA/doc-style/corpus"
+RESULTS="$DATA/doc-style/results"
+if [ ! -d "$CORPUS" ]; then
+  echo "corpus not found at $CORPUS - clone the private data repo (see ../README.md) or set STYLE_HARNESS_DATA" >&2
+  exit 1
+fi
+mkdir -p "$RESULTS"
 
 judge() { # $1 = full prompt text
   claude -p "$1" --output-format text
@@ -47,7 +55,7 @@ Run Mode A. Output ONLY the JSON."
     out="$(judge "$prompt")"
     winner="$(echo "$out" | grep -oE '"winner"[^,}]*' | grep -oE '[AB]' | head -1)"
     if [ "$winner" = "$human_slot" ]; then pass=$((pass+1)); echo "pair $num: PASS (chose human)"; else echo "pair $num: FAIL (chose agent)"; fi
-    echo "$out" > "$HERE/results-calibrate-$num.json"
+    echo "$out" > "$RESULTS/results-calibrate-$num.json"
   done
   echo "calibration: $pass/$total pairs preferred the human doc"
 }

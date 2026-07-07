@@ -49,7 +49,7 @@ Anti-tells:
 This is the priority flow. The feature code is usually fine; the **comments, tests, and PR
 description** come in messy and need cleaning before handoff. So "simplify" here means: find the
 low-value comment/test/description cruft and cut or tighten it. Calibrated against real cleanup
-diffs in `eval/corpus/simplify/human/cleanup-examples.md`.
+diffs in the private data repo (`$STYLE_HARNESS_DATA/pr-style/corpus/simplify/human/cleanup-examples.md`).
 
 What to flag, by target:
 
