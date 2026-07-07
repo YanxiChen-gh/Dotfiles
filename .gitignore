@@ -8,6 +8,13 @@ claude/agent-maturity/evidence/
 claude/agent-maturity/interventions.jsonl
 claude/agent-maturity/tracker.md
 
+# doc/PR style-harness corpora + eval results reference internal Vanta content
+# (real PR bodies, code diffs, review comments, docs). Keep local only - PUBLIC repo.
+claude/doc-style/eval/corpus/
+claude/pr-style/eval/corpus/
+claude/doc-style/eval/results-*.json
+claude/pr-style/eval/results-*.json
+
 # Python bytecode
 __pycache__/
 *.pyc
