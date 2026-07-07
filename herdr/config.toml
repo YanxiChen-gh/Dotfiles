@@ -1,4 +1,6 @@
 # herdr config — https://herdr.dev/docs/configuration/
 [keys]
 # Leader key; herdr's default is ctrl+b.
-prefix = "cmd+r"
+prefix = "ctrl+g"
+previous_tab = "prefix+left"
+next_tab = "prefix+right"
