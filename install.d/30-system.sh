@@ -121,6 +121,25 @@ setup_herdr_config() {
     echo "✅ Linked herdr config: $target_config -> $source_config"
 }
 
+# Symlink treehouse's config (worktree provisioning hook) into
+# ~/.config/treehouse/config.toml.
+setup_treehouse_config() {
+    script_dir=$(resolve_script_dir) || return 1
+    source_config="$script_dir/treehouse/config.toml"
+    target_dir="$HOME/.config/treehouse"
+    target_config="$target_dir/config.toml"
+
+    if [ ! -f "$source_config" ]; then
+        echo "ℹ️  treehouse/config.toml not found, skipping treehouse config setup."
+        return 0
+    fi
+
+    mkdir -p "$target_dir"
+    rm -f "$target_config"
+    ln -s "$source_config" "$target_config"
+    echo "✅ Linked treehouse config: $target_config -> $source_config"
+}
+
 # Symlink the WezTerm config into ~/.config/wezterm/wezterm.lua.
 setup_wezterm_config() {
     script_dir=$(resolve_script_dir) || return 1

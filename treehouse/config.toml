@@ -1,0 +1,16 @@
+# treehouse user config - https://github.com/kunchenguid/treehouse
+# Symlinked to ~/.config/treehouse/config.toml by install.d/30-system.sh.
+
+# Place the worktree pool as a sibling of each repo (resolved relative to the repo
+# root) instead of treehouse's default of $HOME. This keeps worktrees on the same
+# filesystem as the repo, which the node_modules hardlink provisioning below
+# requires - $HOME is a separate device from /workspaces in the Ona CDE.
+root = "../"
+
+# Provision every freshly-created worktree so it's usable without a cold install:
+# hardlink node_modules from the main checkout and copy git-ignored local config.
+# Hooks run via the shell in the worktree directory ($HOME expands, "." = worktree).
+# post_create fires on both fresh creation and pool reset, and the script is
+# idempotent, so re-running it on a reused worktree is harmless.
+[hooks]
+post_create = ["$HOME/dotfiles/scripts/provision-worktree.sh ."]
