@@ -21,12 +21,45 @@
           "alwaysApply": false
         }
       }
+    },
+    "writing-style": {
+      "body": "writing-style.md",
+      "targets": {
+        "cursor": {
+          "file": "writing-style.mdc",
+          "scope": "both",
+          "description": "Global output style: never use em dashes; use a plain hyphen instead.",
+          "alwaysApply": true
+        }
+      }
+    },
+    "git-and-generated-files": {
+      "body": "git-and-generated-files.md",
+      "targets": {
+        "cursor": {
+          "file": "git-and-generated-files.mdc",
+          "scope": "both",
+          "description": "Global git and file-editing rules: no agent co-author trailers, and never hand-edit generated files or CHANGELOG.md.",
+          "alwaysApply": true
+        }
+      }
+    },
+    "engineering-principles": {
+      "body": "engineering-principles.md",
+      "targets": {
+        "cursor": {
+          "file": "engineering-principles.mdc",
+          "scope": "both",
+          "description": "Global engineering principles: decision priorities, reproduction-first bug fixing, UI pixel-perfection, and fixing lint/test/flaky issues you encounter.",
+          "alwaysApply": true
+        }
+      }
     }
   },
   "codex": {
     "file": "codex/AGENTS.md",
     "title": "Codex Global Instructions",
-    "rules": ["pr-authoring", "pr-review-tone"],
+    "rules": ["pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "engineering-principles"],
     "footer": "@RTK.md"
   }
 }
