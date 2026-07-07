@@ -21,6 +21,10 @@ When writing TypeScript code, comments, or PR descriptions on my behalf, follow 
 
 **Comment self-check before handoff** - current models over-comment, so act on the guide's comment bar, don't just cite it: after writing, re-read every comment and test you added and delete any that narrate the change, restate the code, are obvious from the name, or only re-verify a type/mapping; keep only the non-obvious *why*. (A `comment-self-check.sh` PostToolUse hook also nudges this; retire this note when models stop over-commenting - the agent-maturity `verbose-output` tag.)
 
+## Doc Authoring
+
+When writing a design doc, RFC, spec, runbook, or playbook on my behalf (typically a local `.md` I later `gsync` to a Google Doc), use the `doc-authoring` skill and follow `~/dotfiles/claude/doc-style/rubric.md`. Same throughline as PR authoring: thesis first, fence the scope, receipts not claims, one load-bearing frame, and a ruthless draft-then-cut pass - the failure mode is bloat and a buried point, not word choice.
+
 ## Commits & Generated Files
 
 - Never add yourself (the AI agent) as a commit co-author. Do not append `Co-Authored-By:` trailers naming Claude, Codex, Cursor, or any agent, and do not add agent attribution to commit messages or PR descriptions unless I explicitly ask.

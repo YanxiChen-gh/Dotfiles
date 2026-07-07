@@ -13,7 +13,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$HERE/.."
 JUDGE="$HERE/judge.md"
-CLEANER="$ROOT/simplify-cleaner.md"
+# The cleaner IS the real simplify-pr skill agents use - the eval validates that, not a stand-in.
+CLEANER="${SIMPLIFY_PR_SKILL:-$HOME/dotfiles/claude/skills/simplify-pr/SKILL.md}"
 RUBRIC="$ROOT/rubric.md"
 # Corpus + results hold internal content and live in the PRIVATE data repo, not here.
 DATA="${STYLE_HARNESS_DATA:-$HOME/style-harness-data}"

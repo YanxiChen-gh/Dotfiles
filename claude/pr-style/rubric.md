@@ -1,8 +1,9 @@
 # PR Style Rubric (Yanxi)
 
-Source of truth for the PR flows. Unlike `doc-style/rubric.md`, this does NOT restate the style -
-it points at the guides that already define it, and adds only the eval-specific layer (checkable
-questions + contrastive pairs + anti-tells) so the judge and reviewer have something to score.
+This is the **eval layer** for the PR flows, not the generation tool. Generation already lives
+elsewhere: the `pr-authoring.md` guide (wired via CLAUDE.md + the pr-authoring-gate hook) and the
+`simplify-pr` / `review-pr` skills. This file exists so the judge has something to score against;
+it points at those guides and adds only checkable questions + contrastive pairs + anti-tells.
 
 **The style specs (read these first, they are authoritative):**
 - Authoring & code & comments: `../pr-authoring.md` (+ `../pr-examples.md`)

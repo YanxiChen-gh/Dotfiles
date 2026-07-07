@@ -23,7 +23,7 @@ for num in "$@"; do
         }
       }
     }' -F owner="$OWNER" -F repo="$REPO" -F num="$num" \
-    --jq --arg author "$AUTHOR" '
+    | jq -r --arg author "$AUTHOR" '
       .data.repository.pullRequest as $pr
       | ($pr.userContentEdits.nodes | reverse
           | map(select(.editor.login == $author))

@@ -11,7 +11,8 @@ choice.
 
 - `rubric.md` - single source of truth. Signature moves, anti-tells, contrastive pairs. Edit this
   to change the style; authoring, review, and eval all read from it.
-- `SKILL.md` - the `doc-authoring` skill. Loads the rubric, links exemplars, enforces a
+- the `doc-authoring` skill lives at `../skills/doc-authoring/SKILL.md` (registered via symlink in
+  `~/.claude/skills/`, so agents auto-discover it). Loads this rubric, links exemplars, enforces a
   draft-then-cut pass. Fires when I ask an agent to write a doc.
 - `reviewer.md` - read-only pre-`gsync` gate. Scores a draft and returns a ranked fix list in my
   review-tone. Run it before syncing a `.md` to a Google Doc.
