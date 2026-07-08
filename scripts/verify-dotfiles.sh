@@ -6,6 +6,7 @@ usage() {
 
 Run cheap checks on this Dotfiles repo:
   - sh -n on shell entrypoints
+  - node --check on OpenCode plugins (when node is available)
   - shellcheck on those files (if shellcheck is on PATH)
   - sync-claude-skills-to-repo.sh on a temp copy of test-fixtures/minimal-claude-workspace
 
@@ -52,8 +53,19 @@ do
     fi
 done
 
+if command -v node >/dev/null 2>&1; then
+    printf '\n== node --check ==\n'
+    for f in opencode/plugins/*.js; do
+        if ! node --check "$f"; then
+            fail "node --check $f"
+        else
+            pass "node --check $f"
+        fi
+    done
+fi
+
 printf '\n== python3 -m py_compile ==\n'
-for f in scripts/sync_cursor_mcp_from_claude.py agent-rules/build.py; do
+for f in scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py agent-rules/build.py; do
     if [ -f "$f" ]; then
         if ! python3 -m py_compile "$f"; then
             fail "py_compile $f"

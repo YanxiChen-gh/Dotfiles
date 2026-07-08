@@ -189,6 +189,21 @@ sync_cursor_mcp_from_claude() {
     python3 "$script_dir/scripts/sync_cursor_mcp_from_claude.py" || return $?
 }
 
+# Convert Claude Code user MCP servers into an untracked OpenCode overlay.
+# The OpenCode harness plugin merges this file into the resolved runtime config.
+sync_opencode_mcp_from_claude() {
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "⚠️  Python3 not found; skipping Claude → OpenCode MCP sync"
+        return 1
+    fi
+    claude_json="${HOME}/.claude.json"
+    if [ ! -f "$claude_json" ]; then
+        return 0
+    fi
+    script_dir=$(resolve_script_dir) || return 1
+    python3 "$script_dir/scripts/sync_opencode_mcp_from_claude.py" || return $?
+}
+
 # Setup Datadog MCP server configuration (user scope - always available)
 # Reads API keys from environment variables (DATADOG_LOCAL_DEVELOPMENT_KEY_2, DATADOG_APP_KEY)
 setup_datadog_mcp() {
@@ -288,4 +303,3 @@ merge_cursor_work_mcp_entries() {
         merge_cursor_mcp_datadog || true
     fi
 }
-

@@ -4,8 +4,8 @@
 `agent-rules/` is the single source of truth for rules that several agent tools
 share. Each rule has a tool-agnostic body (`<name>.md`); `rules.json` says how it
 maps to each tool. Today this renders Cursor `.mdc` files (into both
-`cursor/rules/` and `cursor/rules-work/` per each rule's scope), the aggregated
-Codex `AGENTS.md`, and the aggregated Claude `CLAUDE.md`.
+`cursor/rules/` and `cursor/rules-work/` per each rule's scope), plus aggregated
+instruction files for Codex, Claude Code, and OpenCode.
 
 A body may fence tool-specific text in `<!--claude-only-->...<!--/claude-only-->`;
 the claude aggregate keeps it, every other target strips it. Use it sparingly - the
@@ -67,7 +67,7 @@ def cursor_dests(scope):
 
 
 def render_aggregate(cfg, rules, target):
-    """Aggregate several rule bodies into one doc (Codex AGENTS.md, Claude CLAUDE.md)
+    """Aggregate several rule bodies into one tool-specific instruction file
     under a title + generated banner.
 
     Bodies lead with an H1 title (used verbatim by the frontmatter-less Cursor
@@ -82,7 +82,11 @@ def render_aggregate(cfg, rules, target):
         body = (ROOT / rules[name]["body"]).read_text()
         body = _apply_claude_only(body, keep=keep_claude_only)
         sections.append(re.sub(r"^(#{1,5}) ", r"#\1 ", body, flags=re.MULTILINE))
-    doc = f"# {cfg['title']}\n\n{GENERATED_BANNER}\n\n" + "\n".join(sections) + f"\n{cfg['footer']}\n"
+    doc = f"# {cfg['title']}\n\n{GENERATED_BANNER}\n\n" + "\n".join(sections)
+    if cfg["footer"]:
+        doc += f"\n{cfg['footer']}\n"
+    elif not doc.endswith("\n"):
+        doc += "\n"
     return re.sub(r"\n{3,}", "\n\n", doc)
 
 
@@ -97,7 +101,7 @@ def outputs(manifest):
             content = render_cursor(settings, body)
             for dest_dir in cursor_dests(settings.get("scope", "both")):
                 yield dest_dir / settings["file"], content
-    for target in ("codex", "claude"):
+    for target in ("codex", "claude", "opencode"):
         cfg = manifest.get(target)
         if cfg:
             yield REPO / cfg["file"], render_aggregate(cfg, rules, target)

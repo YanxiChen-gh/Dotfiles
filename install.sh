@@ -51,6 +51,7 @@ if [ "$OS" = "linux" ]; then
     install_from_apt "lua5.4"
     install_from_apt "gh"
 fi
+install_python_if_missing
 
 create_symlinks
 install_neovim
@@ -69,6 +70,7 @@ fi
 # Install tools from URLs
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
+install_opencode
 install_from_url "herdr" "herdr" "https://herdr.dev/install.sh"
 install_from_url "treehouse" "treehouse" "https://kunchenguid.github.io/treehouse/install.sh"
 install_langsmith_cli
@@ -110,6 +112,7 @@ install_agent_skill "ogulcancelik/herdr" "herdr"
 
 # Setup Claude Code config and commands
 setup_claude_config
+setup_opencode_config
 setup_advisors
 setup_rtk
 setup_agent_maturity
@@ -121,3 +124,4 @@ setup_work_tools
 
 # Align Cursor MCP with Claude Code user config (after all claude mcp add steps)
 sync_cursor_mcp_from_claude || true
+sync_opencode_mcp_from_claude || true

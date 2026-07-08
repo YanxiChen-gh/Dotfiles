@@ -126,5 +126,11 @@
     "title": "User-Level Claude Code Instructions",
     "rules": ["dotfiles-repo", "writing-style", "engineering-principles", "scope-before-code", "pr-authoring", "doc-and-planning", "git-and-generated-files", "verification-and-handoff", "pr-review-tone", "local-dev-environment", "mcp-preferences"],
     "footer": "@RTK.md"
+  },
+  "opencode": {
+    "file": "opencode/AGENTS.md",
+    "title": "OpenCode Global Instructions",
+    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "engineering-principles", "scope-before-code", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences"],
+    "footer": ""
   }
 }

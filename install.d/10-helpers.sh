@@ -61,3 +61,19 @@ install_node_if_missing() {
     fi
 }
 
+install_python_if_missing() {
+    if command -v python3 >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [ "$OS" = "macos" ] && command -v brew >/dev/null 2>&1; then
+        brew install python
+    elif [ "$OS" = "linux" ]; then
+        install_from_apt "python3"
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "⚠️  Python3 is required for agent config sync; install it and rerun install.sh"
+        return 1
+    fi
+}
