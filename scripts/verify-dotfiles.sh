@@ -53,6 +53,15 @@ do
     fi
 done
 
+printf '\n== bash -n (syntax) ==\n'
+for f in claude/style-eval-engine.sh claude/*-style/eval/run-eval.sh; do
+    if ! bash -n "$f"; then
+        fail "bash -n $f"
+    else
+        pass "bash -n $f"
+    fi
+done
+
 if command -v node >/dev/null 2>&1; then
     printf '\n== node --check ==\n'
     for f in opencode/plugins/*.js; do
@@ -87,7 +96,7 @@ fi
 
 if command -v shellcheck >/dev/null 2>&1; then
     printf '\n== shellcheck (-S error) ==\n'
-    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh scripts/setup_work_github_auth.sh shell/work.sh scripts/verify-dotfiles.sh; do
+    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh claude/style-eval-engine.sh claude/*-style/eval/run-eval.sh scripts/setup_work_github_auth.sh shell/work.sh scripts/verify-dotfiles.sh; do
         if out=$(shellcheck -S error -x "$f" 2>&1); then
             pass "shellcheck $f"
         else

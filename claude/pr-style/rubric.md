@@ -11,6 +11,12 @@ it points at those guides and adds only checkable questions + contrastive pairs 
 
 Three flows, each graded against the relevant guide.
 
+The eval runner keeps candidate generation and judging separate. `AGENT_ENGINE` / `AGENT_MODEL`
+select the cleaner under test; `JUDGE_ENGINE` / `JUDGE_MODEL` select the evaluator. For simplify
+calibration, the agent receives extracted BEFORE blocks only. Its frozen output is then scored
+against AFTER by the judge, which defaults to Claude Opus. `EVAL_CANDIDATE` reuses a frozen
+candidate for judge-only reruns.
+
 ## Authoring (grade against pr-authoring.md "PR Descriptions")
 
 Signature moves (checkable):

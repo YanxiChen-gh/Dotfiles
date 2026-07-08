@@ -18,8 +18,22 @@ choice.
   review-tone. Run it before syncing a `.md` to a Google Doc.
 - `eval/` - local eval (code only; data is in the private repo, see below).
   - `judge.md` - the judge prompt (pairwise + single-doc modes).
-  - `run-eval.sh calibrate` - blind pairwise: does the judge prefer the human doc? Uses `claude -p`.
+  - `run-eval.sh calibrate` - blind pairwise: does the judge prefer the human doc?
   - `run-eval.sh score FILE` - rubric-score one doc.
+  - `run-eval.sh rewrite` - have the agent rewrite the golden agent doc, freeze its output, then
+    have the judge compare it with the human doc.
+
+The agent under test and evaluator are separate. Select them with `AGENT_ENGINE` / `AGENT_MODEL`
+and `JUDGE_ENGINE` / `JUDGE_MODEL`; the judge defaults to Claude Opus. For example:
+
+```bash
+AGENT_ENGINE=opencode AGENT_MODEL=openai/gpt-5.6-sol AGENT_VARIANT=high \
+  JUDGE_ENGINE=claude JUDGE_MODEL=opus ./eval/run-eval.sh rewrite
+```
+
+Blind OpenCode runs retain a JSONL trace and fail if the agent uses tools, preventing it from
+reading the withheld human counterpart. Set `EVAL_CANDIDATE` to a frozen candidate file to rerun
+only the judge without spending another agent sample.
 
 ## Data (private)
 
