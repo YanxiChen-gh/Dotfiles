@@ -33,8 +33,12 @@
           "tool_call": true,
           "temperature": false,
           "options": {
-            "reasoningEffort": "high",
-            "serviceTier": "priority"
+            "reasoningEffort": "high"
+          },
+          "variants": {
+            "fast": {
+              "serviceTier": "priority"
+            }
           },
           "limit": {
             "context": 372000,
@@ -56,8 +60,12 @@
           "tool_call": true,
           "temperature": false,
           "options": {
-            "reasoningEffort": "high",
-            "serviceTier": "priority"
+            "reasoningEffort": "high"
+          },
+          "variants": {
+            "fast": {
+              "serviceTier": "priority"
+            }
           },
           "limit": {
             "context": 372000,
@@ -79,8 +87,12 @@
           "tool_call": true,
           "temperature": false,
           "options": {
-            "reasoningEffort": "high",
-            "serviceTier": "priority"
+            "reasoningEffort": "high"
+          },
+          "variants": {
+            "fast": {
+              "serviceTier": "priority"
+            }
           },
           "limit": {
             "context": 372000,
