@@ -2,7 +2,7 @@
 # new-agent-tab.sh - herdr custom-command handler (bound to prefix+a).
 #
 # Opens a new herdr tab split left/right in a fresh treehouse worktree - the
-# coding agent (Claude Code, auto mode) on the left, the editor (nvim) on the
+# coding agent (OpenCode, auto mode) on the left, the editor (nvim) on the
 # right. herdr runs this as a `type = "shell"` command and exports the
 # HERDR_ACTIVE_* context vars we read below.
 #
@@ -16,14 +16,14 @@ set -euo pipefail
 
 # herdr runs custom commands via a non-interactive shell that inherits the
 # server's PATH, not a login shell's, so ensure our tools are searchable.
-export PATH="$HOME/.local/bin:$HOME/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 herdr="${HERDR_BIN_PATH:-herdr}"
 src_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
 workspace="${HERDR_ACTIVE_WORKSPACE_ID:-}"
 
 # Left pane = coding agent, right pane = editor; change these two lines to taste.
-agent_cmd="claude --permission-mode auto"
+agent_cmd="opencode --auto"
 editor_cmd="nvim"
 
 # Detached shells have no visible stderr, so surface failures as a herdr toast,
