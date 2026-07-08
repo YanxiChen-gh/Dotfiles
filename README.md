@@ -74,7 +74,11 @@ After changing OpenCode config or plugins, quit and restart OpenCode. To use Cla
 
 ### Shared global skills (Claude + OpenCode + Cursor + Codex)
 
-Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and `~/.codex/skills` when `WORK_MACHINE=1`, so one copy works across tools. Claude Code, OpenCode, and Cursor auto-load them; Codex does not, so `codex/AGENTS.md` points at `~/.codex/skills/` and the agent reads the relevant `SKILL.md` on demand. Cursor-only meta-skills stay under `cursor/skills/`.
+Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. Claude Code, Codex, OpenCode, and Cursor discover them natively. Cursor-only meta-skills stay under `cursor/skills/`.
+
+### Agent maturity
+
+The agent-maturity bootstrap installs one model-agnostic engine and private data store. Claude Code uses native lifecycle hooks, Codex uses the same hook scripts through `~/.codex/hooks.json`, and OpenCode uses `dotfiles-harness.js` to adapt its plugin events. All three discover the same skills without copying them. Codex requires a one-time `/hooks` review after installation or whenever the hook definition changes.
 
 ### Work monorepo clone
 

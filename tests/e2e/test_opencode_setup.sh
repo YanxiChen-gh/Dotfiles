@@ -30,7 +30,11 @@ printf '%s\n' '[scope-gate] test prompt'
 EOF
 cat >"$AGENT_MATURITY_HOME/scripts/scope-gate-pretooluse.sh" <<'EOF'
 #!/bin/sh
-cat >/dev/null
+input=$(cat)
+case "$input" in
+  *'src/app.js'*) ;;
+  *'/briefs/'*) exit 0 ;;
+esac
 printf '%s\n' 'scope blocked' >&2
 exit 2
 EOF
@@ -224,6 +228,29 @@ await assert.rejects(
   hooks["tool.execute.before"](
     { tool: "write", sessionID: "test-session", callID: "write-call" },
     { args: { filePath: "test.js", content: "const value = true" } },
+  ),
+  /scope blocked/,
+)
+
+await hooks["tool.execute.before"](
+  { tool: "apply_patch", sessionID: "test-session", callID: "brief-call" },
+  {
+    args: {
+      patchText:
+        "*** Begin Patch\n*** Add File: /tmp/data/briefs/test-session.md\n+brief\n*** End Patch",
+    },
+  },
+)
+
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "apply_patch", sessionID: "test-session", callID: "mixed-patch-call" },
+    {
+      args: {
+        patchText:
+          "*** Begin Patch\n*** Add File: /tmp/data/briefs/test-session.md\n+brief\n*** Update File: src/app.js\n-old\n+new\n*** End Patch",
+      },
+    },
   ),
   /scope blocked/,
 )

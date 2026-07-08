@@ -23,18 +23,23 @@ setup_codex_config() {
         echo "✅ Codex RTK.md linked"
     fi
 
-    # Shared skills (work scope only): mirror the Claude/Cursor symlink so Codex can
-    # follow the same SKILL.md files. Codex has no native skill auto-load, so codex/AGENTS.md
-    # points at ~/.codex/skills/ and the agent reads the relevant SKILL.md on demand.
+    # Shared skills (work scope only): use Codex's documented user-level Agent Skills path.
     if [ "$WORK_MACHINE" = "1" ] && [ -d "$script_dir/shared-skills" ]; then
-        mkdir -p "$codex_dir/skills"
+        agent_skills_dir="$HOME/.agents/skills"
+        mkdir -p "$agent_skills_dir"
         for skill_dir in "$script_dir/shared-skills"/*/; do
             [ -d "$skill_dir" ] || continue
             name=$(basename "$skill_dir")
-            rm -rf "$codex_dir/skills/$name"
-            ln -s "$skill_dir" "$codex_dir/skills/$name"
+            target="$agent_skills_dir/$name"
+            if [ -e "$target" ] || [ -L "$target" ]; then
+                if [ -L "$target" ] && [ "$(readlink "$target")" = "$skill_dir" ]; then
+                    continue
+                fi
+                echo "⚠️  Preserving unmanaged Codex skill: $target"
+                continue
+            fi
+            ln -s "$skill_dir" "$target"
         done
         echo "✅ Codex shared skills linked (work)"
     fi
 }
-

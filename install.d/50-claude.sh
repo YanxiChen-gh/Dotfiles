@@ -211,18 +211,42 @@ setup_advisors() {
 
 # Install the agent-maturity engine. It lives in its own PUBLIC repo
 # (github.com/YanxiChen-gh/agent-maturity); the engine's bootstrap.sh does all the heavy
-# lifting (clone-or-pull → install.sh → skills + scope-gate hooks + `li` + env). So this is
-# just the one-liner - same line any teammate puts in their own dotfiles. Data stays private.
+# lifting (clone-or-pull → install.sh → skills + Claude/Codex hooks + `li` + env). OpenCode's
+# incompatible hook API is adapted by opencode/plugins/dotfiles-harness.js. Data stays private.
 setup_agent_maturity() {
     echo "Setting up agent-maturity engine..."
     local boot="${AGENT_MATURITY_BOOTSTRAP_URL:-https://raw.githubusercontent.com/YanxiChen-gh/agent-maturity/main/bootstrap.sh}"
     local data_repo="${AGENT_MATURITY_DATA_REPO:-YanxiChen-gh/agent-maturity-data}"
-    if curl -fsSL "$boot" | bash -s -- --data-repo "$data_repo" \
+    local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+    if ! curl -fsSL "$boot" | bash -s -- --data-repo "$data_repo" \
          --name "$(git config --global user.name)" --email "$(git config --global user.email)" >/dev/null; then
-        echo "✅ agent-maturity installed (via engine bootstrap)"
-    else
         echo "⚠️  agent-maturity install failed (curl $boot | bash)"
+        return 1
     fi
+
+    missing=""
+    for path in \
+        "$HOME/.claude/skills/scope-gate/SKILL.md" \
+        "$HOME/.agents/skills/scope-gate/SKILL.md" \
+        "$HOME/.claude/settings.json" \
+        "$config_home/opencode/plugins/dotfiles-harness.js"
+    do
+        [ -e "$path" ] || missing="$missing $path"
+    done
+    [ -f "$HOME/.codex/hooks.json" ] || missing="$missing $HOME/.codex/hooks.json"
+    grep -qF 'scope-gate-pretooluse.sh' "$HOME/.claude/settings.json" 2>/dev/null \
+        || missing="$missing Claude-scope-hook"
+    grep -qF 'scope-gate-pretooluse.sh' "$config_home/opencode/plugins/dotfiles-harness.js" 2>/dev/null \
+        || missing="$missing OpenCode-scope-adapter"
+    grep -qF 'scope-gate-pretooluse.sh' "$HOME/.codex/hooks.json" 2>/dev/null \
+        || missing="$missing Codex-scope-hook"
+    if [ -n "$missing" ]; then
+        echo "⚠️  agent-maturity client integration incomplete; missing:$missing"
+        return 1
+    fi
+
+    echo "✅ agent-maturity installed for Claude Code, Codex, and OpenCode"
+    echo "ℹ️  Codex: open /hooks once and trust the new agent-maturity hooks"
 }
 
 # Enable Vanta AI Platform Claude Code plugin and sync its skills to Cursor.

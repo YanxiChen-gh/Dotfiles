@@ -84,7 +84,7 @@ export const DotfilesHarnessPlugin = async ({ directory }, options = {}) => {
         session_id: input.sessionID,
         cwd: directory,
         tool_input: {
-          command: stringArg(args, "command"),
+          command: stringArg(args, "command", "patchText", "patch"),
           file_path: stringArg(args, "filePath", "file_path", "path"),
           content: stringArg(args, "content"),
           new_string: stringArg(args, "newString", "new_string"),
