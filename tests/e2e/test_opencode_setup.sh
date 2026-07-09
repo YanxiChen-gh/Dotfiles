@@ -101,7 +101,7 @@ assert config["$schema"] == "https://opencode.ai/config.json"
 assert config["model"] == "openai/gpt-5.6-sol"
 assert "opencode-claude-auth@1.5.4" in config["plugin"]
 for model in config["provider"]["openai"]["models"].values():
-    assert "serviceTier" not in model["options"]
+    assert set(model) == {"variants"}
     assert model["variants"]["fast"] == {"serviceTier": "priority"}
 PY
 
@@ -127,6 +127,16 @@ cat >"$CLAUDE" <<'EOF'
       "type": "http",
       "url": "https://example.com/mcp",
       "headersHelper": "get-dynamic-headers"
+    }
+  }
+}
+EOF
+
+cat >"$MCP" <<'EOF'
+{
+  "mcp": {
+    "stale_server": {
+      "enabled": false
     }
   }
 }
@@ -171,6 +181,19 @@ assert servers["remote_server"] == {
     "timeout": 9000,
 }
 assert "unsupported_server" not in servers
+assert "stale_server" not in servers
+assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+PY
+
+python3 - "$MCP.pre-authoritative-sync" <<'PY'
+import json
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as file:
+    assert "stale_server" in json.load(file)["mcp"]
 assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
 PY
 
@@ -280,6 +303,18 @@ await assert.rejects(
   /Verify gate/,
 )
 JS
+
+printf '%s\n' '{"mcpServers": {}}' >"$CLAUDE"
+python3 "$ROOT/scripts/sync_opencode_mcp_from_claude.py" \
+	--claude-json "$CLAUDE" \
+	--opencode-mcp "$MCP" >/dev/null 2>&1
+python3 - "$MCP" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as file:
+    assert json.load(file) == {"mcp": {}}
+PY
 
 grep -q "OpenCode Global Instructions" "$CONFIG_DIR/AGENTS.md" || fail "generated rules are missing"
 
