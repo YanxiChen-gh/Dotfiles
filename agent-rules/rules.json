@@ -55,6 +55,17 @@
         }
       }
     },
+    "autonomy": {
+      "body": "autonomy.md",
+      "targets": {
+        "cursor": {
+          "file": "autonomy.mdc",
+          "scope": "both",
+          "description": "Defines when coding agents may inspect, edit, validate, commit, push, or expand scope.",
+          "alwaysApply": true
+        }
+      }
+    },
     "engineering-principles": {
       "body": "engineering-principles.md",
       "targets": {
@@ -118,19 +129,19 @@
   "codex": {
     "file": "codex/AGENTS.md",
     "title": "Codex Global Instructions",
-    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "engineering-principles", "scope-before-code", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences", "codex-skills"],
+    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "autonomy", "engineering-principles", "scope-before-code", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences", "codex-skills"],
     "footer": "@RTK.md"
   },
   "claude": {
     "file": "claude/CLAUDE.md",
     "title": "User-Level Claude Code Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "engineering-principles", "scope-before-code", "pr-authoring", "doc-and-planning", "git-and-generated-files", "verification-and-handoff", "pr-review-tone", "local-dev-environment", "mcp-preferences"],
+    "rules": ["dotfiles-repo", "writing-style", "autonomy", "engineering-principles", "scope-before-code", "pr-authoring", "doc-and-planning", "git-and-generated-files", "verification-and-handoff", "pr-review-tone", "local-dev-environment", "mcp-preferences"],
     "footer": "@RTK.md"
   },
   "opencode": {
     "file": "opencode/AGENTS.md",
     "title": "OpenCode Global Instructions",
-    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "engineering-principles", "scope-before-code", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences"],
+    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "autonomy", "engineering-principles", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences"],
     "footer": ""
   }
 }

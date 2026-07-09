@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Merge Claude Code user MCP servers into an OpenCode-local config overlay."""
+"""Sync Claude Code user MCP servers into an OpenCode-local config overlay."""
 
 import argparse
 import json
 import os
 import re
+import shutil
 import sys
 
 
@@ -121,6 +122,22 @@ def to_opencode_entry(config, environment):
     return entry
 
 
+def back_up_existing_overlay(opencode_path):
+    backup = f"{opencode_path}.pre-authoritative-sync"
+    try:
+        descriptor = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return
+
+    try:
+        with os.fdopen(descriptor, "wb") as target:
+            with open(opencode_path, "rb") as source:
+                shutil.copyfileobj(source, target)
+    except Exception:
+        os.unlink(backup)
+        raise
+
+
 def sync(claude_path, opencode_path):
     if os.path.isfile(opencode_path):
         try:
@@ -145,8 +162,8 @@ def sync(claude_path, opencode_path):
         )
         return 1
 
-    raw = claude.get("mcpServers")
-    if not isinstance(raw, dict) or not raw:
+    raw = claude.get("mcpServers", {})
+    if not isinstance(raw, dict):
         return 0
 
     converted = {}
@@ -163,15 +180,13 @@ def sync(claude_path, opencode_path):
             + ", ".join(skipped),
             file=sys.stderr,
         )
-    if not converted:
-        return 0
-
     os.makedirs(os.path.dirname(opencode_path) or ".", exist_ok=True)
-    data = {"mcp": {}}
+    data = {"mcp": converted}
+    existing = None
     if os.path.isfile(opencode_path) and os.path.getsize(opencode_path) > 0:
         try:
             with open(opencode_path, encoding="utf-8") as file:
-                data = json.load(file)
+                existing = json.load(file)
         except (OSError, json.JSONDecodeError) as error:
             print(
                 f"Claude -> OpenCode MCP sync: could not read {opencode_path}: {error}",
@@ -179,21 +194,16 @@ def sync(claude_path, opencode_path):
             )
             return 1
 
-    servers = data.setdefault("mcp", {})
-    changed = []
-    for name, config in converted.items():
-        if servers.get(name) != config:
-            servers[name] = config
-            changed.append(name)
-
-    if changed:
+    if existing != data:
+        if existing is not None:
+            back_up_existing_overlay(opencode_path)
         temporary = f"{opencode_path}.tmp"
         with open(temporary, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=2)
             file.write("\n")
         os.chmod(temporary, 0o600)
         os.replace(temporary, opencode_path)
-        print("OpenCode MCP: synced from Claude Code:", ", ".join(changed))
+        print(f"OpenCode MCP: synced from Claude Code ({len(converted)} servers)")
     else:
         count = len(converted)
         suffix = "s" if count != 1 else ""
