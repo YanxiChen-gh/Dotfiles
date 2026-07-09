@@ -1,3 +1,4 @@
+onboarding = false
 # herdr config - https://herdr.dev/docs/configuration/
 [keys]
 # Leader key; herdr's default is ctrl+b.
@@ -5,13 +6,13 @@ prefix = "ctrl+g"
 previous_tab = "prefix+left"
 next_tab = "prefix+right"
 
-# New agent tabs use a fresh treehouse worktree. Native new_tab (prefix+c)
-# still makes plain tabs.
+# Choose whether a new development tab uses a treehouse worktree, OpenCode,
+# and an nvim split. Native new_tab (prefix+c) still makes plain tabs.
 [[keys.command]]
 key = "prefix+a"
-type = "shell"
-description = "New agent tab (treehouse worktree: OpenCode)"
-command = "$HOME/dotfiles/herdr/new-agent-tab.sh"
+type = "pane"
+description = "Choose new development tab setup"
+command = "$HOME/dotfiles/herdr/new-agent-tab.sh --select"
 
 [[keys.command]]
 key = "prefix+shift+a"
