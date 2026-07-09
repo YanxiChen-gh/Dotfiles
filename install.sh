@@ -52,6 +52,8 @@ if [ "$OS" = "linux" ]; then
     install_from_apt "gh"
 fi
 install_python_if_missing
+install_node_if_missing
+install_typescript_language_service
 
 create_symlinks
 install_neovim

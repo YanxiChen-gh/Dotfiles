@@ -21,26 +21,35 @@ create_symlinks() {
     done
 }
 
-# Install the Neovim binary if missing. create_symlinks/setup_nvim_config only
-# link config - without this a fresh CDE has the config but no `nvim` to run it.
+# Install Neovim 0.11.3+ when missing or outdated. create_symlinks/setup_nvim_config
+# only link config - without this a fresh CDE has the config but no `nvim` to run it.
 # Uses the official static build (distro apt lags); Homebrew on macOS.
 install_neovim() {
-    if command -v nvim >/dev/null 2>&1; then
+    if command -v nvim >/dev/null 2>&1 && \
+       nvim --headless -u NONE -i NONE -c 'if !has("nvim-0.11.3") | cquit 1 | endif' -c 'qa!' >/dev/null 2>&1; then
         echo "✅ Neovim already installed ($(nvim --version | head -1))"
         return 0
     fi
 
+    if command -v nvim >/dev/null 2>&1; then
+        echo "Upgrading Neovim to 0.11.3+..."
+    fi
+
     if [ "$OS" = "macos" ]; then
         if command -v brew >/dev/null 2>&1; then
-            brew install neovim && echo "✅ Neovim installed" || echo "⚠️  Warning: brew install neovim failed"
+            if brew list neovim >/dev/null 2>&1; then
+                brew upgrade neovim && echo "✅ Neovim upgraded" || echo "⚠️  Warning: brew upgrade neovim failed"
+            else
+                brew install neovim && echo "✅ Neovim installed" || echo "⚠️  Warning: brew install neovim failed"
+            fi
         else
-            echo "⚠️  Neovim missing and Homebrew unavailable; install manually: brew install neovim"
+            echo "⚠️  Neovim 0.11.3+ missing and Homebrew unavailable; install manually: brew install neovim"
         fi
         return 0
     fi
 
     if [ "$OS" != "linux" ]; then
-        echo "⚠️  Neovim auto-install unsupported on OS '$OS'; install manually"
+        echo "⚠️  Neovim 0.11.3+ auto-install unsupported on OS '$OS'; install manually"
         return 0
     fi
 
@@ -61,10 +70,29 @@ install_neovim() {
     fi
 }
 
+install_typescript_language_service() {
+    typescript_version="6.0.3"
+    install_dir="$HOME/.local/share/typescript-language-service"
+    package_json="$install_dir/node_modules/typescript/package.json"
+    if [ -f "$package_json" ] && \
+       [ "$(node -p "require('$package_json').version" 2>/dev/null)" = "$typescript_version" ]; then
+        echo "✅ TypeScript language service already installed ($typescript_version)"
+        return 0
+    fi
+
+    echo "Installing TypeScript language service..."
+    if npm install --prefix "$install_dir" --no-save "typescript@$typescript_version"; then
+        echo "✅ TypeScript language service installed ($typescript_version)"
+    else
+        echo "⚠️  Warning: TypeScript language service installation failed"
+        return 1
+    fi
+}
+
 # Setup Neovim/Vim config.
 # .vimrc at the repo root is already linked to ~/.vimrc by create_symlinks. Neovim
 # reads ~/.config/nvim/init.vim instead, so link our init.vim (which sources ~/.vimrc)
-# there, and link coc-settings.json into both ~/.config/nvim (nvim) and ~/.vim (vim).
+# there, then link Neovim's native LSP config.
 setup_nvim_config() {
     script_dir=$(resolve_script_dir) || return 1
 
@@ -73,15 +101,17 @@ setup_nvim_config() {
 
     for pair in \
         "$script_dir/nvim/init.vim:$nvim_dir/init.vim" \
-        "$script_dir/nvim/coc-settings.json:$nvim_dir/coc-settings.json" \
-        "$script_dir/nvim/coc-settings.json:$HOME/.vim/coc-settings.json"; do
+        "$script_dir/nvim/lsp.lua:$nvim_dir/lsp.lua"; do
         src=${pair%%:*}
         dest=${pair#*:}
         [ -f "$src" ] || continue
         rm -f "$dest"
         ln -s "$src" "$dest"
     done
-    echo "✅ Linked Neovim/Vim config (init.vim, coc-settings.json)"
+    for obsolete_coc_config in "$nvim_dir/coc-settings.json" "$HOME/.vim/coc-settings.json"; do
+        [ -L "$obsolete_coc_config" ] && rm -f "$obsolete_coc_config"
+    done
+    echo "✅ Linked Neovim config (init.vim, lsp.lua)"
 }
 
 # Setup Claude Dev tasks configuration
@@ -210,4 +240,3 @@ EOF
         fi
     fi
 }
-

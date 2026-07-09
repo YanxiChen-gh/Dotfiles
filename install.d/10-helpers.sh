@@ -42,23 +42,37 @@ install_from_url() {
     fi
 }
 
-# Ensure Node.js and npm are available
-# Codespaces typically have node pre-installed; this is a fallback
+# Ensure Node.js 20+ and npm are available.
 install_node_if_missing() {
-    if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    node_major=0
+    if command -v node >/dev/null 2>&1; then
+        node_major=$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)
+    fi
+    if command -v npm >/dev/null 2>&1 && [ "$node_major" -ge 20 ]; then
         echo "✅ Node.js $(node --version) and npm $(npm --version) already installed"
         return 0
     fi
 
-    echo "Installing Node.js via NodeSource..."
-    if curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && \
-       sudo apt-get install -y nodejs; then
-        echo "✅ Node.js installed: $(node --version), npm $(npm --version)"
+    if [ "$OS" = "macos" ] && command -v brew >/dev/null 2>&1; then
+        echo "Installing Node.js via Homebrew..."
+        brew install node
+    elif [ "$OS" = "linux" ]; then
+        echo "Installing Node.js via NodeSource..."
+        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && \
+            sudo apt-get install -y nodejs
     else
-        echo "⚠️  Warning: Node.js installation failed"
-        echo "   Try manually: https://nodejs.org/en/download"
+        echo "⚠️  Node.js 20+ is required; install it from https://nodejs.org/en/download"
+    fi
+
+    node_major=0
+    if command -v node >/dev/null 2>&1; then
+        node_major=$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)
+    fi
+    if ! command -v npm >/dev/null 2>&1 || [ "$node_major" -lt 20 ]; then
+        echo "⚠️  Warning: Node.js 20+ installation failed"
         return 1
     fi
+    echo "✅ Node.js installed: $(node --version), npm $(npm --version)"
 }
 
 install_python_if_missing() {

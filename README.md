@@ -12,7 +12,11 @@ In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells def
 
 ## Editor (Vim / Neovim)
 
-`.vimrc` at the repo root is symlinked to `~/.vimrc` by `create_symlinks` (vim-plug bootstraps plugins on first launch). Neovim reads `~/.config/nvim/init.vim` rather than `~/.vimrc`, so `setup_nvim_config` links `nvim/init.vim` (which sources `~/.vimrc`) there, and links `nvim/coc-settings.json` into both `~/.config/nvim/` and `~/.vim/` for `coc.nvim`. Edit the single `~/.vimrc` and both editors stay in sync.
+`.vimrc` at the repo root is symlinked to `~/.vimrc` by `create_symlinks` (vim-plug installs any missing plugins on startup). Neovim reads `~/.config/nvim/init.vim` rather than `~/.vimrc`, so `setup_nvim_config` links `nvim/init.vim` (which sources `~/.vimrc`) and `nvim/lsp.lua` there. Neovim uses its native LSP client with project-local TypeScript 7 `tsgo` when available and Mason's `typescript-language-server` with a pinned TypeScript 6 language-service fallback otherwise. Mason also installs and configures Bash and Go language servers; Java and OCaml servers are included when Java 21+ and opam are available.
+
+For TypeScript navigation in Neovim, `gd` prefers the source implementation, `gD` requests the protocol definition, `Ctrl-w ]` opens a definition in a split, `gy` opens the type definition, `gi` opens implementations, `gr` lists references, and `K` shows documentation. Use `Ctrl-o` and `Ctrl-i` to move backward and forward through the jump list. Run `:checkhealth vim.lsp` when a server does not attach.
+
+Run `:Mason` to inspect managed language servers. In that window, `U` updates every installed tool; `:MasonUpdate` refreshes the package registry. Use `:checkhealth mason` for installation problems and `:checkhealth vim.lsp` for server attachment or root-detection problems.
 
 If you already keep a hand-managed `~/.config/nvim/init.vim`, note that `install.sh` replaces it with this symlink (same declarative-clobber behavior as the other dotfile links).
 

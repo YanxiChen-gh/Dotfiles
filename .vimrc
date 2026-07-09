@@ -7,7 +7,6 @@ endif
 if empty(glob('~/.vim/autoload/plug.vim'))
    silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
             \ https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-   autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
 endif
 
 " vim-plug begin
@@ -109,7 +108,11 @@ Plug 'szw/vim-maximizer'
 " Plug 'SeraphRoy/gutentags_plus.vim'
 " Plug 'fatih/vim-go', { 'do': ':GoUpdateBinaries' }
 " Plug 'Valloric/YouCompleteMe', {'do': './install.py'}
-Plug 'neoclide/coc.nvim', {'branch': 'release'}
+if has('nvim')
+  Plug 'neovim/nvim-lspconfig'
+  Plug 'mason-org/mason.nvim'
+  Plug 'mason-org/mason-lspconfig.nvim'
+endif
 Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}  " We recommend updating the parsers on update
 
 " Plug 'neovim/nvim-lspconfig'
@@ -140,6 +143,9 @@ Plug 'mhinz/vim-signify'
 " Always load the vim-devicons as the very last one.
 Plug 'ryanoasis/vim-devicons'
 call plug#end()
+if !empty(filter(values(g:plugs), '!isdirectory(v:val.dir)'))
+  autocmd VimEnter * PlugInstall --sync | source $MYVIMRC
+endif
 " " To ignore plugin indent changes, instead use:
 " "filetype plugin on
 " "
@@ -571,15 +577,13 @@ let g:lightline = {
          \ 'colorscheme': 'one',
      \ 'active': {
          \   'left': [ [ 'mode', 'paste' ],
-         \             [ 'cocstatus', 'readonly', 'filename', 'modified' ] ]
+         \             [ 'readonly', 'filename', 'modified' ] ]
          \ },
          \ 'component_function': {
-         \   'cocstatus': 'coc#status',
          \   'filetype': 'DeviconsFiletype',
          \   'fileformat': 'DeviconsFileformat',
          \ },
      \ }
-
 " youcompleteme settings
 let g:ycm_complete_in_comments=1
 let g:enable_numbers = 0
@@ -787,6 +791,15 @@ let g:pymode_lint = 0
 let g:pymode_lint_on_write = 0
 let g:pymode_indent = 0
 
+set nobackup
+set nowritebackup
+set shortmess+=c
+if has("patch-8.1.1564")
+  set signcolumn=number
+else
+  set signcolumn=yes
+endif
+
 " vim-fzf
 " --column: Show column number
 " --line-number: Show line number
@@ -798,78 +811,6 @@ let g:pymode_indent = 0
 " --glob: Additional conditions for search (in this case ignore everything in the .git/ folder)
 " --color: Search color options
 " command! -bang -nargs=* Find call fzf#vim#grep('rg --column --line-number --no-heading --ignore-case --no-ignore --hidden --follow --glob "!.git/*" --color "always" '.shellescape(<q-args>).'| tr -d "\017"', 1, <bang>0)
-
-" vim-LanguageClient
-let g:LanguageClient_serverCommands = {
-         \ 'go': ['go-langserver'],
-         \ }
-
-" nnoremap <silent> K :call LanguageClient#textDocument_hover()<CR>
-" nnoremap <silent> gd :call LanguageClient#textDocument_definition()<CR>
-
-" coc-nvim
-" Some servers have issues with backup files, see #649.
-set nobackup
-set nowritebackup
-" Don't pass messages to |ins-completion-menu|.
-set shortmess+=c
-" Always show the signcolumn, otherwise it would shift the text each time
-" diagnostics appear/become resolved.
-if has("patch-8.1.1564")
-  " Recently vim can merge signcolumn and number column into one
-  set signcolumn=number
-else
-  set signcolumn=yes
-endif
-" disable coc in git commits
-autocmd BufRead,BufNewFile COMMIT_EDITMSG let b:coc_enabled=0
-" inoremap <silent><expr> <CR> coc#pum#visible() ? coc#pum#confirm() : "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
-" inoremap <expr> <cr> coc#pum#visible() ? coc#pum#confirm() : "\<CR>"
-inoremap <silent><expr> <cr> coc#pum#visible() && coc#pum#info()['index'] != -1 ? coc#pum#confirm() : "\<C-g>u\<CR>"
-" inoremap <silent><expr> <cr> coc#pum#visible() ? coc#_select_confirm() : "\<C-g>u\<CR>"
-
-inoremap <silent><expr> <C-x><C-z> coc#pum#visible() ? coc#pum#stop() : "\<C-x>\<C-z>"
-" remap for complete to use tab and <cr>
-inoremap <silent><expr> <TAB>
-    \ coc#pum#visible() ? coc#pum#next(1):
-    \ <SID>check_back_space() ? "\<Tab>" :
-    \ coc#refresh()
-inoremap <expr><S-TAB> coc#pum#visible() ? coc#pum#prev(1) : "\<C-h>"
-inoremap <silent><expr> <C-j> coc#pum#visible() ? coc#pum#next(1) : "\<C-j>"
-inoremap <silent><expr> <C-k> coc#pum#visible() ? coc#pum#prev(1) : "\<C-k>"
-inoremap <silent><expr> <c-space> coc#refresh()
-function! s:check_back_space() abort
-  let col = col('.') - 1
-  return !col || getline('.')[col - 1]  =~# '\s'
-endfunction
-
-nmap <silent> gd <Plug>(coc-definition)
-nmap <silent> <C-w>] :sp<CR><Plug>(coc-definition)
-nmap <silent> gy <Plug>(coc-type-definition)
-nmap <silent> gi <Plug>(coc-implementation)
-nmap <silent> gr <Plug>(coc-references)
-nmap <leader>rn <Plug>(coc-rename)
-nmap <leader>ca <Plug>(coc-codeaction)
-let g:coc_auto_copen = 0
-nnoremap <silent> K :call <SID>show_documentation()<CR>
-nmap <silent> [v <Plug>(coc-diagnostic-prev)
-nmap <silent> ]v <Plug>(coc-diagnostic-next)
-nmap <silent> [c <Plug>(coc-diagnostic-prev-error)
-nmap <silent> ]c <Plug>(coc-diagnostic-next-error)
-set statusline^=%{coc#status()}%{get(b:,'coc_current_function','')}
-" autocmd BufWritePre *.go :call CocActionAsync('runCommand', 'editor.action.organizeImport')
-" Highlight the symbol and its references when holding the cursor.
-autocmd CursorHold * silent call CocActionAsync('highlight')
-
-function! s:show_documentation()
-  if (index(['vim','help'], &filetype) >= 0)
-    execute 'h '.expand('<cword>')
-  elseif (coc#rpc#ready())
-    call CocActionAsync('doHover')
-  else
-    execute '!' . &keywordprg . " " . expand('<cword>')
-  endif
-endfunction
 
 " markdown-preview-nvim
 " let vim_markdown_preview_github=1
