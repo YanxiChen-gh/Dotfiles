@@ -21,7 +21,7 @@ src_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
 workspace="${HERDR_ACTIVE_WORKSPACE_ID:-}"
 
 # Left pane = coding agent, right pane = editor; change these two lines to taste.
-agent_cmd="opencode"
+agent_cmd="opencode --auto"
 editor_cmd="nvim"
 with_worktree=true
 with_agent=true
