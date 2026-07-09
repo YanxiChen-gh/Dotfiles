@@ -6,11 +6,12 @@ TMP="${TMPDIR:-/tmp}/dotfiles-e2e-agent-maturity-$$"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 HOME="$TMP/home"
+XDG_CONFIG_HOME="$HOME/.config"
 FAKE_BOOT="$TMP/bootstrap.sh"
 AGENT_MATURITY_BOOTSTRAP_URL="https://example.invalid/bootstrap.sh"
 AGENT_MATURITY_DATA_REPO="example/agent-maturity-data"
 WORK_MACHINE=1
-export HOME FAKE_BOOT AGENT_MATURITY_BOOTSTRAP_URL AGENT_MATURITY_DATA_REPO WORK_MACHINE
+export HOME XDG_CONFIG_HOME FAKE_BOOT AGENT_MATURITY_BOOTSTRAP_URL AGENT_MATURITY_DATA_REPO WORK_MACHINE
 mkdir -p "$HOME/.config/opencode/plugins" "$HOME/.codex"
 
 cat >"$FAKE_BOOT" <<'EOF'
