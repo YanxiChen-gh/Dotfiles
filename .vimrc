@@ -49,12 +49,7 @@ Plug 'mbbill/undotree'
 " Plug 'puremourning/vimspector'
 " Plug 'bling/vim-airline'
 Plug 'itchyny/lightline.vim'
-" Plug 'flazz/vim-colorschemes'
-" Plug 'gruvbox-community/gruvbox'
-" Plug 'rktjmp/lush.nvim'
-" Plug 'npxbr/gruvbox.nvim'
-Plug 'sainnhe/gruvbox-material'
-Plug 'rakr/vim-one'
+Plug 'tomasiser/vim-code-dark'
 " Plug 'neovim/nvim-lspconfig'
 " Plug 'glepnir/lspsaga.nvim'
 " Plug 'michaelb/sniprun', {'do': 'bash install.sh'}
@@ -171,26 +166,33 @@ let mapleader=" "
 " Syntax Highlight
 syntax on
 
-" 256 color
+" true color
 set termguicolors
-let $NVIM_TUI_ENABLE_TRUE_COLOR=1
-" let &t_Co=256
 
 " color scheme/theme
 syntax enable
 set background=dark
-let g:gruvbox_contrast_dark = 'soft'
-let g:gruvbox_material_diagnostic_line_highlight = 1
-let g:gruvbox_material_transparent_background = 0
-let g:gruvbox_material_menu_selection_background = 'grey'
-let g:gruvbox_material_visual = 'reverse'
-let g:gruvbox_material_diagnostic_line_highlight = 0
-let g:gruvbox_material_diagnostic_virtual_text = 'colored'
-let g:gruvbox_material_better_performance = 1
-let g:gruvbox_material_enable_italic = 1
-let g:gruvbox_material_current_word = 'bold'
-hi Search cterm=NONE ctermfg=grey ctermbg=blue
-colorscheme one
+let g:codedark_modern = 1
+colorscheme codedark
+
+highlight! link CurSearch IncSearch
+highlight! link WinSeparator VertSplit
+highlight NormalFloat guifg=#d4d4d4 guibg=#252526 ctermfg=188 ctermbg=235
+highlight FloatBorder guifg=#6b6b6b guibg=#252526 ctermfg=242 ctermbg=235
+highlight PmenuMatch guifg=#ffffff guibg=#2d2d30 gui=bold ctermfg=231 ctermbg=236 cterm=bold
+highlight PmenuMatchSel guifg=#ffffff guibg=#073655 gui=bold ctermfg=231 ctermbg=24 cterm=bold
+highlight DiagnosticVirtualTextError guifg=#f85149 guibg=#2b1d1d ctermfg=203 ctermbg=52
+highlight DiagnosticVirtualTextWarn guifg=#d7ba7d guibg=#2a2618 ctermfg=179 ctermbg=58
+highlight DiagnosticVirtualTextInfo guifg=#75beff guibg=#182638 ctermfg=117 ctermbg=24
+highlight DiagnosticVirtualTextHint guifg=#4ec9b0 guibg=#17332f ctermfg=43 ctermbg=23
+highlight DiagnosticUnderlineError gui=undercurl guisp=#f85149 cterm=underline
+highlight DiagnosticUnderlineWarn gui=undercurl guisp=#d7ba7d cterm=underline
+highlight DiagnosticUnderlineInfo gui=undercurl guisp=#75beff cterm=underline
+highlight DiagnosticUnderlineHint gui=undercurl guisp=#4ec9b0 cterm=underline
+highlight LspReferenceText guibg=#343b43 ctermbg=237
+highlight LspReferenceRead guibg=#343b43 ctermbg=237
+highlight LspReferenceWrite guibg=#264f78 ctermbg=24
+highlight LspSignatureActiveParameter guifg=#ffffff guibg=#264f78 gui=bold ctermfg=231 ctermbg=24 cterm=bold
 
 " disable the “Press ENTER or type command to continue” prompt in Vim
 " https://stackoverflow.com/questions/890802/how-do-i-disable-the-press-enter-or-type-command-to-continue-prompt-in-vim
@@ -501,11 +503,12 @@ let g:better_escape_interval = 300
 " treesitter settings
 
 " telescope.nvim settings
-nnoremap <C-p> <cmd>lua require('telescope.builtin').find_files()<cr>
-nnoremap <Leader>p <cmd>lua require('telescope.builtin').live_grep()<cr>
-nnoremap <Leader>fd <cmd>lua require('telescope.builtin').grep_string()<cr>
-highlight default link TelescopePreviewLine Search
-lua << EOF
+if has('nvim')
+  nnoremap <C-p> <cmd>lua require('telescope.builtin').find_files()<cr>
+  nnoremap <Leader>p <cmd>lua require('telescope.builtin').live_grep()<cr>
+  nnoremap <Leader>fd <cmd>lua require('telescope.builtin').grep_string()<cr>
+  highlight default link TelescopePreviewLine Search
+  lua << EOF
 local actions = require('telescope.actions')
 require('telescope').setup{
     extensions = {
@@ -528,6 +531,7 @@ require('telescope').setup{
 }
 require('telescope').load_extension('fzy_native')
 EOF
+endif
 
 " LeaderF settings
 " let g:Lf_ShortcutF = '<C-P>'
@@ -574,7 +578,7 @@ endfunction
 
 " lightline.vim
 let g:lightline = {
-         \ 'colorscheme': 'one',
+         \ 'colorscheme': 'codedark',
      \ 'active': {
          \   'left': [ [ 'mode', 'paste' ],
          \             [ 'readonly', 'filename', 'modified' ] ]
