@@ -28,14 +28,14 @@ If it isn't cloned, stop and tell me - there's nowhere to write.
    This prints cleanup-commit candidates and PRs with multiple body revisions. It does NOT write
    anything.
 
-   Preserve every recoverable PR revision chain before curating it:
+   Merge every recoverable complete PR revision chain into the discovery cache before curating it:
 
        ~/dotfiles/claude/pr-style/eval/harvest.sh sync-descriptions 500
 
-   This writes structured evidence under
-   `$STYLE_HARNESS_DATA/pr-style/corpus/authoring/revisions/`. It records the earliest and last
-   author revisions separately from the current body because bots can edit the body after the
-   author's final revision. Agent authorship remains `unverified` unless another source proves it.
+   This refreshes `$STYLE_HARNESS_DATA/pr-style/corpus/authoring/revisions/`. The cache is additive:
+   records absent from a later bounded query remain, while returned records are refreshed. The query
+   is not treated as a complete inventory. Each written history is complete, or the fetch fails
+   before the atomic swap. Agent authorship remains `unverified` unless another source proves it.
 
 2. For each promising **cleanup commit**, pull the diff and judge it against `../../pr-authoring.md`:
 
@@ -49,16 +49,40 @@ If it isn't cloned, stop and tell me - there's nowhere to write.
 
        ~/dotfiles/claude/pr-style/eval/extract-pr-description-history.sh <pr>
 
-4. Write each new example into the corpus, matching the existing format:
+4. Discovery and freezing are separate. For exploratory calibration, write each new example into
+   the mutable corpus, matching the existing format:
    - comments/tests -> append to `$STYLE_HARNESS_DATA/pr-style/corpus/simplify/human/cleanup-examples.md`
      (BEFORE / AFTER / rule + commit, exactly like the entries there).
    - descriptions -> append to `.../simplify/human/description-pairs.md` as numbered `BEFORE` /
      `AFTER` examples plus the tell fixed. Use consecutive author revisions where the style tell
-     flips; raw first/final evidence remains in `authoring/revisions/`.
+      flips; the complete raw chain remains in the discovery cache.
    - Dedupe against what's already there (check the commit SHA / PR number).
 
 5. Update `$STYLE_HARNESS_DATA/pr-style/corpus/SOURCES.md` with the new PR numbers / SHAs so the
    corpus stays auditable.
+
+   For a held-out evaluation, do not point a manifest at the refreshable discovery cache. Review the
+   complete history, then explicitly copy each selected raw record into the new append-only version:
+
+       $STYLE_HARNESS_DATA/pr-style/corpus/evidence/pr-description-revisions/<version>/<pr>.json
+
+   `sync-descriptions` must never target that directory. Create a new manifest version whose
+   `evidence_path` values name those frozen copies, with exact evidence/body hashes and scoring
+   fields. Do not modify an existing frozen manifest or evidence version. Then validate and run it
+   offline:
+
+       ~/dotfiles/claude/pr-style/eval/pr-description-benchmark.sh validate <manifest.json>
+       ~/dotfiles/claude/pr-style/eval/run-eval.sh description-heldout <manifest.json> --flow simplify
+       ~/dotfiles/claude/pr-style/eval/run-eval.sh description-heldout <manifest.json> --flow authoring
+
+   Harvesting discovers source histories. Explicit versioned copies and a manifest freeze the
+   selected case set. Materialized output and judgments are evaluation artifacts, not corpus inputs.
+   Simplify uses `AGENT_ENGINE` / `AGENT_MODEL` for the candidate and `JUDGE_ENGINE` /
+   `JUDGE_MODEL` for Mode C scoring. Authoring is different: the configured agent is the model under
+   test and makes each deterministic blind A/B choice with tools disabled. Its prompt and no-tools
+   trace are saved per case. Sorted case IDs alternate the preferred revision between A and B so the
+   assignment is balanced. Judge settings remain in common metadata for reproducibility but do not
+   participate in authoring decisions.
 
 6. If asked to commit, inspect status and diff, then stage only the intended corpus and result paths.
    Do not use `git add -A` in this intentionally dirty data workspace. Only push if I ask.

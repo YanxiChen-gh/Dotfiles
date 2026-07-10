@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Surface fresh calibration material from my recent PRs, for MANUAL curation into the corpus.
-# This does NOT write the corpus - it prints candidates; the harvest-style-corpus skill (or you)
-# curate the good ones into $STYLE_HARNESS_DATA/pr-style/corpus/simplify/human/ and update SOURCES.
+# Discover fresh calibration material from recent PRs for manual curation. sync-descriptions
+# refreshes an additive discovery cache: it retains histories outside the latest bounded query and
+# refreshes those returned by GitHub. It never writes versioned frozen benchmark evidence.
 #
 #   ./harvest.sh                 # both, last 20 merged PRs
 #   ./harvest.sh commits [N]     # cleanup commits (comment/test before->after) in last N PRs
 #   ./harvest.sh descriptions [N]# PR-body edit histories with >1 author revision (description pairs)
-#   ./harvest.sh sync-descriptions [N] # persist complete revision evidence in the private data repo
+#   ./harvest.sh sync-descriptions [N] # merge complete histories into the discovery cache
 set -euo pipefail
 OWNER=VantaInc REPO=obsidian
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,6 +41,7 @@ descriptions() {
   done
   echo ""
   echo "# Dump one PR's body history:  $HERE/extract-pr-description-history.sh <pr>"
+  echo "# To freeze: copy selected histories into a versioned evidence directory, then create a manifest."
 }
 
 case "${1:-both}" in

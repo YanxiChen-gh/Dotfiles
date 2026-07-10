@@ -1,7 +1,20 @@
 #!/usr/bin/env bash
 
 style_eval_engine() {
-  local role="$1" prompt="$2" trace_file="${3:-}"
+  style_eval_engine_run "$1" "$2" "" "${3:-}"
+}
+
+style_eval_engine_file() {
+  local role="$1" prompt_file="$2" trace_file="${3:-}"
+  [ -f "$prompt_file" ] || {
+    echo "eval prompt file not found: $prompt_file" >&2
+    return 1
+  }
+  style_eval_engine_run "$role" "" "$prompt_file" "$trace_file"
+}
+
+style_eval_engine_run() {
+  local role="$1" prompt="$2" prompt_file="$3" trace_file="$4"
   local engine model profile variant
 
   if [ "$role" = "agent" ]; then
@@ -18,9 +31,23 @@ style_eval_engine() {
 
   case "$engine" in
     claude)
-      local claude_args=(-p --output-format text --no-session-persistence --tools "")
+      local claude_args=(-p --no-session-persistence --tools "")
       [ -n "$model" ] && claude_args+=(--model "$model")
-      claude "${claude_args[@]}" -- "$prompt"
+      if [ -n "$trace_file" ]; then
+        if [ -n "$prompt_file" ]; then
+          claude "${claude_args[@]}" --output-format json <"$prompt_file" |
+            tee "$trace_file" |
+            jq -r '.result'
+        else
+          claude "${claude_args[@]}" --output-format json -- "$prompt" |
+            tee "$trace_file" |
+            jq -r '.result'
+        fi
+      elif [ -n "$prompt_file" ]; then
+        claude "${claude_args[@]}" --output-format text <"$prompt_file"
+      else
+        claude "${claude_args[@]}" --output-format text -- "$prompt"
+      fi
       ;;
     opencode)
       local opencode_args=(run --agent "$profile")
@@ -28,7 +55,11 @@ style_eval_engine() {
       [ -n "$variant" ] && opencode_args+=(--variant "$variant")
 
       if [ -z "$trace_file" ]; then
-        opencode "${opencode_args[@]}" -- "$prompt"
+        if [ -n "$prompt_file" ]; then
+          opencode "${opencode_args[@]}" <"$prompt_file"
+        else
+          opencode "${opencode_args[@]}" -- "$prompt"
+        fi
         return
       fi
 
@@ -36,9 +67,15 @@ style_eval_engine() {
         echo "jq is required to capture a blind OpenCode eval trace" >&2
         return 1
       }
-      opencode "${opencode_args[@]}" --format json -- "$prompt" |
-        tee "$trace_file" |
-        jq -r 'select(.type == "text") | .part.text'
+      if [ -n "$prompt_file" ]; then
+        opencode "${opencode_args[@]}" --format json <"$prompt_file" |
+          tee "$trace_file" |
+          jq -r 'select(.type == "text") | .part.text'
+      else
+        opencode "${opencode_args[@]}" --format json -- "$prompt" |
+          tee "$trace_file" |
+          jq -r 'select(.type == "text") | .part.text'
+      fi
       if jq -e 'select(.type == "tool_use" or .type == "tool" or .part.type == "tool")' "$trace_file" >/dev/null; then
         echo "agent used a tool during a blind eval; rejecting the candidate" >&2
         return 1
@@ -144,10 +181,13 @@ style_eval_harness_state_sha256() {
 
 style_eval_validate_pairwise_json() {
   jq -e '
+    def nonempty_strings:
+      type == "array" and length > 0 and
+      all(.[]; type == "string" and length > 0);
     (.winner == "A" or .winner == "B") and
     (.confidence | type == "number" and . >= 0 and . <= 1) and
-    (.reasons | type == "array") and
-    (.anti_tells_in_loser | type == "array")
+    (.reasons | nonempty_strings) and
+    (.anti_tells_in_loser | nonempty_strings)
   ' "$1" >/dev/null
 }
 
@@ -178,6 +218,81 @@ style_eval_validate_simplify_json() {
   ' "$1" >/dev/null
 }
 
+style_eval_validate_manifest_simplify_json() {
+  local judgment="$1" manifest="$2"
+  jq -e --slurpfile manifest "$manifest" '
+    def same_strings($left; $right):
+      ($left | length) == ($left | unique | length) and
+      ($right | length) == ($right | unique | length) and
+      ($left | sort) == ($right | sort);
+    def strings: type == "array" and all(.[]; type == "string");
+    ($manifest[0].cases | map(select(.flow == "simplify"))) as $cases |
+    ($cases | map({key: .id, value: .}) | from_entries) as $case_by_id |
+    ($cases | map(.id)) as $expected_ids |
+    (.examples | type == "array" and length > 0) and
+    ([.examples[].case_id] | same_strings(.; $expected_ids)) and
+    all(.examples[];
+      . as $example |
+      ($case_by_id[$example.case_id]) as $case |
+      ($case != null) and
+      ($example.caught | strings) and
+      ($example.missed | strings) and
+      ($example.overreach | strings) and
+      ($example.load_bearing_overreach | strings) and
+      ($example.unscored | strings) and
+      ([($example.caught + $example.missed)[]] | same_strings(.; $case.scoring.expected_edits)) and
+      ($example.overreach | length == ($example.overreach | unique | length)) and
+      ($example.load_bearing_overreach | length == ($example.load_bearing_overreach | unique | length)) and
+      all($example.load_bearing_overreach[]; . as $item |
+        ($example.overreach | index($item)) != null and
+        ($case.scoring.must_preserve | index($item)) != null) and
+      (($example.caught | length) + ($example.missed | length)) as $denominator |
+      ($denominator > 0) and
+      ($example.recall | type == "number" and . >= 0 and . <= 1) and
+      (($example.recall - (($example.caught | length) / $denominator)) | fabs < 0.000001) and
+      ($example.cited_right_rule | type == "boolean")
+    ) and
+    ([.examples[].recall] | add / length) as $mean |
+    (.mean_recall | type == "number") and
+    ((.mean_recall - $mean) | fabs < 0.000001) and
+    ([.examples[].load_bearing_overreach[]] | length) as $load_bearing_count |
+    (.load_bearing_overreach_count | type == "number" and . == floor) and
+    (.load_bearing_overreach_count == $load_bearing_count)
+  ' "$judgment" >/dev/null
+}
+
+style_eval_validate_manifest_authoring_summary() {
+  local summary="$1" manifest="$2"
+  jq -e --slurpfile manifest "$manifest" '
+    def same_strings($left; $right):
+      ($left | length) == ($left | unique | length) and
+      ($right | length) == ($right | unique | length) and
+      ($left | sort) == ($right | sort);
+    def nonempty_strings:
+      type == "array" and length > 0 and
+      all(.[]; type == "string" and length > 0);
+    ($manifest[0].cases | map(select(.flow == "authoring"))) as $manifest_cases |
+    ($manifest_cases | map(.id)) as $expected_ids |
+    ($manifest_cases | map({key: .id, value: .}) | from_entries) as $case_by_id |
+    (.flow == "authoring") and
+    (.cases | type == "array") and
+    ([.cases[].case_id] | same_strings(.; $expected_ids)) and
+    all(.cases[];
+      (.case_id | type == "string") and
+      (.winner == "A" or .winner == "B") and
+      (.reference_slot == "A" or .reference_slot == "B") and
+      (.reference_won | type == "boolean") and
+      (.reference_won == (.winner == .reference_slot)) and
+      (.expected_reasons | nonempty_strings) and
+      (.expected_reasons == $case_by_id[.case_id].scoring.reasons)
+    ) and
+    (.total | type == "number" and . == floor and . == ($expected_ids | length)) and
+    (.total == (.cases | length)) and
+    (.reference_wins | type == "number" and . == floor and . >= 0) and
+    (.reference_wins == ([.cases[] | select(.reference_won)] | length))
+  ' "$summary" >/dev/null
+}
+
 style_eval_normalize_json() {
   awk '
     NR == 1 && /^```(json)?$/ { fenced = 1; next }
@@ -187,7 +302,7 @@ style_eval_normalize_json() {
 }
 
 style_eval_run_dir() {
-  local results="$1" benchmark="$2"
+  local results="$1" benchmark="$2" decision_mode="${3:-judged}"
   local run_id benchmark_slug agent_engine agent_model judge_engine judge_model dir
   run_id="$(style_eval_slug "${RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}")"
   benchmark_slug="$(style_eval_slug "$benchmark")"
@@ -195,9 +310,13 @@ style_eval_run_dir() {
   agent_engine="$(style_eval_slug "$agent_engine")"
   agent_model="$(style_eval_agent_metadata agent_model "${AGENT_MODEL:-configured-default}")" || return 1
   agent_model="$(style_eval_slug "$agent_model")"
-  judge_engine="$(style_eval_slug "${JUDGE_ENGINE:-claude}")"
-  judge_model="$(style_eval_slug "${JUDGE_MODEL:-opus}")"
-  dir="$results/runs/$run_id-$benchmark_slug-$agent_engine-$agent_model-judged-by-$judge_engine-$judge_model"
+  if [ "$decision_mode" = agent ]; then
+    dir="$results/runs/$run_id-$benchmark_slug-agent-decision-$agent_engine-$agent_model"
+  else
+    judge_engine="$(style_eval_slug "${JUDGE_ENGINE:-claude}")"
+    judge_model="$(style_eval_slug "${JUDGE_MODEL:-opus}")"
+    dir="$results/runs/$run_id-$benchmark_slug-$agent_engine-$agent_model-judged-by-$judge_engine-$judge_model"
+  fi
   if [ -e "$dir" ]; then
     echo "result directory already exists: $dir (set a different RUN_ID)" >&2
     return 1
