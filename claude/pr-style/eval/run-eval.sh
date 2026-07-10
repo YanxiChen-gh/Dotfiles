@@ -38,6 +38,7 @@ source "$ENGINE"
 agent() { style_eval_engine agent "$1" "${2:-}"; }
 agent_file() { style_eval_engine_file agent "$1" "${2:-}"; }
 judge() { style_eval_engine judge "$1"; }
+judge_file() { style_eval_engine_file judge "$1" "${2:-}"; }
 
 capture_description_manifest_provenance() {
   local manifest="$1" flow="$2"
@@ -209,6 +210,7 @@ Run Mode A. Output ONLY the JSON."
 
 description_heldout_simplify() {
   local manifest="$1" benchmark_id benchmark_version run_dir materialized candidate_file judgment_file
+  local agent_prompt_file judge_prompt_file
   benchmark_id="$(jq -er '.benchmark.id' "$manifest")"
   benchmark_version="$(jq -er '.benchmark.version' "$manifest")"
   capture_description_manifest_provenance "$manifest" simplify
@@ -216,29 +218,21 @@ description_heldout_simplify() {
   materialized="$run_dir/materialized"
   candidate_file="$run_dir/candidate.md"
   judgment_file="$run_dir/judgment.json"
+  agent_prompt_file="$run_dir/agent-prompt.md"
+  judge_prompt_file="$run_dir/judge-prompt.md"
   "$BENCHMARK" materialize "$manifest" "$materialized" simplify
   [ -f "$materialized/simplify/blind-input.md" ] || {
     echo "manifest has no simplify cases" >&2
     return 1
   }
-  style_eval_write_metadata "$run_dir" "description-heldout-$benchmark_id-v$benchmark_version-simplify" \
-    "$materialized/manifest.json" "$materialized/simplify/blind-input.md" \
-    "$materialized/simplify/answer-key.md" "$CLEANER" "$AUTHOR_GUIDE" "$AUTHOR_EXAMPLES" "$RUBRIC" "$JUDGE"
-  append_description_manifest_metadata "$run_dir/metadata.txt"
+  {
+    cat "$CLEANER"
+    printf '\n\npr-authoring guide:\n'
+    cat "$AUTHOR_GUIDE"
+    printf '\n\nworked examples:\n'
+    cat "$AUTHOR_EXAMPLES"
+    cat <<'EOF'
 
-  if [ -n "${EVAL_CANDIDATE:-}" ]; then
-    [ -f "$EVAL_CANDIDATE" ] || { echo "candidate not found: $EVAL_CANDIDATE" >&2; return 1; }
-    cp "$EVAL_CANDIDATE" "$candidate_file"
-    printf 'candidate_source=%s\n' "$EVAL_CANDIDATE" >>"$run_dir/metadata.txt"
-    printf 'candidate_source_sha256=%s\n' "$(sha256sum "$EVAL_CANDIDATE" | cut -d' ' -f1)" >>"$run_dir/metadata.txt"
-  else
-    agent "$(cat "$CLEANER")
-
-pr-authoring guide:
-$(cat "$AUTHOR_GUIDE")
-
-worked examples:
-$(cat "$AUTHOR_EXAMPLES")
 
 You are the cleaner under evaluation. Inspect only the complete BEFORE bodies below. For every
 case ID, propose the exact cuts or tightening you would make. Do not use tools or read files; this
@@ -246,10 +240,21 @@ prompt is the complete allowed input. Return a concrete edit report keyed by cas
 yourself and do not speculate about the withheld answer key.
 
 === BLIND INPUT ===
-$(cat "$materialized/simplify/blind-input.md")" "$run_dir/agent-trace.jsonl" >"$candidate_file"
+EOF
+    cat "$materialized/simplify/blind-input.md"
+  } >"$agent_prompt_file"
+
+  if [ -n "${EVAL_CANDIDATE:-}" ]; then
+    [ -f "$EVAL_CANDIDATE" ] || { echo "candidate not found: $EVAL_CANDIDATE" >&2; return 1; }
+    cp "$EVAL_CANDIDATE" "$candidate_file"
+  else
+    agent_file "$agent_prompt_file" "$run_dir/agent-trace.jsonl" >"$candidate_file"
   fi
 
-  judge "$(cat "$JUDGE")
+  {
+    cat "$JUDGE"
+    cat <<'EOF'
+
 
 You are the evaluator, not the cleaner. The candidate was frozen before this call and did not see
 the answer key. Run Mode C for every case. Output one JSON object with an examples array and the
@@ -257,20 +262,35 @@ aggregate fields below. Every example must have exactly these fields: case_id, c
 overreach, load_bearing_overreach, unscored, recall, and cited_right_rule. caught plus missed must
 partition EXPECTED EDITS using those strings verbatim. load_bearing_overreach uses matching MUST
 PRESERVE strings verbatim and must also appear in overreach. Other overreach and unscored entries
-may be concise free text. Enforce recall = caught / (caught + missed), mean_recall as the arithmetic mean, and
-load_bearing_overreach_count as the total number of load_bearing_overreach entries. Output JSON only.
+may be concise free text. Evaluate each MUST PRESERVE claim only inside the proposed rewritten description.
+Explicitly exclude the change ledger, cuts, explanations, and all other commentary. A claim mentioned
+only in commentary is lost. Count a load-bearing overreach when the claim disappears or is materially
+weakened in the proposed rewritten description. Enforce recall = caught / (caught + missed), mean_recall
+as the arithmetic mean, and load_bearing_overreach_count as the total number of
+load_bearing_overreach entries. Output JSON only.
 
 rubric:
-$(cat "$RUBRIC")
+EOF
+    cat "$RUBRIC"
+    printf '\n\npr-authoring guide (Comments / Tests / PR Descriptions):\n'
+    cat "$AUTHOR_GUIDE"
+    printf '\n\n=== FROZEN CLEANER OUTPUT ===\n'
+    cat "$candidate_file"
+    printf '\n\n=== ANSWER KEY ===\n'
+    cat "$materialized/simplify/answer-key.md"
+  } >"$judge_prompt_file"
 
-pr-authoring guide (Comments / Tests / PR Descriptions):
-$(cat "$AUTHOR_GUIDE")
+  style_eval_write_metadata "$run_dir" "description-heldout-$benchmark_id-v$benchmark_version-simplify" \
+    "$materialized/manifest.json" "$materialized/simplify/blind-input.md" \
+    "$materialized/simplify/answer-key.md" "$CLEANER" "$AUTHOR_GUIDE" "$AUTHOR_EXAMPLES" "$RUBRIC" "$JUDGE" \
+    "$agent_prompt_file" "$judge_prompt_file"
+  append_description_manifest_metadata "$run_dir/metadata.txt"
+  if [ -n "${EVAL_CANDIDATE:-}" ]; then
+    printf 'candidate_source=%s\n' "$EVAL_CANDIDATE" >>"$run_dir/metadata.txt"
+    printf 'candidate_source_sha256=%s\n' "$(sha256sum "$EVAL_CANDIDATE" | cut -d' ' -f1)" >>"$run_dir/metadata.txt"
+  fi
 
-=== FROZEN CLEANER OUTPUT ===
-$(cat "$candidate_file")
-
-=== ANSWER KEY ===
-$(cat "$materialized/simplify/answer-key.md")" | style_eval_normalize_json >"$judgment_file"
+  judge_file "$judge_prompt_file" | style_eval_normalize_json >"$judgment_file"
   style_eval_validate_manifest_simplify_json "$judgment_file" "$materialized/manifest.json"
   printf 'candidate: %s\njudgment: %s\n' "$candidate_file" "$judgment_file"
 }

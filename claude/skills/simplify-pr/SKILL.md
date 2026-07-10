@@ -14,6 +14,22 @@ This is a manual cleanup tool. You're invoked because the CLAUDE.md authoring in
 got ignored (an agent wrote the PR without it). So the bar is: leave the PR reading the way
 it would have if the guide had been followed from the start.
 
+## Non-negotiable: make a surgical patch
+
+Before rewriting, build a violation ledger: each proposed change must name the exact input span and
+the guide rule it violates. "Could be shorter" or "I prefer this wording" is not a violation. Copy
+every span without a ledger entry verbatim, including its section placement and formatting.
+
+Treat these as protected claims, wherever they appear: compatibility and caller impact, resulting
+interfaces or operating shape, behavior parity, permissions, failure-path evidence, deployment and
+rollback constraints, and concrete verification receipts. Reword one only when its full meaning
+still appears in the result. Before returning, compare the rewrite with the input claim by claim;
+restore anything lost or materially weakened.
+
+Local process narration is not protected evidence. Remove `--no-verify` explanations, broken-hook
+diagnostics, "CI will catch it," and routine lint/typecheck status rather than preserving them as
+justification for how the change was pushed.
+
 ## When invoked
 
 The user may pass a PR (URL or number), or nothing. Resolve the target in this order:
@@ -76,8 +92,8 @@ injection. The operational points the guide can't know about, which this skill a
   out of scope: fix a formula opener or run-on in place; remove the table-stakes bullets; delete the
   ceremony section. Do not opportunistically rewrite Motivation, Deployment, reviewer guidance, or
   other sentences just because you prefer different wording. Every unrelated change needs its own
-  guide violation. Worked examples calibrate altitude for a new draft; they do not license a broad
-  rewrite of an existing description.
+  violation-ledger entry. Worked examples calibrate altitude for a new draft; they do not license a
+  broad rewrite of an existing description.
 - **Do not compress distinct evidence into a generic e2e claim.** Keep separate manual checks when
   they prove different boundaries, and keep the concrete result plus setup/cleanup detail needed to
   interpret or repeat them. Brevity does not earn deleting receipts a reviewer cannot infer from CI.
@@ -89,10 +105,10 @@ injection. The operational points the guide can't know about, which this skill a
 ## Output
 
 1. Show the **rewritten description** in full (all template sections preserved), and a short
-   **comment-cleanup list**: each comment you'd remove/simplify as `file:line` → why, with
-   the proposed replacement (or "remove"). The rewrite is a surgical patch: outside the sentences
-   and sections named in the cleanup list, preserve the input verbatim. Before returning it, diff
-   section by section and restore every wording change that lacks a named guide violation.
+   **change ledger**: each description span or comment you'd remove/simplify, its guide violation,
+   and the proposed replacement (or "remove"). List comments as `file:line`. The rewrite is a
+   surgical patch: outside the ledger, preserve the input verbatim. Before returning it, diff
+   section by section and restore every wording change without a ledger entry.
 2. Briefly note what you cut and why, so the user can sanity-check the altitude - but don't
    over-explain; the rewrite should mostly speak for itself.
 3. **Wait for approval.** These are outward-facing edits.

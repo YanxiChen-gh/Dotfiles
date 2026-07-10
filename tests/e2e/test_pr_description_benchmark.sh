@@ -184,6 +184,18 @@ if [ -n "${FAKE_CAPTURE_DIR:-}" ] && [ "$json_output" = true ]; then
   prompt=$(cat "$FAKE_CAPTURE_DIR/prompt-$capture_count.md")
   printf '%s\0' "$@" >"$FAKE_CAPTURE_DIR/args-$capture_count.bin"
 fi
+if [ "$prompt" = text ]; then
+  if [ -n "${FAKE_CAPTURE_DIR:-}" ]; then
+    capture_count=1
+    [ ! -f "$FAKE_CAPTURE_DIR/count" ] || capture_count=$(($(cat "$FAKE_CAPTURE_DIR/count") + 1))
+    printf '%s\n' "$capture_count" >"$FAKE_CAPTURE_DIR/count"
+    cat >"$FAKE_CAPTURE_DIR/prompt-$capture_count.md"
+    prompt=$(cat "$FAKE_CAPTURE_DIR/prompt-$capture_count.md")
+    printf '%s\0' "$@" >"$FAKE_CAPTURE_DIR/args-$capture_count.bin"
+  else
+    prompt=$(cat)
+  fi
+fi
 case "$prompt" in
   *'aggregate fields below'*)
     result='{"examples":[{"case_id":"simplify-42-r1-r2","caught":["remove file-by-file narration"],"missed":[],"overreach":[],"load_bearing_overreach":[],"unscored":[],"recall":1,"cited_right_rule":true}],"mean_recall":1,"load_bearing_overreach_count":0}'
@@ -207,9 +219,15 @@ data_git_sha="$(git -C "$TMP/repo" rev-parse HEAD)"
 data_dirty=true
 pre_simplify_state="$(bash -c 'source "$1"; style_eval_harness_state_sha256 "$2"' _ \
   "$ROOT/claude/style-eval-engine.sh" "$TMP/repo")"
+mkdir "$TMP/simplify-captures"
 PATH="$TMP/fake-bin:$PATH" STYLE_HARNESS_DATA="$TMP/repo" RUN_ID=simplify-test \
+  FAKE_CAPTURE_DIR="$TMP/simplify-captures" \
   "$ROOT/claude/pr-style/eval/run-eval.sh" description-heldout "$MANIFEST" --flow simplify >/dev/null
-for metadata in "$TMP/repo/pr-style/results/runs"/simplify-test-*/metadata.txt; do
+simplify_run_dir=
+for run_dir in "$TMP/repo/pr-style/results/runs"/simplify-test-*; do
+  [ -d "$run_dir" ] || { echo "FAIL: simplify held-out run was not written" >&2; exit 1; }
+  simplify_run_dir=$run_dir
+  metadata="$run_dir/metadata.txt"
   [ -f "$metadata" ] || { echo "FAIL: simplify held-out metadata was not written" >&2; exit 1; }
   grep -Fqx "data_repo_git_sha=$data_git_sha" "$metadata"
   grep -Fqx "data_repo_git_dirty=$data_dirty" "$metadata"
@@ -217,6 +235,38 @@ for metadata in "$TMP/repo/pr-style/results/runs"/simplify-test-*/metadata.txt; 
   grep -Fqx "benchmark_manifest_path=$manifest_path" "$metadata"
   grep -Fqx "benchmark_manifest_sha256=$manifest_sha" "$metadata"
   grep -Fqx 'benchmark_case_ids=simplify-42-r1-r2' "$metadata"
+  for prompt_file in "$run_dir/agent-prompt.md" "$run_dir/judge-prompt.md"; do
+    [ -f "$prompt_file" ] || { echo "FAIL: simplify prompt was not persisted: $prompt_file" >&2; exit 1; }
+    source_key=$(awk -F= -v path="$prompt_file" '$1 ~ /^source_[0-9]+_path$/ && $2 == path { sub(/_path$/, "", $1); print $1; exit }' "$metadata")
+    [ -n "$source_key" ] || { echo "FAIL: simplify prompt was not recorded as a metadata source: $prompt_file" >&2; exit 1; }
+    grep -Fqx "${source_key}_sha256=$(sha256sum "$prompt_file" | cut -d' ' -f1)" "$metadata"
+  done
+  cmp "$run_dir/agent-prompt.md" "$TMP/simplify-captures/prompt-1.md"
+  cmp "$run_dir/judge-prompt.md" "$TMP/simplify-captures/prompt-2.md"
+  grep -Fq 'Evaluate each MUST PRESERVE claim only inside the proposed rewritten description.' "$run_dir/judge-prompt.md"
+  grep -Fq 'Explicitly exclude the change ledger, cuts, explanations, and all other commentary.' "$run_dir/judge-prompt.md"
+  grep -Fq 'only in commentary is lost.' "$run_dir/judge-prompt.md"
+done
+[ -n "$simplify_run_dir" ]
+
+frozen_candidate="$simplify_run_dir/candidate.md"
+PATH="$TMP/fake-bin:$PATH" STYLE_HARNESS_DATA="$TMP/repo" RUN_ID=simplify-rerun \
+  EVAL_CANDIDATE="$frozen_candidate" \
+  "$ROOT/claude/pr-style/eval/run-eval.sh" description-heldout "$MANIFEST" --flow simplify >/dev/null
+for run_dir in "$TMP/repo/pr-style/results/runs"/simplify-rerun-*; do
+  [ -d "$run_dir" ] || { echo "FAIL: simplify judge-only rerun was not written" >&2; exit 1; }
+  metadata="$run_dir/metadata.txt"
+  cmp "$frozen_candidate" "$run_dir/candidate.md"
+  [ ! -e "$run_dir/agent-trace.jsonl" ]
+  grep -Fqx "candidate_source=$frozen_candidate" "$metadata"
+  grep -Fqx "candidate_source_sha256=$(sha256sum "$frozen_candidate" | cut -d' ' -f1)" "$metadata"
+  for prompt_file in "$run_dir/agent-prompt.md" "$run_dir/judge-prompt.md"; do
+    [ -f "$prompt_file" ] || { echo "FAIL: judge-only prompt was not persisted: $prompt_file" >&2; exit 1; }
+    source_key=$(awk -F= -v path="$prompt_file" '$1 ~ /^source_[0-9]+_path$/ && $2 == path { sub(/_path$/, "", $1); print $1; exit }' "$metadata")
+    [ -n "$source_key" ] || { echo "FAIL: judge-only prompt was not recorded as a metadata source: $prompt_file" >&2; exit 1; }
+    grep -Fqx "${source_key}_sha256=$(sha256sum "$prompt_file" | cut -d' ' -f1)" "$metadata"
+  done
+  grep -Fq 'only in commentary is lost.' "$run_dir/judge-prompt.md"
 done
 pre_authoring_state="$(bash -c 'source "$1"; style_eval_harness_state_sha256 "$2"' _ \
   "$ROOT/claude/style-eval-engine.sh" "$TMP/repo")"
