@@ -66,7 +66,7 @@ When writing a design doc, RFC, spec, runbook, or playbook, use a doc-authoring 
 
 ### Planning artifacts
 
-For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser (`npx -y lavish-axi <file>`), not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs), then `npx -y lavish-axi poll` for feedback and iterate. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
+For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser (`npx -y lavish-axi <file>`), not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs), then `npx -y lavish-axi poll` for feedback and iterate. After Lavish prints its local URL, always pass that port and session path to `~/dotfiles/scripts/expose-port.sh` and give the user the URL that script returns; do not reason about CDE versus local execution yourself. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
 
 ## Local Dev Environment (Worktrees & Port Forwarding)
 
@@ -76,13 +76,16 @@ After creating a git worktree (any repo), provision it with `~/dotfiles/scripts/
 
 In Zed remote sessions, agent-created worktrees don't appear in the sidebar's "Open Worktrees" list, but they do show in the `git: worktree` picker (`cmd-shift-P`) - so `git worktree add` is fine; open it from there.
 
-### Exposing local dev servers (port forwarding)
+### Resolving browser URLs
 
-To reach a local server on a remote CDE from a laptop, prefer in order:
+Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before giving the user a local-server URL. The script owns environment detection, setup, and verification: Ona uses the Tailscale path, macOS returns localhost, and unknown remotes fail closed. Return the single URL it prints on stdout. Do not ask the user whether the agent is in a CDE or choose the exposure method yourself.
 
-1. **`~/dotfiles/scripts/expose-port-tailscale.sh <local-port> [verify-path]`** (preferred) - handles the whole Ona/tailnet chain and verifies through the tailnet path. It encodes two hard-won constraints; don't work around them by hand: serve on **tailnet port 8080 only** (ACLs for `tag:ona-dev` admit only that port - others hang from a laptop while self-tests still pass), and **verify through the tailnet path, not a localhost curl**.
-2. **Editor port-forward** - VS Code/Cursor Ports panel (needs a human click).
-3. **ngrok** - last resort (public URL; tear it down when done).
+The dispatcher delegates Ona to `expose-port-tailscale.sh`, which encodes two hard-won constraints; don't work around them by hand: serve on **tailnet port 8080 only** (ACLs for `tag:ona-dev` admit only that port - others hang from a laptop while self-tests still pass), and **verify through the tailnet path, not a localhost curl**.
+
+If the dispatcher rejects an unsupported remote environment, fall back in order:
+
+1. **Editor port-forward** - VS Code/Cursor Ports panel (needs a human click).
+2. **ngrok** - last resort (public URL; tear it down when done).
 
 Don't use a static share/publish/export when you need a *live* server - it drops the interactive connection back to the agent.
 

@@ -110,7 +110,7 @@
         "cursor": {
           "file": "local-dev-environment.mdc",
           "scope": "work",
-          "description": "Local dev environment ops: provisioning git worktrees and exposing a local dev server on a remote CDE (tailscale > editor forward > ngrok). Apply when creating worktrees or port-forwarding a dev server for browser testing.",
+          "description": "Local dev environment ops: provisioning worktrees and resolving a verified browser-accessible URL for local servers across macOS and remote CDEs.",
           "alwaysApply": false
         }
       }

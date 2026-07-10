@@ -11,4 +11,4 @@ When writing a design doc, RFC, spec, runbook, or playbook, use a doc-authoring 
 
 ## Planning artifacts
 
-For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser (`npx -y lavish-axi <file>`), not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs), then `npx -y lavish-axi poll` for feedback and iterate. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
+For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser (`npx -y lavish-axi <file>`), not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs), then `npx -y lavish-axi poll` for feedback and iterate. After Lavish prints its local URL, always pass that port and session path to `~/dotfiles/scripts/expose-port.sh` and give the user the URL that script returns; do not reason about CDE versus local execution yourself. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
