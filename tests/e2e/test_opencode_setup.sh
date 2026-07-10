@@ -100,9 +100,7 @@ with open(sys.argv[1], encoding="utf-8") as file:
 assert config["$schema"] == "https://opencode.ai/config.json"
 assert config["model"] == "openai/gpt-5.6-sol"
 assert "opencode-claude-auth@1.5.4" in config["plugin"]
-for model in config["provider"]["openai"]["models"].values():
-    assert set(model) == {"variants"}
-    assert model["variants"]["fast"] == {"serviceTier": "priority"}
+assert "provider" not in config
 PY
 
 CLAUDE="$TMP/claude.json"
