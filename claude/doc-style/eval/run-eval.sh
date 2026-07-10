@@ -18,6 +18,8 @@ AUTHOR_SKILL="$HERE/../../skills/doc-authoring/SKILL.md"
 DATA="${STYLE_HARNESS_DATA:-$HOME/style-harness-data}"
 CORPUS="$DATA/doc-style/corpus"
 RESULTS="$DATA/doc-style/results"
+SOURCES="$CORPUS/SOURCES.md"
+SYNTHETIC_GENERATION="$CORPUS/synthetic-generation.json"
 if [ ! -d "$CORPUS" ]; then
   echo "corpus not found at $CORPUS - clone the private data repo (see ../README.md) or set STYLE_HARNESS_DATA" >&2
   exit 1
@@ -47,25 +49,28 @@ calibrate() {
     else A="$agent_doc"; B="$human_doc"; human_slot=B; fi
 
     local prompt out winner run_dir
+    run_dir="$(style_eval_run_dir "$RESULTS" "calibrate-$num")"
+    cp "$A" "$run_dir/artifact-a.md"
+    cp "$B" "$run_dir/artifact-b.md"
+    style_eval_write_metadata "$run_dir" "calibrate-$num" "$run_dir/artifact-a.md" "$run_dir/artifact-b.md" "$SOURCES" "$SYNTHETIC_GENERATION" "$RUBRIC" "$JUDGE"
+    printf 'human_slot=%s\n' "$human_slot" >>"$run_dir/metadata.txt"
     prompt="$(cat "$JUDGE")
 
 Rubric:
 $(cat "$RUBRIC")
 
 === DOC A ===
-$(cat "$A")
+$(cat "$run_dir/artifact-a.md")
 
 === DOC B ===
-$(cat "$B")
+$(cat "$run_dir/artifact-b.md")
 
 Run Mode A. Output ONLY the JSON."
     out="$(judge "$prompt" | style_eval_normalize_json)"
     winner="$(echo "$out" | grep -oE '"winner"[^,}]*' | grep -oE '[AB]' | head -1)"
     if [ "$winner" = "$human_slot" ]; then pass=$((pass+1)); echo "pair $num: PASS (chose human)"; else echo "pair $num: FAIL (chose agent)"; fi
-    run_dir="$(style_eval_run_dir "$RESULTS" "calibrate-$num")"
-    style_eval_write_metadata "$run_dir" "calibrate-$num"
     printf '%s\n' "$out" >"$run_dir/judgment.json"
-    jq -e . "$run_dir/judgment.json" >/dev/null
+    style_eval_validate_pairwise_json "$run_dir/judgment.json"
   done
   echo "calibration: $pass/$total pairs preferred the human doc"
 }
@@ -74,16 +79,21 @@ rewrite() {
   style_eval_require_jq
   local source_doc="$CORPUS/agent/01-day1-playbook.md"
   local human_doc="$CORPUS/human/01-day1-playbook.md"
-  local run_dir candidate_file judgment_file
+  local run_dir candidate_file judgment_file source_snapshot reference_file
   run_dir="$(style_eval_run_dir "$RESULTS" rewrite-01)"
   candidate_file="$run_dir/candidate.md"
   judgment_file="$run_dir/judgment.json"
-  style_eval_write_metadata "$run_dir" rewrite-01
+  source_snapshot="$run_dir/source.md"
+  reference_file="$run_dir/reference.md"
+  cp "$source_doc" "$source_snapshot"
+  cp "$human_doc" "$reference_file"
+  style_eval_write_metadata "$run_dir" rewrite-01 "$source_snapshot" "$reference_file" "$SOURCES" "$RUBRIC" "$JUDGE" "$AUTHOR_SKILL"
 
   if [ -n "${EVAL_CANDIDATE:-}" ]; then
     [ -f "$EVAL_CANDIDATE" ] || { echo "candidate not found: $EVAL_CANDIDATE" >&2; return 1; }
     cp "$EVAL_CANDIDATE" "$candidate_file"
     printf 'candidate_source=%s\n' "$EVAL_CANDIDATE" >>"$run_dir/metadata.txt"
+    printf 'candidate_source_sha256=%s\n' "$(sha256sum "$EVAL_CANDIDATE" | cut -d' ' -f1)" >>"$run_dir/metadata.txt"
   else
     agent "$(cat "$AUTHOR_SKILL")
 
@@ -96,7 +106,7 @@ files: all allowed context is included in this prompt, and the human counterpart
 answer key. Return only the complete rewritten Markdown document.
 
 === DOCUMENT TO REWRITE ===
-$(cat "$source_doc")" "$run_dir/agent-trace.jsonl" >"$candidate_file"
+$(cat "$source_snapshot")" "$run_dir/agent-trace.jsonl" >"$candidate_file"
   fi
 
   judge "$(cat "$JUDGE")
@@ -108,10 +118,10 @@ $(cat "$RUBRIC")
 $(cat "$candidate_file")
 
 === DOC B ===
-$(cat "$human_doc")
+$(cat "$reference_file")
 
 Run Mode A. Output ONLY the JSON." | style_eval_normalize_json >"$judgment_file"
-  jq -e . "$judgment_file" >/dev/null
+  style_eval_validate_pairwise_json "$judgment_file"
 
   printf 'candidate: %s\njudgment: %s\n' "$candidate_file" "$judgment_file"
 }

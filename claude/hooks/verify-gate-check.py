@@ -5,7 +5,7 @@ Reads the hook JSON on stdin. Exit 2 (with a stderr message) blocks the call;
 exit 0 allows it. Fails OPEN (exit 0) on anything unexpected - the gate must only
 ever block a deliberate, inspectable miss, never wedge on a parse error.
 
-Work-scoped: the verification+grading ceremony is the Vanta PR handoff, so the gate
+Work-scoped: the verification ceremony is the Vanta PR handoff, so the gate
 only fires on work-org repos. Personal repos (push-to-main once verified) are skipped.
 """
 import json
@@ -45,34 +45,32 @@ Missing from the PR body:
 {missing}
 
 Before `gh pr create`, run the verification + independent-review workflow
-(~/dotfiles/shared-skills/full-verification-workflow) and put the results in the body:
-  - a Verification/Evidence section (commands run + results; e2e/browser/manual when the
-    change warrants it), and
-  - a Grading section from an INDEPENDENT review - dispatch a clean-context review subagent
-    over the diff + evidence, then record its verdict + findings-fixed.
+(~/dotfiles/shared-skills/full-verification-workflow), then put reviewer-useful verification
+in the body (e2e/browser/manual when the change warrants it). Keep routine CI results and
+independent grading notes out of the PR description.
 
 The evidence bar scales to the change: a docs-only PR just needs "docs only, no runtime".
 Kill switch (escape hatch): export VERIFY_GATE=off
 """
 
-# Lenient on purpose: match the *presence* of a section, not an exact heading, so the
-# gate is low-false-positive across repos. A docs PR satisfies VERIFICATION with a line
-# like "docs only, no runtime".
-VERIFICATION = re.compile(
-    r"(?i)(##\s*(verification|test|testing|evidence|qa)\b"
-    r"|verification evidence|test plan|\btested\b|verified (that|by|it|with)"
-    r"|\be2e\b|end[- ]to[- ]end|manual (test|verification)|screenshot"
-    r"|\btypecheck\b|\bunit tests?\b|verification commands"
-    r"|docs?[ -]only|no runtime|no code change)"
+# Require evidence beyond checks CI already carries, inside the repository's evidence section.
+VERIFICATION_SECTION = re.compile(
+    r"(?ims)^##\s*(?:verification|tests?|testing|evidence|qa)\b(?P<body>.*?)(?=^##\s|\Z)"
 )
-GRADING = re.compile(
-    r"(?i)(independent (review|grade|grader|grading|pass)"
-    r"|##\s*grading|grading notes|\breviewer\b|review (agent|subagent|pass)"
-    r"|graded by|second[- ]pass review|adversarial review"
-    r"|reviewed by (a |an )?(sub)?agent)"
+REVIEWER_USEFUL = re.compile(
+    r"(?i)(\be2e\b|end[- ]to[- ]end|manual(?:ly| test| verification)?"
+    r"|browser|screenshot|reproduc(?:e|ed|ible)|failure[- ]path|round[- ]trip"
+    r"|authenticated|queried|returned (?:http )?\d{3}"
+    r"|tested (?:in|against|with)|verified (?:in|against|with|by|that))"
 )
+DOCS_ONLY = re.compile(r"(?i)(docs?[ -]only|no runtime|no code change)")
 
 
+def has_reviewer_useful_verification(body):
+    return any(
+        REVIEWER_USEFUL.search(match.group("body")) or DOCS_ONLY.search(match.group("body"))
+        for match in VERIFICATION_SECTION.finditer(body)
+    )
 # The gate is the Vanta PR handoff ceremony, so it only fires on work-org repos.
 # Default org is Vanta; override with a comma-separated VERIFY_GATE_WORK_ORGS.
 def work_orgs():
@@ -180,17 +178,14 @@ def main():
     if body is None:
         block([
             "no PR body found (use --body / --body-file) - so no verification evidence",
-            "an independent-review/grading section",
         ])
 
     missing = []
-    if not VERIFICATION.search(body):
-        missing.append("a Verification/Evidence section (what you ran + results)")
-    if not GRADING.search(body):
-        missing.append("a Grading section from an independent review subagent")
+    if not has_reviewer_useful_verification(body):
+        missing.append("reviewer-useful verification beyond routine CI checks")
     if missing:
         block(missing)
-    allow("evidence + grading present")
+    allow("verification evidence present")
 
 
 if __name__ == "__main__":

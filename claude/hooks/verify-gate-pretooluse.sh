@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # PreToolUse(Bash) gate: block `gh pr create` when the PR body lacks verification
-# evidence AND an independent-grading section. This is the Trust L2→L3 lever - the
+# evidence. This is the Trust L2→L3 lever - the
 # rubric names `gh pr create` as the "before your eyes" boundary where verification
-# should gate completion. The gate only checks that a review happened; the primed
-# workflow (CLAUDE.md) makes it actually happen, and the independent review itself is
-# a clean-context subagent the main agent dispatches (a shell hook can't spawn one).
+# should gate completion. The gate only checks that useful verification is present; the primed
+# workflow (CLAUDE.md) makes independent review happen without copying its internal
+# verdict into the PR body.
 #
 # Exit 0 = allow; exit 2 = block (Claude Code feeds stderr back to the agent).
 # Fails OPEN on any error - a broken gate must never wedge PR creation.
 #
-# Work-scoped at runtime: the verification+grading ceremony is the Vanta PR handoff, so
+# Work-scoped at runtime: this is the Vanta PR handoff, so
 # check.py only fires on work-org repos (default VantaInc). Personal repos - where the flow
 # is push-to-main once verified - are skipped. Override the org list with VERIFY_GATE_WORK_ORGS.
 #

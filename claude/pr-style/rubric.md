@@ -28,6 +28,7 @@ Signature moves (checkable):
 - **Motivation states root cause / tradeoff**, not a restatement of the description.
 - **Testing shows only the non-obvious** (repro command + real output, screenshot), skips "ran unit
   tests / lint".
+- **Internal process stays out of the body**: no independent-review verdict or grading section.
 
 Anti-tells (penalize):
 - **Diff narration** - walking through each file the reviewer can already read.
@@ -35,6 +36,7 @@ Anti-tells (penalize):
 - **Em-dash / colon pile-up** in one paragraph (the strongest AI tell per the guide).
 - **Half-filled template** with empty placeholder comments left in.
 - **Testing section restating table stakes** ("added unit tests, ran lint, typecheck passes").
+- **Handoff ceremony in the description** (independent-review verdicts, grading sections).
 
 ## Review (grade against review-tone.md)
 
@@ -85,7 +87,8 @@ What to flag, by target:
 - Complex / mocks half the world - the smell points at the code (inject deps), not more mocking.
 
 **PR description** (trim):
-- Narrates the diff file-by-file; formula openers; a Testing section restating table stakes.
+- Narrates the diff file-by-file; formula openers; a Testing section restating table stakes;
+  independent-review or grading ceremony.
 
 **Comments, specifically JSDoc** (the cleaner under-cuts these): delete every per-field or
 per-param doc that just restates the field/param name or type (`/** the output name */` on
@@ -109,5 +112,6 @@ Seeded from `pr-authoring.md`'s own examples; grow this from real review catches
 |---|---|---|---|
 | Authoring | Formula opener | "One behavior change a reviewer can't see from the diff:" | "Worth flagging since the diff won't show it:" |
 | Authoring | Diff narration | "In foo.ts we add a field; in bar.ts we update the caller; in baz.test.ts we..." | "Make alarm keys structural so a rename is a type error, not a silent miss." |
+| Authoring | Process ceremony | "Independent review: pass. Unit tests, lint, and CI passed." | Omit it; keep only verification the reviewer cannot infer from CI. |
 | Review | Empty praise + command | "Great work! Change this to use a Map." | "Hmm can you just use a Map here instead of overriding fields one by one?" |
 | Review | Corporate hedge | "I would like to suggest we consider extracting this." | "the duplicated blocks might be worth extracting to avoid drift" |
