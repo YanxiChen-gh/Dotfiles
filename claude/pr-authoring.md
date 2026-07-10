@@ -104,6 +104,9 @@ Concise and high-level. Describe the *shape* of the change, not a line-by-line t
   that are right there in the code (the data structures, the duplication you removed, the helper you
   added) are noise in the description. A risky migration earns per-file guidance and links; a small
   refactor doesn't. When in doubt, write less and let Motivation carry the why.
+- **When tightening an existing description, edit locally.** Remove the specific narration,
+  formula opener, or redundant section that violates this guide, then stop. Correct surrounding
+  prose is not an invitation to rewrite every section into your preferred wording.
 - **For remove / replace / migrate PRs, use a decision table.** One row per item: what happened to
   it, what replaced it, and why. It's the clearest possible before→after.
 - **Fill the template, delete what doesn't apply.** Drop inapplicable sections rather than leaving
@@ -144,6 +147,16 @@ Only call out what a reviewer can't safely assume.
 - **Show the hard stuff as evidence.** Name the failure modes a test covers, paste the reproducible
   command (with real output), or attach the screenshot. Say what you actually did so the reviewer
   doesn't re-do it. If there's genuinely nothing beyond the obvious, one short line is fine.
+- **Keep independent receipts distinct.** Two manual checks that prove different boundaries are not
+  duplication. Do not collapse them into “verified end to end,” or remove setup/cleanup details a
+  reviewer needs to interpret or repeat the result.
+- **Judge a check by its claim, not its command shape.** Formatter, lint, typecheck, and ordinary
+  unit-test success are routine. A focused script or query that proves deployment targeting,
+  permissions, generated configuration, or a real failure path is evidence CI may not carry; keep
+  the command and observed result.
+- **Keep internal process internal.** Independent review and grading are handoff checks, not PR
+  content. Apply their findings before opening the PR; don't add a grading or reviewer-verdict
+  section to the description.
 
 ### Deployment
 

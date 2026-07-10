@@ -17,10 +17,11 @@ Input: two docs, A and B, on the same topic, WITHOUT being told which is human. 
 }
 ```
 
-Pick the doc that better fits the rubric (thesis-first, scope-fenced, receipts, no bloat). The
-calibration test: on the known golden pair, you must pick the human doc AND your
-`anti_tells_in_loser` must independently name the completeness bloat, the "15,000+" false
-precision, and the buried Day-1 opener. If you can't, the rubric or this prompt is wrong - say so.
+Pick the doc that better fits the rubric (thesis-first, scope-fenced, receipts, no bloat). For the
+Day-1 playbook pair specifically, you must pick the human doc AND your `anti_tells_in_loser` must
+independently name the completeness bloat, the "15,000+" false precision, and the buried Day-1
+opener. Do not carry those pair-specific facts into other comparisons. If the Day-1 pair misses
+them, the rubric or this prompt is wrong - say so.
 
 ## Mode B: single-doc scoring
 

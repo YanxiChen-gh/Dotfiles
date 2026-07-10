@@ -33,6 +33,8 @@ Read for stance and structure, not to copy content.
   decorative catalog. If you didn't verify it, don't dress it up as if you did.
 - One load-bearing frame. Reuse it; don't pile on analogies.
 - Write like a person: first person where natural, honest about what's unresolved.
+- Stay at the requested altitude. A proposal should not grow an implementation plan or exhaustive
+  future platform design unless the decision depends on it.
 
 ## After the first draft - the cut pass (do not skip)
 
@@ -42,6 +44,8 @@ This is where agent docs go wrong. Re-read and:
 2. Find anything said more than once (body + reference + checklist). Keep one instance.
 3. Delete every sentence removable with no loss - especially hedged openers.
 4. Check every number traces to something real. Vague-true beats specific-false.
+5. Cut implementation, rollout, and future-state sections that do not help make the doc's current
+   decision. Save them for the next artifact when they become real work.
 
 Target: if you can say it in a quarter of the words, do. The human twin of a 3,646-word agent doc
 was 909 words with the same payload.

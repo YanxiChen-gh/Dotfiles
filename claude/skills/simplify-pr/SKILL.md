@@ -72,12 +72,27 @@ injection. The operational points the guide can't know about, which this skill a
   one tight. Don't delete sections to "simplify."
 - **When you cut a code comment that carried real change-context**, fold that context into
   the PR description (or flag it as a candidate inline review comment) rather than losing it.
+- **Make the minimum description edit that fixes the tell.** Treat correct surrounding prose as
+  out of scope: fix a formula opener or run-on in place; remove the table-stakes bullets; delete the
+  ceremony section. Do not opportunistically rewrite Motivation, Deployment, reviewer guidance, or
+  other sentences just because you prefer different wording. Every unrelated change needs its own
+  guide violation. Worked examples calibrate altitude for a new draft; they do not license a broad
+  rewrite of an existing description.
+- **Do not compress distinct evidence into a generic e2e claim.** Keep separate manual checks when
+  they prove different boundaries, and keep the concrete result plus setup/cleanup detail needed to
+  interpret or repeat them. Brevity does not earn deleting receipts a reviewer cannot infer from CI.
+- **Classify checks by what they prove, not what the command looks like.** Formatter, lint,
+  typecheck, and ordinary unit-test success are table stakes. A focused script or query that proves
+  deployment targeting, permissions, generated configuration, a failure path, or another property
+  CI does not establish is a receipt - keep it.
 
 ## Output
 
 1. Show the **rewritten description** in full (all template sections preserved), and a short
    **comment-cleanup list**: each comment you'd remove/simplify as `file:line` → why, with
-   the proposed replacement (or "remove").
+   the proposed replacement (or "remove"). The rewrite is a surgical patch: outside the sentences
+   and sections named in the cleanup list, preserve the input verbatim. Before returning it, diff
+   section by section and restore every wording change that lacks a named guide violation.
 2. Briefly note what you cut and why, so the user can sanity-check the altitude - but don't
    over-explain; the rewrite should mostly speak for itself.
 3. **Wait for approval.** These are outward-facing edits.

@@ -40,6 +40,10 @@ Each has a checkable question. A doc should hit most of these; a doc that hits n
    - Check: is there one frame doing work, reused - not a pile of unrelated analogies?
 7. **A person wrote this.** First person where natural, honest about mess, opinionated.
    - Check: any "it's been a rabbit hole", honest "TBD", a real opinion, or is it voiceless?
+8. **Stop at the doc's job.** A proposal makes the decision and gives enough shape to trust it; it
+   does not silently become an implementation plan, rollout plan, or platform spec.
+   - Check: does each section help the reader make the decision this doc exists to make, or did the
+     draft start solving later phases nobody asked it to solve?
 
 ## Anti-tells (penalize these - these are what mark a doc as agent-written)
 
@@ -63,6 +67,11 @@ Each has a checkable question. A doc should hit most of these; a doc that hits n
    re-tabulate prose already written.
    - Check: does each table carry something prose can't (Scenario/Expected/Observed, Pros/Cons)?
      If it just reformats a paragraph, drop it.
+8. **Scope spillover.** A focused proposal grows a second document inside itself: speculative core
+   contracts, exhaustive safety properties, rollout stages, or "later" designs that are not needed
+   to choose the current direction.
+   - Check: if the implementation-plan half disappeared, would the proposal still support its
+     decision? If yes, cut it and write that plan only when implementation starts.
 
 ## Contrastive pairs (the teaching signal)
 
@@ -74,6 +83,7 @@ Seeded from real edits. Left = agent draft, right = the fix, tagged with the ant
 | Buried thesis | "You don't have production traffic yet, but the choices you make now decide whether evaluation is easy or painful later. The North Star doc assumes you already have data; this section is what to do before that." | "Start setting up online evals from day 1 - that's your playground for iterating as you ship. Don't treat it as an afterthought." |
 | Completeness compulsion | appended "Appendix: glossary", "Day-1 checklist", "Quick reference", "Gotchas & known traps" | none of these - the reader didn't need them |
 | Triple-coverage | commands in body + Quick Reference + checklist | commands stated once, where the step is |
+| Scope spillover | proposal followed by speculative contracts, capture flow, safety checklist, rollout, and future evidence types | proposal stops after the current use case, interface, storage choice, capture policy, and real tradeoffs |
 
 Add new rows whenever a review catches a fresh instance. This table is also the judge's
 calibration set: a correct judge, shown the left column blind, flags the right anti-tell.
