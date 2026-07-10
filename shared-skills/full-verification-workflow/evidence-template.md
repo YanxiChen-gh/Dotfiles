@@ -1,6 +1,6 @@
 # Verification Evidence
 
-Use this as a checklist, not a required layout. Preserve the repository's PR template when one exists, and adapt the evidence format so it stays factual and easy for a human reviewer or follow-up agent to audit.
+Use this as an internal checklist, not a required PR layout. Preserve the repository's PR template when one exists.
 
 ## Required Evidence
 
@@ -10,6 +10,12 @@ Use this as a checklist, not a required layout. Preserve the repository's PR tem
 - Independent grading or review summary.
 - Issues fixed from grading.
 - Known gaps or residual risk.
+
+## PR Description
+
+Include only evidence a reviewer cannot infer from CI, such as e2e, browser, manual, or a
+reproducible failure-path check. Omit routine unit tests, typecheck, lint, CI status, and the
+independent grading notes below.
 
 ## Optional Compact Format
 

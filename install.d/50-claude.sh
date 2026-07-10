@@ -103,7 +103,7 @@ PY
     fi
 
     # Register the verify-gate PreToolUse(Bash) hook (work scope): blocks `gh pr create`
-    # when the PR body lacks verification evidence + an independent-review/grading section
+    # when the PR body lacks reviewer-useful verification evidence
     # (Trust L2→L3 lever). Runtime-scoped to work-org repos (default VantaInc) so it doesn't
     # gate personal repos; override with VERIFY_GATE_WORK_ORGS. Idempotent (deduped on the
     # script name). Fail-open + kill switch (VERIFY_GATE=off) + retirement trigger live in the
@@ -296,4 +296,3 @@ PY
         echo "⚠️  Cursor skill sync script not found or not executable: $sync_script"
     fi
 }
-
