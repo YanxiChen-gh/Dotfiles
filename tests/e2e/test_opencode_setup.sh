@@ -70,6 +70,8 @@ fail() {
 CONFIG_DIR="$XDG_CONFIG_HOME/opencode"
 printf 'existing config\n' >"$CONFIG_DIR/opencode.jsonc"
 printf 'existing legacy config\n' >"$CONFIG_DIR/opencode.json"
+printf 'existing TUI config\n' >"$CONFIG_DIR/tui.jsonc"
+printf 'existing legacy TUI config\n' >"$CONFIG_DIR/tui.json"
 printf 'existing rules\n' >"$CONFIG_DIR/AGENTS.md"
 printf 'existing plugin\n' >"$CONFIG_DIR/plugins/dotfiles-harness.js"
 
@@ -77,10 +79,13 @@ setup_opencode_config >/dev/null
 setup_opencode_config >/dev/null
 
 [ -L "$CONFIG_DIR/opencode.jsonc" ] || fail "config is not linked"
+[ -L "$CONFIG_DIR/tui.jsonc" ] || fail "TUI config is not linked"
 [ -L "$CONFIG_DIR/AGENTS.md" ] || fail "global rules are not linked"
 [ -L "$CONFIG_DIR/plugins/dotfiles-harness.js" ] || fail "harness plugin is not linked"
 [ "$(cat "$CONFIG_DIR/opencode.jsonc.pre-dotfiles")" = "existing config" ] || fail "config backup is missing"
 [ "$(cat "$CONFIG_DIR/opencode.json.pre-dotfiles")" = "existing legacy config" ] || fail "legacy config backup is missing"
+[ "$(cat "$CONFIG_DIR/tui.jsonc.pre-dotfiles")" = "existing TUI config" ] || fail "TUI config backup is missing"
+[ "$(cat "$CONFIG_DIR/tui.json.pre-dotfiles")" = "existing legacy TUI config" ] || fail "legacy TUI config backup is missing"
 [ "$(cat "$CONFIG_DIR/AGENTS.md.pre-dotfiles")" = "existing rules" ] || fail "rules backup is missing"
 [ "$(cat "$CONFIG_DIR/plugins/dotfiles-harness.js.pre-dotfiles")" = "existing plugin" ] || fail "plugin backup is missing"
 
@@ -101,6 +106,21 @@ assert config["$schema"] == "https://opencode.ai/config.json"
 assert config["model"] == "openai/gpt-5.6-sol"
 assert "opencode-claude-auth@1.5.4" in config["plugin"]
 assert "provider" not in config
+PY
+
+python3 - "$CONFIG_DIR/tui.jsonc" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as file:
+    config = json.load(file)
+
+assert config["$schema"] == "https://opencode.ai/tui.json"
+assert config["attention"] == {
+    "enabled": True,
+    "notifications": True,
+    "sound": False,
+}
 PY
 
 CLAUDE="$TMP/claude.json"

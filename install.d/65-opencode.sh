@@ -68,9 +68,15 @@ setup_opencode_config() {
     fi
     link_opencode_file "$source_dir/opencode.jsonc" "$config_dir/opencode.jsonc" || return 1
 
+    if [ -e "$config_dir/tui.json" ] || [ -L "$config_dir/tui.json" ]; then
+        link_opencode_file "$source_dir/tui.jsonc" "$config_dir/tui.json" || return 1
+        rm -f "$config_dir/tui.json"
+    fi
+    link_opencode_file "$source_dir/tui.jsonc" "$config_dir/tui.jsonc" || return 1
+
     link_opencode_file "$source_dir/AGENTS.md" "$config_dir/AGENTS.md" || return 1
 
     link_opencode_file "$source_dir/plugins/dotfiles-harness.js" "$plugin_dir/dotfiles-harness.js" || return 1
 
-    echo "✅ OpenCode config, global rules, and harness linked"
+    echo "✅ OpenCode config, TUI settings, global rules, and harness linked"
 }
