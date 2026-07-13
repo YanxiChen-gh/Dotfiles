@@ -6,7 +6,7 @@ BENCHMARK="$ROOT/claude/pr-style/eval/pr-description-benchmark.sh"
 HARVEST="$ROOT/claude/pr-style/eval/harvest-pr-description-data.sh"
 TMP="${TMPDIR:-/tmp}/dotfiles-e2e-pr-description-benchmark-$$"
 trap 'rm -rf "$TMP"' EXIT INT TERM
-mkdir -p "$TMP/repo/pr-style/corpus/evidence/pr-description-revisions" "$TMP/bodies"
+mkdir -p "$TMP/repo/pr-style/corpus/evidence/pr-description-revisions" "$TMP/bodies" "$TMP/home"
 git -C "$TMP/repo" init -q
 
 printf '## Changes\r\n\r\nIn foo.ts, add cache.\r\n' >"$TMP/bodies/revision-1.md"
@@ -220,7 +220,7 @@ data_dirty=true
 pre_simplify_state="$(bash -c 'source "$1"; style_eval_harness_state_sha256 "$2"' _ \
   "$ROOT/claude/style-eval-engine.sh" "$TMP/repo")"
 mkdir "$TMP/simplify-captures"
-PATH="$TMP/fake-bin:$PATH" STYLE_HARNESS_DATA="$TMP/repo" RUN_ID=simplify-test \
+HOME="$TMP/home" PATH="$TMP/fake-bin:$PATH" STYLE_HARNESS_DATA="$TMP/repo" RUN_ID=simplify-test \
   FAKE_CAPTURE_DIR="$TMP/simplify-captures" \
   "$ROOT/claude/pr-style/eval/run-eval.sh" description-heldout "$MANIFEST" --flow simplify >/dev/null
 simplify_run_dir=
