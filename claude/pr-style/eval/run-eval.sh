@@ -17,7 +17,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$HERE/.."
 JUDGE="$HERE/judge.md"
 # The cleaner IS the real simplify-pr skill agents use - the eval validates that, not a stand-in.
-CLEANER="${SIMPLIFY_PR_SKILL:-$HOME/dotfiles/claude/skills/simplify-pr/SKILL.md}"
+CLEANER="${SIMPLIFY_PR_SKILL:-$ROOT/../skills/simplify-pr/SKILL.md}"
 RUBRIC="$ROOT/rubric.md"
 AUTHOR_GUIDE="$ROOT/../pr-authoring.md"
 AUTHOR_EXAMPLES="$ROOT/../pr-examples.md"
