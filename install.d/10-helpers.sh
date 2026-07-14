@@ -1,6 +1,39 @@
 # shellcheck shell=sh
 # Sourced by ../install.sh - function definitions only.
 
+# Link a versioned Dotfiles file without overwriting unmanaged user configuration.
+link_dotfiles_file() {
+    source_file=$1
+    target_file=$2
+    shift 2
+
+    if [ -L "$target_file" ] && [ "$(readlink "$target_file")" = "$source_file" ]; then
+        return 0
+    fi
+
+    if [ -L "$target_file" ]; then
+        current_source=$(readlink "$target_file")
+        for managed_source in "$@"; do
+            if [ "$current_source" = "$managed_source" ]; then
+                rm -f "$target_file"
+                break
+            fi
+        done
+    fi
+
+    if [ -e "$target_file" ] || [ -L "$target_file" ]; then
+        backup_file="$target_file.pre-dotfiles"
+        if [ -e "$backup_file" ] || [ -L "$backup_file" ]; then
+            echo "⚠️  Preserving unmanaged file because its backup already exists: $target_file"
+            return 1
+        fi
+        mv "$target_file" "$backup_file"
+        echo "ℹ️  Preserved existing file at $backup_file"
+    fi
+
+    ln -s "$source_file" "$target_file"
+}
+
 # Install a package using apt-get
 # Usage: install_from_apt <package_name>
 install_from_apt() {

@@ -3,9 +3,8 @@
 
 `agent-rules/` is the single source of truth for rules that several agent tools
 share. Each rule has a tool-agnostic body (`<name>.md`); `rules.json` says how it
-maps to each tool. Today this renders Cursor `.mdc` files (into both
-`cursor/rules/` and `cursor/rules-work/` per each rule's scope), plus aggregated
-instruction files for Codex, Claude Code, and OpenCode.
+maps to each tool. Today this renders scoped Cursor `.mdc` files plus personal and
+work instruction aggregates for Codex, Claude Code, and OpenCode.
 
 A body may fence tool-specific text in `<!--claude-only-->...<!--/claude-only-->`;
 the claude aggregate keeps it, every other target strips it. Use it sparingly - the
@@ -55,7 +54,13 @@ def render_cursor(settings, body):
         lines.append(f"globs: {settings['globs']}")
     lines.append(f"alwaysApply: {'true' if settings.get('alwaysApply', False) else 'false'}")
     lines.append("---")
-    return "\n".join(lines) + "\n\n" + _apply_claude_only(body, keep=False)
+    return (
+        "\n".join(lines)
+        + "\n\n"
+        + GENERATED_BANNER
+        + "\n\n"
+        + _apply_claude_only(body, keep=False)
+    )
 
 
 def cursor_dests(scope):
@@ -66,7 +71,7 @@ def cursor_dests(scope):
     raise ValueError(f"unknown cursor scope: {scope!r} (expected both|personal|work)")
 
 
-def render_aggregate(cfg, rules, target):
+def render_aggregate(cfg, rules, target, output_scope):
     """Aggregate several rule bodies into one tool-specific instruction file
     under a title + generated banner.
 
@@ -76,10 +81,24 @@ def render_aggregate(cfg, rules, target):
     H6 are left alone (Markdown has no H7). Claude-only spans are kept for the
     claude target and stripped for every other.
     """
+    if output_scope not in CURSOR_DIRS:
+        raise ValueError(
+            f"unknown aggregate scope: {output_scope!r} (expected personal|work)"
+        )
+
     keep_claude_only = target == "claude"
     sections = []
     for name in cfg["rules"]:
-        body = (ROOT / rules[name]["body"]).read_text()
+        rule = rules[name]
+        rule_scope = rule.get("scope", "both")
+        if rule_scope not in (*CURSOR_DIRS, "both"):
+            raise ValueError(
+                f"{name}: unknown rule scope {rule_scope!r} "
+                "(expected both|personal|work)"
+            )
+        if rule_scope not in ("both", output_scope):
+            continue
+        body = (ROOT / rule["body"]).read_text()
         body = _apply_claude_only(body, keep=keep_claude_only)
         sections.append(re.sub(r"^(#{1,5}) ", r"#\1 ", body, flags=re.MULTILINE))
     doc = f"# {cfg['title']}\n\n{GENERATED_BANNER}\n\n" + "\n".join(sections)
@@ -99,29 +118,50 @@ def outputs(manifest):
             if target != "cursor":
                 raise ValueError(f"{name}: unsupported target {target!r}")
             content = render_cursor(settings, body)
-            for dest_dir in cursor_dests(settings.get("scope", "both")):
+            for dest_dir in cursor_dests(rule.get("scope", "both")):
                 yield dest_dir / settings["file"], content
     for target in ("codex", "claude", "opencode"):
         cfg = manifest.get(target)
         if cfg:
-            yield REPO / cfg["file"], render_aggregate(cfg, rules, target)
+            for output in cfg["outputs"]:
+                yield REPO / output["file"], render_aggregate(
+                    cfg, rules, target, output["scope"]
+                )
+
+
+def existing_generated_paths():
+    patterns = (
+        (REPO / "cursor" / "rules", "*.mdc"),
+        (REPO / "cursor" / "rules-work", "*.mdc"),
+        (REPO / "claude", "CLAUDE*.md"),
+        (REPO / "codex", "AGENTS*.md"),
+        (REPO / "opencode", "AGENTS*.md"),
+    )
+    for directory, pattern in patterns:
+        for path in directory.glob(pattern):
+            if GENERATED_BANNER in path.read_text():
+                yield path
 
 
 def main():
     check = "--check" in sys.argv
     manifest = json.loads(MANIFEST.read_text())
     planned = list(outputs(manifest))
+    planned_paths = {path for path, _ in planned}
+    stale = sorted(set(existing_generated_paths()) - planned_paths)
 
     if check:
         drift = [p for p, c in planned if (not p.exists()) or p.read_text() != c]
-        if drift:
+        if drift or stale:
             sys.stderr.write("agent-rules: generated files are stale - run `python3 agent-rules/build.py`:\n")
-            for p in drift:
+            for p in (*drift, *stale):
                 sys.stderr.write(f"  - {p.relative_to(REPO)}\n")
             return 1
         print(f"agent-rules: {len(planned)} generated file(s) up to date")
         return 0
 
+    for path in stale:
+        path.unlink()
     for path, content in planned:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)

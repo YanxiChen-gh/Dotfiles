@@ -7,10 +7,19 @@ setup_codex_config() {
     codex_dir="$HOME/.codex"
     mkdir -p "$codex_dir"
 
-    if [ -f "$script_dir/codex/AGENTS.md" ]; then
-        rm -f "$codex_dir/AGENTS.md"
-        ln -s "$script_dir/codex/AGENTS.md" "$codex_dir/AGENTS.md"
-        echo "✅ Codex AGENTS.md linked"
+    codex_instructions="$script_dir/codex/AGENTS.md"
+    instruction_scope="personal"
+    if [ "${WORK_MACHINE:-}" = "1" ]; then
+        codex_instructions="$script_dir/codex/AGENTS-work.md"
+        instruction_scope="work"
+    fi
+    if [ -f "$codex_instructions" ]; then
+        link_dotfiles_file \
+            "$codex_instructions" \
+            "$codex_dir/AGENTS.md" \
+            "$script_dir/codex/AGENTS.md" \
+            "$script_dir/codex/AGENTS-work.md" || return 1
+        echo "✅ Codex AGENTS.md linked ($instruction_scope)"
     fi
 
     rtk_source="$script_dir/codex/RTK.md"
@@ -18,8 +27,7 @@ setup_codex_config() {
         rtk_source="$script_dir/claude/RTK.md"
     fi
     if [ -f "$rtk_source" ]; then
-        rm -f "$codex_dir/RTK.md"
-        ln -s "$rtk_source" "$codex_dir/RTK.md"
+        link_dotfiles_file "$rtk_source" "$codex_dir/RTK.md" || return 1
         echo "✅ Codex RTK.md linked"
     fi
 

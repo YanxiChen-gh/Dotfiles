@@ -1,10 +1,9 @@
 # shellcheck shell=sh
 # Sourced by ../install.sh - function definitions only.
 
-# Install RTK and enable for Claude Code, OpenCode, OpenAI Codex (GPT), and Cursor.
+# Install RTK and enable hooks for Claude Code, OpenCode, and Cursor.
 # Claude: PreToolUse hook in ~/.claude/settings.json
 # Cursor: preToolUse hook in cursor/hooks.json (symlinked to ~/.cursor/hooks.json)
-# Codex: AGENTS.md + RTK.md symlinks (~/.codex/); agents prefix shell commands with rtk
 setup_rtk() {
     echo "Setting up RTK (token-optimized shell output)..."
 
@@ -47,14 +46,6 @@ setup_rtk() {
         echo "✅ RTK Cursor hook present (cursor/hooks.json)"
     else
         echo "⚠️  RTK Cursor hook not configured (re-run install or: rtk init -g --agent cursor --hook-only --auto-patch)"
-    fi
-
-    # OpenAI Codex (GPT) - AGENTS.md + RTK.md (instruction-based; no bash hook API)
-    setup_codex_config
-    if [ -f "$HOME/.codex/AGENTS.md" ] && [ -f "$HOME/.codex/RTK.md" ]; then
-        echo "✅ RTK instructions linked for OpenAI Codex (GPT)"
-    else
-        echo "⚠️  Codex RTK config incomplete (expected ~/.codex/AGENTS.md and RTK.md)"
     fi
 
     echo "✅ RTK setup complete (rtk gain for savings stats)"

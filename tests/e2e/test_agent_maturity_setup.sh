@@ -41,6 +41,8 @@ curl() {
   cat "$FAKE_BOOT"
 }
 
+# shellcheck source=../../install.d/10-helpers.sh
+. "$ROOT/install.d/10-helpers.sh"
 # shellcheck source=../../install.d/50-claude.sh
 . "$ROOT/install.d/50-claude.sh"
 # shellcheck source=../../install.d/60-codex.sh

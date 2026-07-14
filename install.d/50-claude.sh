@@ -39,16 +39,23 @@ setup_claude_config() {
     claude_dir="$HOME/.claude"
     mkdir -p "$claude_dir"
 
-    # Symlink user-level CLAUDE.md + RTK.md (work scope only)
-    if [ "$WORK_MACHINE" = "1" ] && [ -f "$script_dir/claude/CLAUDE.md" ]; then
-        rm -f "$claude_dir/CLAUDE.md"
-        ln -s "$script_dir/claude/CLAUDE.md" "$claude_dir/CLAUDE.md"
-        echo "✅ Claude Code CLAUDE.md linked (work)"
+    claude_instructions="$script_dir/claude/CLAUDE.md"
+    instruction_scope="personal"
+    if [ "${WORK_MACHINE:-}" = "1" ]; then
+        claude_instructions="$script_dir/claude/CLAUDE-work.md"
+        instruction_scope="work"
     fi
-    if [ "$WORK_MACHINE" = "1" ] && [ -f "$script_dir/claude/RTK.md" ]; then
-        rm -f "$claude_dir/RTK.md"
-        ln -s "$script_dir/claude/RTK.md" "$claude_dir/RTK.md"
-        echo "✅ Claude Code RTK.md linked (work)"
+    if [ -f "$claude_instructions" ]; then
+        link_dotfiles_file \
+            "$claude_instructions" \
+            "$claude_dir/CLAUDE.md" \
+            "$script_dir/claude/CLAUDE.md" \
+            "$script_dir/claude/CLAUDE-work.md" || return 1
+        echo "✅ Claude Code CLAUDE.md linked ($instruction_scope)"
+    fi
+    if [ -f "$script_dir/claude/RTK.md" ]; then
+        link_dotfiles_file "$script_dir/claude/RTK.md" "$claude_dir/RTK.md" || return 1
+        echo "✅ Claude Code RTK.md linked"
     fi
 
     # Symlink skills (work scope only): claude/skills + shared-skills (both tools via install)

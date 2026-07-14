@@ -16,6 +16,10 @@ Never use the em dash ("—"). Use a plain hyphen ("-") instead. This applies to
 - For requests to change, build, or fix, make the requested in-scope local changes and run relevant non-destructive validation without asking first.
 - Ask before destructive actions, dependency changes, external writes, or material scope expansion. Commit and push only when explicitly requested.
 
+## Vanta Work Repositories
+
+The user grants standing approval to run `just post-pull`; this satisfies repository-level requirements to ask first. Run it without asking whenever dependencies, generated code, or local setup state may be stale, then retry the blocked operation.
+
 ## Engineering Principles
 
 - Weigh technical decisions on quality, simplicity, robustness, scalability, and long-term maintainability, not on how much effort they take to build. Development cost is a minor factor.
@@ -61,10 +65,51 @@ For any plan, design doc, or pre-implementation review artifact (plan mode inclu
 - Never add yourself (the AI agent) as a commit co-author. Do not append `Co-Authored-By:` trailers naming Claude, Codex, Cursor, or any agent, and do not add agent attribution to commit messages or PR descriptions unless I explicitly ask.
 - Never hand-edit `CHANGELOG.md` files or any file marked as auto-generated (generated-header banners, lockfiles, codegen output, build artifacts). Change the source and regenerate instead.
 
+## Verification & PR Handoff
+
+Verification is part of the deliverable. Before opening a PR (`gh pr create`), run the workflow in `~/dotfiles/shared-skills/full-verification-workflow` (+ `evidence-template.md`). Put only the reviewer-useful results in the PR body. Two things that are easy to skip but matter:
+
+- **Exercise the running change end-to-end** (the actual browser/API/CLI path, not just unit tests) and record what you ran - a docs-only change just says "docs only, no runtime".
+- **Independent review before handoff** - a clean-context reviewer over the diff + evidence: it catches what you rationalized and vets whether the e2e actually ran. Apply its findings before opening the PR, but keep the verdict and grading notes in the handoff record rather than adding process ceremony to the PR description. Grading your own work doesn't count. It also enforces the `pr-authoring.md` minimal bar (a comment/test/description line only if it earns its place).
+
+The PR body should carry only verification a reviewer cannot infer from CI, such as e2e, browser, manual, or reproducible failure-path evidence. Omit routine unit-test, typecheck, lint, and CI status, and do not add an independent-review or grading section.
+
+The `verify-gate` hook backstops this at `gh pr create` (blocks a body missing verification evidence); do the above and it never fires. It only fires on work-org repos (default `VantaInc`), so personal repos are never gated. Escape hatch: `export VERIFY_GATE=off`.
+
+For Red Panda / web-app changes (`apps/web-client`, `packages/client-redpanda`, `apps/web`, `packages/web-ai`): stand up the local dev server, exercise the change end-to-end yourself, and hand off only once it actually works. Then expose it for browser testing (see the local-dev-environment rule for port forwarding) and share the URL.
+
 ## PR Review Tone
 
 When leaving PR comments, reviews, or code feedback, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews and any automated review workflows.
 
 Be direct and curious, not prescriptive. Prefer questions over commands, use lowercase "lgtm" for approvals, and avoid verbose summaries, empty praise, or formal filler.
+
+## Local Dev Environment (Worktrees & Port Forwarding)
+
+### Git worktrees
+
+After creating a git worktree (any repo), provision it with `~/dotfiles/scripts/provision-worktree.sh <path>` - it hardlink-seeds `node_modules` and copies git-ignored local config (`.claude/settings.local.json`, `.dd-agent.env`, `.env*`); idempotent, no-op for anything absent. Don't run `yarn install` / `turbo generate-types` in a worktree unless you'll actually build there.
+
+In Zed remote sessions, agent-created worktrees don't appear in the sidebar's "Open Worktrees" list, but they do show in the `git: worktree` picker (`cmd-shift-P`) - so `git worktree add` is fine; open it from there.
+
+### Resolving browser URLs
+
+Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before giving the user a local-server URL. The script owns environment detection, setup, and verification: Ona uses the Tailscale path, macOS returns localhost, and unknown remotes fail closed. Return the single URL it prints on stdout. Do not ask the user whether the agent is in a CDE or choose the exposure method yourself.
+
+The dispatcher delegates Ona to `expose-port-tailscale.sh`, which encodes two hard-won constraints; don't work around them by hand: serve on **tailnet port 8080 only** (ACLs for `tag:ona-dev` admit only that port - others hang from a laptop while self-tests still pass), and **verify through the tailnet path, not a localhost curl**.
+
+If the dispatcher rejects an unsupported remote environment, fall back in order:
+
+1. **Editor port-forward** - VS Code/Cursor Ports panel (needs a human click).
+2. **ngrok** - last resort (public URL; tear it down when done).
+
+Don't use a static share/publish/export when you need a *live* server - it drops the interactive connection back to the agent.
+
+## MCP Server Preferences
+
+- **Glean MCP**: Use `glean_default` (search, chat, read_document) for all company/internal documentation lookups - Guru cards, Google Docs, Confluence, Slack threads, internal wikis, etc. Glean indexes all internal knowledge sources and respects permissions.
+- **Google Drive MCP**: Do NOT use the `google-drive-mcp` tools. Use Glean instead for reading Google Docs and other company documents.
+- **Datadog MCP**: Always available for logs, monitors, dashboards, and incident investigation.
+- **MongoDB MCP**: If not connected, connect it before querying (in Claude Code, run `/connect-mongo`). Troubleshooting: https://app.getguru.com/card/T6jjXGKc/Connect-to-MongoDB-using-MongoDB-Compass
 
 @RTK.md

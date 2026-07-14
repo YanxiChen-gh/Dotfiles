@@ -66,7 +66,7 @@ Check savings anytime: `rtk gain`. Telemetry is disabled by default (`RTK_TELEME
 
 ### Shared agent rules (single source)
 
-Rules that more than one tool shares live once under `agent-rules/`: a tool-agnostic body (`<name>.md`) plus per-tool settings in `rules.json`. `agent-rules/build.py` compiles them into each tool's native format - today the Cursor `.mdc` files in **both** `cursor/rules/` (personal) and `cursor/rules-work/` (work), per each rule's `scope`. Edit the source and re-run `python3 agent-rules/build.py`; never hand-edit a generated `.mdc`. `verify-dotfiles.sh` runs `build.py --check` and fails on drift, so the copies can't diverge. Adding a tool is a new emitter in `build.py`; adding a rule is a new source file plus a `rules.json` entry.
+Rules that more than one tool shares live once under `agent-rules/`: a tool-agnostic body (`<name>.md`) plus per-tool settings in `rules.json`. Each rule's canonical `scope` is `personal`, `work`, or `both` (the default). `agent-rules/build.py` compiles scoped aggregates for Claude, Codex, and OpenCode plus Cursor `.mdc` files under `cursor/rules/` and `cursor/rules-work/`. The installer selects work aggregates only when `WORK_MACHINE=1`. Edit the source and re-run `python3 agent-rules/build.py`; never hand-edit generated instructions. `verify-dotfiles.sh` runs `build.py --check` and fails on drift, so the copies can't diverge. Adding a tool is a new emitter in `build.py`; adding a rule is a new source file plus a `rules.json` entry.
 
 ### OpenCode
 

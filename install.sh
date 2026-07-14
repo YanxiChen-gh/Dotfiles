@@ -115,6 +115,7 @@ install_agent_skill "ogulcancelik/herdr" "herdr"
 # Setup Claude Code config and commands
 setup_claude_config
 setup_opencode_config
+setup_codex_config
 setup_advisors
 setup_rtk
 setup_agent_maturity
