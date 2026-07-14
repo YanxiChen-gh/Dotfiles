@@ -5,7 +5,6 @@
       "targets": {
         "cursor": {
           "file": "dotfiles-repo.mdc",
-          "scope": "both",
           "description": "The location of the user's personal Dotfiles repo. Apply when the user references \"my Dotfiles\" or \"the Dotfiles repo\".",
           "alwaysApply": false
         }
@@ -16,7 +15,6 @@
       "targets": {
         "cursor": {
           "file": "pr-authoring.mdc",
-          "scope": "both",
           "description": "When writing or reviewing TypeScript code, code comments, or PR descriptions, follow the user's authoring conventions. Apply when writing/refactoring code, adding comments, or drafting PR descriptions and commit summaries.",
           "alwaysApply": false
         }
@@ -27,7 +25,6 @@
       "targets": {
         "cursor": {
           "file": "pr-review-tone.mdc",
-          "scope": "both",
           "description": "When writing PR reviews, code review comments, or any feedback on pull requests, follow the user's personal review tone. Apply when reviewing PRs, leaving inline comments, or approving/requesting changes.",
           "alwaysApply": false
         }
@@ -38,7 +35,6 @@
       "targets": {
         "cursor": {
           "file": "writing-style.mdc",
-          "scope": "both",
           "description": "Global output style: never use em dashes; use a plain hyphen instead.",
           "alwaysApply": true
         }
@@ -49,7 +45,6 @@
       "targets": {
         "cursor": {
           "file": "git-and-generated-files.mdc",
-          "scope": "both",
           "description": "Global git and file-editing rules: no agent co-author trailers, and never hand-edit generated files or CHANGELOG.md.",
           "alwaysApply": true
         }
@@ -60,7 +55,6 @@
       "targets": {
         "cursor": {
           "file": "autonomy.mdc",
-          "scope": "both",
           "description": "Defines when coding agents may inspect, edit, validate, commit, push, or expand scope.",
           "alwaysApply": true
         }
@@ -71,7 +65,6 @@
       "targets": {
         "cursor": {
           "file": "engineering-principles.mdc",
-          "scope": "both",
           "description": "Global engineering principles: decision priorities, reproduction-first bug fixing, UI pixel-perfection, and fixing lint/test/flaky issues you encounter.",
           "alwaysApply": true
         }
@@ -82,7 +75,6 @@
       "targets": {
         "cursor": {
           "file": "scope-before-code.mdc",
-          "scope": "both",
           "description": "Before writing code on a non-trivial task, scope it first: acceptance checks, declared implementation choices, PR-decomposition, and batched scope questions. Apply before starting any multi-file, interface-changing, or approach-forking work.",
           "alwaysApply": false
         }
@@ -90,6 +82,7 @@
     },
     "verification-and-handoff": {
       "body": "verification-and-handoff.md",
+      "scope": "work",
       "comment": "Codex-only: Cursor already carries this via the hand-authored dev-cycle-verification.mdc.",
       "targets": {}
     },
@@ -98,7 +91,6 @@
       "targets": {
         "cursor": {
           "file": "doc-and-planning.mdc",
-          "scope": "both",
           "description": "When writing a design doc, RFC, spec, runbook, or playbook, or producing a plan/pre-implementation review artifact. Covers the doc-style rubric and defaulting plans to a Lavish HTML artifact.",
           "alwaysApply": false
         }
@@ -106,10 +98,10 @@
     },
     "local-dev-environment": {
       "body": "local-dev-environment.md",
+      "scope": "work",
       "targets": {
         "cursor": {
           "file": "local-dev-environment.mdc",
-          "scope": "work",
           "description": "Local dev environment ops: provisioning worktrees and resolving a verified browser-accessible URL for local servers across macOS and remote CDEs.",
           "alwaysApply": false
         }
@@ -117,6 +109,7 @@
     },
     "mcp-preferences": {
       "body": "mcp-preferences.md",
+      "scope": "work",
       "comment": "Codex-only: Cursor already carries the Glean bit via the hand-authored use-glean-mcp-for-google-docs.mdc.",
       "targets": {}
     },
@@ -124,24 +117,44 @@
       "body": "codex-skills.md",
       "comment": "Codex-only: tells Codex where its symlinked skills live, since it has no native skill auto-load.",
       "targets": {}
+    },
+    "vanta-work": {
+      "body": "vanta-work.md",
+      "scope": "work",
+      "targets": {
+        "cursor": {
+          "file": "vanta-work.mdc",
+          "description": "Standing approval and other personal agent behavior for Vanta work repositories.",
+          "alwaysApply": true
+        }
+      }
     }
   },
   "codex": {
-    "file": "codex/AGENTS.md",
+    "outputs": [
+      {"file": "codex/AGENTS.md", "scope": "personal"},
+      {"file": "codex/AGENTS-work.md", "scope": "work"}
+    ],
     "title": "Codex Global Instructions",
-    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "autonomy", "engineering-principles", "scope-before-code", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences", "codex-skills"],
+    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "autonomy", "vanta-work", "engineering-principles", "scope-before-code", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences", "codex-skills"],
     "footer": "@RTK.md"
   },
   "claude": {
-    "file": "claude/CLAUDE.md",
+    "outputs": [
+      {"file": "claude/CLAUDE.md", "scope": "personal"},
+      {"file": "claude/CLAUDE-work.md", "scope": "work"}
+    ],
     "title": "User-Level Claude Code Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "autonomy", "engineering-principles", "scope-before-code", "pr-authoring", "doc-and-planning", "git-and-generated-files", "verification-and-handoff", "pr-review-tone", "local-dev-environment", "mcp-preferences"],
+    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "scope-before-code", "pr-authoring", "doc-and-planning", "git-and-generated-files", "verification-and-handoff", "pr-review-tone", "local-dev-environment", "mcp-preferences"],
     "footer": "@RTK.md"
   },
   "opencode": {
-    "file": "opencode/AGENTS.md",
+    "outputs": [
+      {"file": "opencode/AGENTS.md", "scope": "personal"},
+      {"file": "opencode/AGENTS-work.md", "scope": "work"}
+    ],
     "title": "OpenCode Global Instructions",
-    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "autonomy", "engineering-principles", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences"],
+    "rules": ["dotfiles-repo", "pr-authoring", "pr-review-tone", "writing-style", "git-and-generated-files", "autonomy", "vanta-work", "engineering-principles", "verification-and-handoff", "doc-and-planning", "local-dev-environment", "mcp-preferences"],
     "footer": ""
   }
 }

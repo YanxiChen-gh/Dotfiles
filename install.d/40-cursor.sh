@@ -119,14 +119,24 @@ with open('$cursor_user_dir/settings.json', 'w') as f:
     if [ -d "$cursor_dotfiles/rules" ] || [ -d "$cursor_dotfiles/rules-work" ]; then
         echo "Linking Cursor rules..."
         mkdir -p "$cursor_home_dir/rules"
+
+        for rule in "$cursor_home_dir/rules"/*.mdc; do
+            [ -L "$rule" ] || continue
+            case "$(readlink "$rule")" in
+                "$cursor_dotfiles/rules/"*|"$cursor_dotfiles/rules-work/"*) rm -f "$rule" ;;
+            esac
+        done
         
         # Link personal rules
         if [ -d "$cursor_dotfiles/rules" ]; then
             for rule in "$cursor_dotfiles/rules"/*.mdc; do
                 [ -f "$rule" ] || continue
                 name=$(basename "$rule")
-                rm -f "$cursor_home_dir/rules/$name"
-                ln -s "$rule" "$cursor_home_dir/rules/$name"
+                link_dotfiles_file \
+                    "$rule" \
+                    "$cursor_home_dir/rules/$name" \
+                    "$cursor_dotfiles/rules/$name" \
+                    "$cursor_dotfiles/rules-work/$name" || return 1
             done
             echo "✅ personal rules linked"
         fi
@@ -136,11 +146,22 @@ with open('$cursor_user_dir/settings.json', 'w') as f:
             for rule in "$cursor_dotfiles/rules-work"/*.mdc; do
                 [ -f "$rule" ] || continue
                 name=$(basename "$rule")
-                rm -f "$cursor_home_dir/rules/$name"
-                ln -s "$rule" "$cursor_home_dir/rules/$name"
+                link_dotfiles_file \
+                    "$rule" \
+                    "$cursor_home_dir/rules/$name" \
+                    "$cursor_dotfiles/rules/$name" \
+                    "$cursor_dotfiles/rules-work/$name" || return 1
             done
             echo "✅ work rules linked"
         fi
+
+        for backup in "$cursor_home_dir/rules"/*.mdc.pre-dotfiles; do
+            [ -e "$backup" ] || [ -L "$backup" ] || continue
+            target=${backup%.pre-dotfiles}
+            if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+                mv "$backup" "$target"
+            fi
+        done
     fi
 
     echo "✅ Cursor configuration setup complete"
@@ -199,4 +220,3 @@ install_cursor_extensions() {
 
     echo "✅ Extension installation complete"
 }
-

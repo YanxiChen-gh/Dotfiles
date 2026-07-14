@@ -59,6 +59,8 @@ resolve_script_dir() {
 	printf '%s\n' "$ROOT"
 }
 
+# shellcheck source=../../install.d/10-helpers.sh
+. "$ROOT/install.d/10-helpers.sh"
 # shellcheck source=../../install.d/65-opencode.sh
 . "$ROOT/install.d/65-opencode.sh"
 

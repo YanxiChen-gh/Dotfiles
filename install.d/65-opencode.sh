@@ -34,27 +34,6 @@ ensure_opencode_path() {
     done
 }
 
-link_opencode_file() {
-    source_file=$1
-    target_file=$2
-
-    if [ -L "$target_file" ] && [ "$(readlink "$target_file")" = "$source_file" ]; then
-        return 0
-    fi
-
-    if [ -e "$target_file" ] || [ -L "$target_file" ]; then
-        backup_file="$target_file.pre-dotfiles"
-        if [ -e "$backup_file" ] || [ -L "$backup_file" ]; then
-            echo "⚠️  OpenCode setup kept unmanaged file because backup already exists: $target_file"
-            return 1
-        fi
-        mv "$target_file" "$backup_file"
-        echo "ℹ️  Preserved existing OpenCode file at $backup_file"
-    fi
-
-    ln -s "$source_file" "$target_file"
-}
-
 setup_opencode_config() {
     script_dir=$(resolve_script_dir) || return 1
     source_dir="$script_dir/opencode"
@@ -63,20 +42,30 @@ setup_opencode_config() {
 
     mkdir -p "$plugin_dir"
     if [ -e "$config_dir/opencode.json" ] || [ -L "$config_dir/opencode.json" ]; then
-        link_opencode_file "$source_dir/opencode.jsonc" "$config_dir/opencode.json" || return 1
+        link_dotfiles_file "$source_dir/opencode.jsonc" "$config_dir/opencode.json" || return 1
         rm -f "$config_dir/opencode.json"
     fi
-    link_opencode_file "$source_dir/opencode.jsonc" "$config_dir/opencode.jsonc" || return 1
+    link_dotfiles_file "$source_dir/opencode.jsonc" "$config_dir/opencode.jsonc" || return 1
 
     if [ -e "$config_dir/tui.json" ] || [ -L "$config_dir/tui.json" ]; then
-        link_opencode_file "$source_dir/tui.jsonc" "$config_dir/tui.json" || return 1
+        link_dotfiles_file "$source_dir/tui.jsonc" "$config_dir/tui.json" || return 1
         rm -f "$config_dir/tui.json"
     fi
-    link_opencode_file "$source_dir/tui.jsonc" "$config_dir/tui.jsonc" || return 1
+    link_dotfiles_file "$source_dir/tui.jsonc" "$config_dir/tui.jsonc" || return 1
 
-    link_opencode_file "$source_dir/AGENTS.md" "$config_dir/AGENTS.md" || return 1
+    opencode_instructions="$source_dir/AGENTS.md"
+    instruction_scope="personal"
+    if [ "${WORK_MACHINE:-}" = "1" ]; then
+        opencode_instructions="$source_dir/AGENTS-work.md"
+        instruction_scope="work"
+    fi
+    link_dotfiles_file \
+        "$opencode_instructions" \
+        "$config_dir/AGENTS.md" \
+        "$source_dir/AGENTS.md" \
+        "$source_dir/AGENTS-work.md" || return 1
 
-    link_opencode_file "$source_dir/plugins/dotfiles-harness.js" "$plugin_dir/dotfiles-harness.js" || return 1
+    link_dotfiles_file "$source_dir/plugins/dotfiles-harness.js" "$plugin_dir/dotfiles-harness.js" || return 1
 
-    echo "✅ OpenCode config, TUI settings, global rules, and harness linked"
+    echo "✅ OpenCode config, TUI settings, $instruction_scope rules, and harness linked"
 }
