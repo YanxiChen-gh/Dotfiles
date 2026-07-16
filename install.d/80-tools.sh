@@ -216,6 +216,74 @@ install_siggy_cli() {
     fi
 }
 
+# Install the Google Workspace CLI at the version tested by these Dotfiles.
+# Work machines only; authentication remains an explicit user action.
+install_google_workspace_cli() {
+    if [ "${WORK_MACHINE:-}" != "1" ]; then
+        return 0
+    fi
+
+    gws_version="0.22.5"
+    install_node_if_missing || return 1
+
+    npm_prefix=$(npm prefix -g 2>/dev/null || true)
+    if [ -z "$npm_prefix" ]; then
+        echo "⚠️  Could not determine the global npm prefix"
+        return 1
+    fi
+    npm_gws="$npm_prefix/bin/gws"
+
+    installed_version=""
+    if [ -x "$npm_gws" ]; then
+        installed_version=$("$npm_gws" --version 2>/dev/null | (
+            IFS=' ' read -r command version _
+            if [ "$command" = "gws" ]; then
+                printf '%s\n' "$version"
+            fi
+        ))
+    fi
+
+    if [ "$installed_version" != "$gws_version" ]; then
+        if [ -n "$installed_version" ]; then
+            echo "Updating Google Workspace CLI from $installed_version to $gws_version..."
+        else
+            echo "Installing Google Workspace CLI $gws_version..."
+        fi
+
+        if ! npm install -g "@googleworkspace/cli@$gws_version"; then
+            echo "⚠️  Warning: Failed to install Google Workspace CLI"
+            echo "   Try manually: npm install -g @googleworkspace/cli@$gws_version"
+            return 1
+        fi
+    fi
+
+    installed_version=$("$npm_gws" --version 2>/dev/null | (
+        IFS=' ' read -r command version _
+        if [ "$command" = "gws" ]; then
+            printf '%s\n' "$version"
+        fi
+    ))
+    if [ "$installed_version" != "$gws_version" ]; then
+        echo "⚠️  Google Workspace CLI installed, but expected $gws_version and found ${installed_version:-unknown}"
+        return 1
+    fi
+
+    managed_gws_dir="$HOME/.local/bin"
+    managed_gws="$managed_gws_dir/gws"
+    mkdir -p "$managed_gws_dir"
+    if [ -e "$managed_gws" ] && [ ! -L "$managed_gws" ]; then
+        echo "⚠️  Refusing to replace unmanaged file at $managed_gws"
+        return 1
+    fi
+    if [ -L "$managed_gws" ]; then
+        rm -f "$managed_gws"
+    fi
+    ln -s "$npm_gws" "$managed_gws"
+
+    echo "✅ Google Workspace CLI $gws_version installed at $managed_gws"
+    echo "   Run gws-work-auth to authenticate Docs, Sheets, Slides, and Drive."
+}
+
 # Install an AXI agent skill (github.com/kunchenguid/*) for Claude Code and Cursor.
 # Install an agent skill for Claude Code and/or Cursor from a GitHub repo.
 # Usage: install_agent_skill <github_repo> <skill_name>
@@ -235,4 +303,3 @@ install_agent_skill() {
             || echo "⚠️  ${skill} skill installation failed for Cursor (can retry manually)"
     fi
 }
-

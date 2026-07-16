@@ -80,6 +80,7 @@ if [ "$WORK_MACHINE" = "1" ]; then
     install_pup_cli
     install_gastown
     install_siggy_cli
+    install_google_workspace_cli
     install_from_url "Cortex Code" "cortex" "https://ai.snowflake.com/static/cc-scripts/install.sh"
 fi
 

@@ -5,7 +5,7 @@ REPOSITORY_URL="${REPOSITORY_URL:-https://github.com/VantaInc/obsidian.git}"
 BRANCH="${BRANCH:-main}"
 OUTPUT_FILE="${OUTPUT_FILE:-$HOME/.ona_env}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-120}"
-REQUIRED_VARS="${REQUIRED_VARS:-GH_TOKEN NPM_TASKFORCESH_TOKEN NPM_LEVEL_CI_TOKEN CLOUDSMITH_NPM_TOKEN LANGSMITH_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY}"
+REQUIRED_VARS="${REQUIRED_VARS:-GH_TOKEN NPM_TASKFORCESH_TOKEN NPM_LEVEL_CI_TOKEN CLOUDSMITH_NPM_TOKEN LANGSMITH_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY GOOGLE_WORKSPACE_CLI_CLIENT_ID GOOGLE_WORKSPACE_CLI_CLIENT_SECRET}"
 
 usage() {
     cat <<'EOF'
@@ -137,6 +137,8 @@ remote_env_path, output_path, env_id = sys.argv[1:4]
 output = Path(output_path).expanduser()
 
 denylist_exact = {
+    "GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE",
+    "GOOGLE_WORKSPACE_CLI_TOKEN",
     "HOME",
     "OLDPWD",
     "PATH",
@@ -176,6 +178,10 @@ tooling_prefixes = (
     "OSO_",
     "TURBO_",
 )
+explicit_tooling_vars = {
+    "GOOGLE_WORKSPACE_CLI_CLIENT_ID",
+    "GOOGLE_WORKSPACE_CLI_CLIENT_SECRET",
+}
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -216,6 +222,8 @@ def should_sync(key: str) -> bool:
         return False
     if key in existing_keys:
         return True
+    if key in explicit_tooling_vars:
+        return True
     if any(marker in key for marker in secret_markers):
         return True
     return any(key.startswith(prefix) for prefix in tooling_prefixes)
@@ -233,7 +241,7 @@ for line in old_lines:
     if candidate.startswith("export "):
         candidate = candidate[len("export ") :].strip()
     key = candidate.split("=", 1)[0].strip() if "=" in candidate else ""
-    if key in synced:
+    if key in synced or key in denylist_exact:
         continue
     new_lines.append(line)
 

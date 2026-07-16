@@ -32,3 +32,10 @@ if [ -f "$HOME/.ona_env" ]; then
     export PATH=$_work_saved_PATH
     unset _work_saved_HOME _work_saved_USER _work_saved_LOGNAME _work_saved_SHELL _work_saved_PWD _work_saved_PATH
 fi
+
+# Work-managed binaries take precedence over system tools with the same name.
+export PATH="$HOME/.local/bin:$PATH"
+
+if [ -n "${DOTFILES_DIR:-}" ]; then
+    alias gws-work-auth="$DOTFILES_DIR/scripts/setup_work_google_workspace_auth.sh"
+fi

@@ -80,6 +80,12 @@ After changing OpenCode config or plugins, quit and restart OpenCode. To use Cla
 
 Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. Claude Code, Codex, OpenCode, and Cursor discover them natively. Cursor-only meta-skills stay under `cursor/skills/`.
 
+### Google Workspace CLI
+
+On work machines, `install.sh` pins and installs [`gws`](https://github.com/googleworkspace/cli). Run `gws-work-auth` once per fresh machine to authorize Docs, Sheets, Slides, and the Drive operations used for comments, permissions, and file metadata. The helper is idempotent, accepts only a valid `@vanta.com` account, and deliberately uses explicit scopes so `gws` does not add `cloud-platform` access.
+
+The OAuth client is shared configuration, not a per-machine Cloud project. Supply `GOOGLE_WORKSPACE_CLI_CLIENT_ID` and `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET` through work secrets; Dotfiles syncs only those two Google Workspace values from Ona to Cursor Cloud. Alternatively, place the existing desktop client at `~/.config/gws/client_secret.json`. Never commit that file, `credentials.enc`, `.encryption_key`, or an exported refresh token. The helper rejects access-token and external-credentials-file overrides. Cursor's hybrid port forwarding normally handles the random localhost OAuth callback in a remote environment; if it does not, forward the printed port in the Ports panel before opening the URL.
+
 ### Agent maturity
 
 The agent-maturity bootstrap installs one model-agnostic engine and private data store. Claude Code uses native lifecycle hooks, Codex uses the same hook scripts through `~/.codex/hooks.json`, and OpenCode uses `dotfiles-harness.js` to adapt its plugin events. All three discover the same skills without copying them. Codex requires a one-time `/hooks` review after installation or whenever the hook definition changes.

@@ -43,6 +43,7 @@ for f in \
     sync-cursor-app-to-dotfiles.sh \
     sync-ona-env-to-cursor-cloud.sh \
     scripts/setup_work_github_auth.sh \
+    scripts/setup_work_google_workspace_auth.sh \
     shell/work.sh \
     tests/e2e/test_agent_rule_scopes.sh \
     scripts/verify-dotfiles.sh
@@ -97,7 +98,7 @@ fi
 
 if command -v shellcheck >/dev/null 2>&1; then
     printf '\n== shellcheck (-S error) ==\n'
-    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh claude/style-eval-engine.sh claude/*-style/eval/*.sh scripts/expose-port.sh scripts/expose-port-tailscale.sh scripts/setup_work_github_auth.sh shell/work.sh scripts/verify-dotfiles.sh tests/e2e/test_agent_rule_scopes.sh tests/e2e/test_expose_port.sh; do
+    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh claude/style-eval-engine.sh claude/*-style/eval/*.sh scripts/expose-port.sh scripts/expose-port-tailscale.sh scripts/setup_work_github_auth.sh scripts/setup_work_google_workspace_auth.sh shell/work.sh scripts/verify-dotfiles.sh tests/e2e/test_agent_rule_scopes.sh tests/e2e/test_expose_port.sh tests/e2e/test_google_workspace_cli.sh; do
         if out=$(shellcheck -S error -x "$f" 2>&1); then
             pass "shellcheck $f"
         else
