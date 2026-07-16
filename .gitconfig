@@ -21,5 +21,7 @@
 [user]
 	name = Yanxi Chen
 	email = 13044821+YanxiChen-gh@users.noreply.github.com
+[fetch]
+	prune = true
 [pull]
 	rebase = false

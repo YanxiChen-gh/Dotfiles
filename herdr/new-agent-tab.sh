@@ -6,10 +6,8 @@
 #
 # We lean on Treehouse's own pool lifecycle rather than manage worktrees
 # ourselves: the LEFT pane runs `treehouse get` (NOT --lease), so treehouse owns
-# the worktree and auto-returns it to the pool when the tab's processes exit - no
-# cleanup/reaper needed. Because an unleased `get` prints no scriptable path (and
-# herdr doesn't expose a pane's cwd), the left subshell publishes its path to a
-# per-invocation handoff file when the editor pane needs to join the same worktree.
+# the worktree and auto-returns it to the pool when the tab's processes exit.
+# Herdr's per-pane foreground cwd identifies the acquired worktree for the editor.
 set -euo pipefail
 
 # herdr runs custom commands via a non-interactive shell that inherits the
@@ -94,6 +92,12 @@ repo_root=$(git -C "$src_cwd" rev-parse --show-toplevel 2>/dev/null) \
   || die "Not a git repo: $src_cwd - open an agent tab from a repo workspace."
 
 if [ "$with_worktree" = true ]; then
+  # A relative Treehouse root must resolve from the primary checkout, not from
+  # an existing linked worktree, or each nested launch creates another pool.
+  repo_root=$(git -C "$repo_root" worktree list --porcelain \
+    | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')
+  if [ -z "$repo_root" ] || [ ! -d "$repo_root" ]; then die "could not resolve primary checkout"; fi
+
   # Prevent a pool directory removed out-of-band from wedging `treehouse get`.
   git -C "$repo_root" worktree prune 2>/dev/null || true
 fi
@@ -146,19 +150,20 @@ fi
 "$herdr" pane send-keys "$left" ctrl+u >/dev/null 2>&1 || true
 "$herdr" pane run "$left" "cd '$repo_root' && treehouse get" || die "failed to start treehouse in left pane"
 
-# Wait for treehouse to enter a worktree (it reports one in-use), then have the
-# subshell launch the agent. Running the agent as a child (not exec) keeps the
-# get subshell alive as the worktree's owner until the tab closes, at which point
-# treehouse returns it to the pool.
-worktree_ready=false
+# Wait for this pane to enter its acquired worktree, then have the subshell
+# launch the agent. Running the agent as a child keeps the get subshell alive as
+# the worktree's owner until the tab closes.
+wt=""
 for _ in $(seq 1 60); do
-  if treehouse status 2>/dev/null | grep -q 'in-use'; then
-    worktree_ready=true
+  pane_json=$("$herdr" pane get "$left" 2>/dev/null || true)
+  wt=$(printf '%s' "$pane_json" | jq -r '.result.pane.foreground_cwd // empty')
+  if [ -n "$wt" ] && [ "$wt" != "$repo_root" ] && [ -d "$wt" ]; then
     break
   fi
+  wt=""
   sleep 1
 done
-if [ "$worktree_ready" = false ]; then die "timed out waiting for the worktree to be ready"; fi
+if [ -z "$wt" ]; then die "timed out waiting for the worktree to be ready"; fi
 
 if [ "$with_editor" = false ]; then
   if [ "$with_agent" = true ]; then
@@ -167,18 +172,9 @@ if [ "$with_editor" = false ]; then
   exit 0
 fi
 
-handoff=$(mktemp "${TMPDIR:-/tmp}/herdr-agent-wt.XXXXXX")
-left_command="pwd > '$handoff'"
 if [ "$with_agent" = true ]; then
-  left_command="$left_command; clear; $agent_cmd"
+  "$herdr" pane run "$left" "clear; $agent_cmd" || die "failed to launch agent in left pane"
 fi
-"$herdr" pane run "$left" "$left_command" || die "failed to prepare left pane"
-
-# Read the worktree path the left subshell published, then join the right pane.
-wt=""
-for _ in $(seq 1 30); do [ -s "$handoff" ] && wt=$(cat "$handoff") && break; sleep 1; done
-rm -f "$handoff"
-if [ -z "$wt" ] || [ ! -d "$wt" ]; then die "timed out waiting for the worktree to be ready"; fi
 
 "$herdr" pane send-keys "$right" ctrl+u >/dev/null 2>&1 || true
 "$herdr" pane run "$right" "cd '$wt' && clear; $editor_cmd" || die "failed to launch editor in right pane"
