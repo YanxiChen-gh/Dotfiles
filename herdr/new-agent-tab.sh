@@ -26,6 +26,8 @@ with_agent=true
 with_editor=false
 select_setup=false
 requested_label=""
+selected_label=false
+handoff_ready=""
 
 # Detached shells have no visible stderr, so surface failures as a herdr toast,
 # and - once the panes exist - in the panes too, so a failure never leaves them
@@ -46,10 +48,25 @@ while [ "$#" -gt 0 ]; do
     --without-agent | --shell) with_agent=false ;;
     --with-editor | --editor) with_editor=true ;;
     --without-editor | --no-editor) with_editor=false ;;
+    --selected-label)
+      [ "$#" -ge 2 ] || die "--selected-label requires a value"
+      requested_label="$2"
+      selected_label=true
+      shift
+      ;;
+    --handoff-ready)
+      [ "$#" -ge 2 ] || die "--handoff-ready requires a path"
+      handoff_ready="$2"
+      shift
+      ;;
     *) die "unknown option: $1" ;;
   esac
   shift
 done
+
+if [ -n "$handoff_ready" ]; then
+  printf 'ready\n' > "$handoff_ready" || die "could not signal detached launcher readiness"
+fi
 
 choose() {
   prompt="$1"
@@ -74,6 +91,52 @@ if [ "$select_setup" = true ]; then
   [ "$checkout" = "Fresh Treehouse worktree" ] || with_worktree=false
   [ "$primary" = "OpenCode" ] || with_agent=false
   [ "$editor" = "nvim right split" ] && with_editor=true
+
+  command -v python3 >/dev/null 2>&1 || die "python3 not installed"
+  handoff_ready=$(mktemp "${TMPDIR:-/tmp}/herdr-new-agent-tab.XXXXXX") \
+    || die "could not create detached launcher handshake"
+  printf 'pending\n' > "$handoff_ready"
+
+  detached_args=(--selected-label "$requested_label" --handoff-ready "$handoff_ready")
+  if [ "$with_worktree" = true ]; then
+    detached_args+=(--with-worktree)
+  else
+    detached_args+=(--without-worktree)
+  fi
+  if [ "$with_agent" = true ]; then
+    detached_args+=(--with-agent)
+  else
+    detached_args+=(--without-agent)
+  fi
+  if [ "$with_editor" = true ]; then
+    detached_args+=(--with-editor)
+  else
+    detached_args+=(--without-editor)
+  fi
+
+  # start_new_session isolates setup from the popup PTY on both Linux and macOS.
+  python3 - "$0" "${detached_args[@]}" <<'PY' \
+    || die "could not start detached launcher"
+import subprocess
+import sys
+
+subprocess.Popen(
+    sys.argv[1:],
+    stdin=subprocess.DEVNULL,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    start_new_session=True,
+)
+PY
+  for _ in $(seq 1 100); do
+    if [ "$(<"$handoff_ready")" = "ready" ]; then
+      rm -f "$handoff_ready"
+      exit 0
+    fi
+    sleep 0.02
+  done
+  rm -f "$handoff_ready"
+  die "timed out starting detached launcher"
 fi
 
 command -v jq >/dev/null 2>&1 || die "jq not installed"
@@ -102,7 +165,7 @@ if [ "$with_worktree" = true ]; then
   git -C "$repo_root" worktree prune 2>/dev/null || true
 fi
 
-if [ "$select_setup" = false ]; then
+if [ "$selected_label" = false ]; then
   requested_label="shell"
   if [ "$with_agent" = true ]; then
     requested_label="agent"
