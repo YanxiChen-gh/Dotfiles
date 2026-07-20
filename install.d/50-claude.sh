@@ -303,3 +303,43 @@ PY
         echo "⚠️  Cursor skill sync script not found or not executable: $sync_script"
     fi
 }
+
+# Enable Obsidian Doc Discovery for Claude Code. OpenCode uses its adapter from
+# opencode/skills because the repository skill names Claude-specific Glean tools.
+setup_vanta_doc_discovery_plugin() {
+    if [ "${WORK_MACHINE:-}" != "1" ]; then
+        return 0
+    fi
+
+    obsidian_root="${OBSIDIAN_ROOT:-/workspaces/obsidian}"
+    if [ ! -d "$obsidian_root/.claude/plugins/vanta-doc-discovery" ]; then
+        echo "ℹ️  obsidian checkout not found; skipping Doc Discovery plugin setup"
+        return 0
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        echo "⚠️  Python3 not found; skipping Doc Discovery plugin enablement"
+        return 0
+    fi
+
+    python3 - "$HOME/.claude/settings.json" <<'PY'
+import json
+import os
+import sys
+
+path = os.path.expanduser(sys.argv[1])
+os.makedirs(os.path.dirname(path), exist_ok=True)
+
+data = {}
+if os.path.exists(path):
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+
+data.setdefault("enabledPlugins", {})["vanta-doc-discovery@obsidian-local"] = True
+
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, sort_keys=True)
+    f.write("\n")
+PY
+    echo "✅ Doc Discovery plugin enabled for Claude Code"
+}

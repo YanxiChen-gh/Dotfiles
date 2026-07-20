@@ -67,5 +67,21 @@ setup_opencode_config() {
 
     link_dotfiles_file "$source_dir/plugins/dotfiles-harness.js" "$plugin_dir/dotfiles-harness.js" || return 1
 
+    doc_discovery_source="$source_dir/skills/vanta-doc-discovery/SKILL.md"
+    doc_discovery_dir="$config_dir/skills/vanta-doc-discovery"
+    doc_discovery_target="$doc_discovery_dir/SKILL.md"
+    if [ "${WORK_MACHINE:-}" = "1" ]; then
+        mkdir -p "$doc_discovery_dir"
+        link_dotfiles_file "$doc_discovery_source" "$doc_discovery_target" "$doc_discovery_source" || return 1
+    else
+        if [ -L "$doc_discovery_target" ] && [ "$(readlink "$doc_discovery_target")" = "$doc_discovery_source" ]; then
+            rm -f "$doc_discovery_target"
+        fi
+        if [ ! -e "$doc_discovery_target" ] && [ ! -L "$doc_discovery_target" ] && { [ -e "$doc_discovery_target.pre-dotfiles" ] || [ -L "$doc_discovery_target.pre-dotfiles" ]; }; then
+            mv "$doc_discovery_target.pre-dotfiles" "$doc_discovery_target"
+        fi
+        rmdir "$doc_discovery_dir" 2>/dev/null || true
+    fi
+
     echo "✅ OpenCode config, TUI settings, $instruction_scope rules, and harness linked"
 }

@@ -86,6 +86,47 @@ assert_scope_links() {
 assert_scope_links personal 0 ""
 assert_scope_links work 1 "-work"
 
+work_opencode_skill="$TMP/work/home/.config/opencode/skills/vanta-doc-discovery/SKILL.md"
+[ -L "$work_opencode_skill" ] || fail "OpenCode did not link the work-only Doc Discovery adapter"
+[ "$(readlink "$work_opencode_skill")" = "$ROOT/opencode/skills/vanta-doc-discovery/SKILL.md" ] || fail "OpenCode linked the wrong Doc Discovery adapter"
+[ ! -e "$TMP/personal/home/.config/opencode/skills/vanta-doc-discovery/SKILL.md" ] || fail "personal OpenCode setup included Doc Discovery"
+
+HOME="$TMP/opencode-skill-collision/home"
+XDG_CONFIG_HOME="$HOME/.config"
+WORK_MACHINE=1
+export HOME XDG_CONFIG_HOME WORK_MACHINE
+collision_skill="$XDG_CONFIG_HOME/opencode/skills/vanta-doc-discovery/SKILL.md"
+mkdir -p "$(dirname "$collision_skill")"
+printf 'unmanaged skill\n' >"$collision_skill"
+setup_opencode_config >/dev/null
+[ -L "$collision_skill" ] || fail "OpenCode did not link Doc Discovery over the preserved collision"
+[ "$(cat "$collision_skill.pre-dotfiles")" = "unmanaged skill" ] || fail "OpenCode did not preserve the colliding skill"
+setup_opencode_config >/dev/null
+WORK_MACHINE=0
+setup_opencode_config >/dev/null
+[ ! -L "$collision_skill" ] || fail "personal OpenCode setup retained work-only Doc Discovery"
+[ "$(cat "$collision_skill")" = "unmanaged skill" ] || fail "personal OpenCode setup did not restore the colliding skill"
+
+HOME="$TMP/doc-discovery-plugin/home"
+WORK_MACHINE=1
+OBSIDIAN_ROOT="$TMP/obsidian"
+export HOME WORK_MACHINE OBSIDIAN_ROOT
+mkdir -p "$OBSIDIAN_ROOT/.claude/plugins/vanta-doc-discovery"
+setup_vanta_doc_discovery_plugin >/dev/null
+setup_vanta_doc_discovery_plugin >/dev/null
+python3 - "$HOME/.claude/settings.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as file:
+    settings = json.load(file)
+
+assert settings["enabledPlugins"]["vanta-doc-discovery@obsidian-local"] is True
+PY
+grep -qF 'setup_vanta_doc_discovery_plugin' "$ROOT/install.sh" || fail "installer does not run Doc Discovery setup"
+grep -qF 'glean_default_search' "$ROOT/opencode/skills/vanta-doc-discovery/SKILL.md" || fail "OpenCode adapter does not map Glean search"
+grep -qF 'glean_default_read_document' "$ROOT/opencode/skills/vanta-doc-discovery/SKILL.md" || fail "OpenCode adapter does not map Glean document reads"
+
 HOME="$TMP/cursor/home"
 XDG_CONFIG_HOME="$HOME/.config"
 OS="linux"

@@ -122,6 +122,7 @@ setup_rtk
 setup_agent_maturity
 setup_superpowers_plugin
 setup_vanta_ai_platform_plugin
+setup_vanta_doc_discovery_plugin
 
 # Setup work-specific tools (conditional)
 setup_work_tools
