@@ -25,8 +25,6 @@ with_worktree=true
 with_agent=true
 with_editor=false
 select_setup=false
-requested_label=""
-selected_label=false
 handoff_ready=""
 
 # Detached shells have no visible stderr, so surface failures as a herdr toast,
@@ -48,12 +46,6 @@ while [ "$#" -gt 0 ]; do
     --without-agent | --shell) with_agent=false ;;
     --with-editor | --editor) with_editor=true ;;
     --without-editor | --no-editor) with_editor=false ;;
-    --selected-label)
-      [ "$#" -ge 2 ] || die "--selected-label requires a value"
-      requested_label="$2"
-      selected_label=true
-      shift
-      ;;
     --handoff-ready)
       [ "$#" -ge 2 ] || die "--handoff-ready requires a path"
       handoff_ready="$2"
@@ -85,8 +77,6 @@ if [ "$select_setup" = true ]; then
   checkout=$(choose "Checkout" "Fresh Treehouse worktree" "Current checkout") || exit 0
   primary=$(choose "Primary pane" "OpenCode" "Shell") || exit 0
   editor=$(choose "Editor" "No editor" "nvim right split") || exit 0
-  printf '\033[2J\033[HTab name (leave blank for Herdr default): '
-  IFS= read -r requested_label || exit 0
 
   [ "$checkout" = "Fresh Treehouse worktree" ] || with_worktree=false
   [ "$primary" = "OpenCode" ] || with_agent=false
@@ -97,7 +87,7 @@ if [ "$select_setup" = true ]; then
     || die "could not create detached launcher handshake"
   printf 'pending\n' > "$handoff_ready"
 
-  detached_args=(--selected-label "$requested_label" --handoff-ready "$handoff_ready")
+  detached_args=(--handoff-ready "$handoff_ready")
   if [ "$with_worktree" = true ]; then
     detached_args+=(--with-worktree)
   else
@@ -165,13 +155,11 @@ if [ "$with_worktree" = true ]; then
   git -C "$repo_root" worktree prune 2>/dev/null || true
 fi
 
-if [ "$selected_label" = false ]; then
-  requested_label="shell"
-  if [ "$with_agent" = true ]; then
-    requested_label="agent"
-  elif [ "$with_editor" = true ]; then
-    requested_label="editor"
-  fi
+requested_label="shell"
+if [ "$with_agent" = true ]; then
+  requested_label="agent"
+elif [ "$with_editor" = true ]; then
+  requested_label="editor"
 fi
 
 # Create the tab up front, rooted at the repo, so it appears instantly instead

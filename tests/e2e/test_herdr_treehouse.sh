@@ -112,8 +112,7 @@ fi
 
 : > "$HERDR_LOG"
 
-printf 'picked tab\n' | \
-  HOME="$HOME_DIR" \
+HOME="$HOME_DIR" \
   HERDR_BIN_PATH="$TMP/herdr" \
   HERDR_ACTIVE_WORKSPACE_ID=test-workspace \
   HERDR_ACTIVE_PANE_CWD="$LINKED" \
@@ -127,7 +126,7 @@ for _ in $(seq 1 100); do
   sleep 0.02
 done
 [ -e "$TAB_CREATE_STARTED" ] || fail "detached launcher did not start tab creation"
-assert_log "tab create --cwd $MAIN --focus --workspace test-workspace --label picked tab" "$HERDR_LOG"
+assert_log "tab create --cwd $MAIN --focus --workspace test-workspace --label shell" "$HERDR_LOG"
 
 : > "$TAB_CREATE_RELEASE"
 for _ in $(seq 1 100); do
@@ -139,25 +138,22 @@ assert_log "pane run test-pane cd '$MAIN' && treehouse get" "$HERDR_LOG"
 
 : > "$HERDR_LOG"
 
-printf '\n' | \
-  HOME="$HOME_DIR" \
+HOME="$HOME_DIR" \
   HERDR_BIN_PATH="$TMP/herdr" \
   HERDR_ACTIVE_WORKSPACE_ID=test-workspace \
   HERDR_ACTIVE_PANE_CWD="$LINKED" \
   FAKE_FZF_CHECKOUT="Current checkout" \
+  FAKE_FZF_PRIMARY="OpenCode" \
   FAKE_TAB_CREATE_COMPLETED="$TAB_CREATE_COMPLETED" \
   timeout 2 "$LAUNCHER" --select \
-  || fail "blank-label selector failed"
+  || fail "agent selector failed"
 
 for _ in $(seq 1 100); do
   [ -e "$TAB_CREATE_COMPLETED" ] && break
   sleep 0.02
 done
-[ -e "$TAB_CREATE_COMPLETED" ] || fail "blank-label tab was not created"
-assert_log "tab create --cwd $LINKED --focus --workspace test-workspace" "$HERDR_LOG"
-if grep -F -- "--label" "$HERDR_LOG" >/dev/null; then
-  fail "blank selected label was replaced with a default"
-fi
+[ -e "$TAB_CREATE_COMPLETED" ] || fail "agent tab was not created"
+assert_log "tab create --cwd $LINKED --focus --workspace test-workspace --label agent" "$HERDR_LOG"
 
 [ "$(git config --file "$ROOT/.gitconfig" --get fetch.prune)" = true ] \
   || fail "fetch.prune is not enabled"

@@ -21,6 +21,7 @@ export MCP_CLIENT_ID
 export AGENT_MATURITY_HOME
 export HARNESS_HOOKS
 unset MISSING_ENV
+unset HERDR_ENV HERDR_TAB_ID HERDR_BIN_PATH
 
 mkdir -p "$AGENT_MATURITY_HOME/scripts" "$HARNESS_HOOKS"
 cat >"$AGENT_MATURITY_HOME/scripts/scope-gate-userpromptsubmit.sh" <<'EOF'
@@ -54,6 +55,20 @@ cat >"$HARNESS_HOOKS/pr-authoring-gate-pretooluse.sh" <<'EOF'
 cat >/dev/null
 exit 0
 EOF
+
+HERDR_TITLE_LOG="$TMP/herdr-title.log"
+HERDR_FAIL_MARKER="$TMP/herdr-title-failed"
+HERDR_TEST_BIN="$TMP/herdr"
+export HERDR_TITLE_LOG HERDR_FAIL_MARKER HERDR_TEST_BIN
+cat >"$HERDR_TEST_BIN" <<'EOF'
+#!/bin/sh
+printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$HERDR_TITLE_LOG"
+if [ -n "${HERDR_FAIL_ONCE:-}" ] && [ ! -e "$HERDR_FAIL_MARKER" ]; then
+    : >"$HERDR_FAIL_MARKER"
+    exit 7
+fi
+EOF
+chmod +x "$HERDR_TEST_BIN"
 
 resolve_script_dir() {
 	printf '%s\n' "$ROOT"
@@ -228,6 +243,7 @@ cmp -s "$MCP" "$TMP/mcp-before.json" || fail "MCP sync is not idempotent"
 node --input-type=module - "$ROOT/opencode/plugins/dotfiles-harness.js" <<'JS'
 import assert from "node:assert/strict"
 import { spawn as spawnChild } from "node:child_process"
+import { readFile, rm, writeFile } from "node:fs/promises"
 import { Readable } from "node:stream"
 import { pathToFileURL } from "node:url"
 
@@ -237,15 +253,17 @@ globalThis.Bun = {
   spawn(command, options) {
     const child = spawnChild(command[0], command.slice(1), {
       env: options.env,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: [options.stdin === "ignore" ? "ignore" : "pipe", options.stdout, options.stderr],
     })
-    options.stdin.text().then((input) => {
-      spawnedInputs.push({ command, input })
-      child.stdin.end(input)
-    })
+    if (options.stdin instanceof Blob) {
+      options.stdin.text().then((input) => {
+        spawnedInputs.push({ command, input })
+        child.stdin.end(input)
+      })
+    }
     return {
-      stdout: Readable.toWeb(child.stdout),
-      stderr: Readable.toWeb(child.stderr),
+      stdout: child.stdout && Readable.toWeb(child.stdout),
+      stderr: child.stderr && Readable.toWeb(child.stderr),
       exited: new Promise((resolve) => child.on("close", resolve)),
     }
   },
@@ -322,6 +340,81 @@ await assert.rejects(
   ),
   /Verify gate/,
 )
+
+const titleEvent = (type, info) => ({ event: { type, properties: { info } } })
+const titleLogLines = async () => {
+  const content = (await readFile(process.env.HERDR_TITLE_LOG, "utf8")).trim()
+  return content ? content.split("\n") : []
+}
+
+process.env.HERDR_ENV = "1"
+process.env.HERDR_TAB_ID = "w1:t-test"
+process.env.HERDR_BIN_PATH = process.env.HERDR_TEST_BIN
+await writeFile(process.env.HERDR_TITLE_LOG, "")
+
+const titleHooks = await pluginModule.DotfilesHarnessPlugin(
+  { directory: process.cwd() },
+  { hooksDir: process.env.HARNESS_HOOKS },
+)
+await titleHooks.event(
+  titleEvent("session.created", {
+    id: "root",
+    title: "New session - 2026-07-20T12:34:56.789Z",
+  }),
+)
+await titleHooks.event(
+  titleEvent("session.created", { id: "child", parentID: "root", title: "Child work" }),
+)
+await titleHooks.event(
+  titleEvent("session.created", { id: "other-root", title: "Other root" }),
+)
+assert.deepEqual(await titleLogLines(), [])
+
+await titleHooks.event(
+  titleEvent("session.updated", { id: "root", title: "Generated title" }),
+)
+await titleHooks.event(
+  titleEvent("session.updated", { id: "root", title: "Generated title" }),
+)
+await titleHooks.event(
+  titleEvent("session.updated", { id: "other-root", title: "Wrong title" }),
+)
+assert.deepEqual(await titleLogLines(), ["tab\trename\tw1:t-test\tGenerated title"])
+await titleHooks.event(
+  titleEvent("session.updated", { id: "root", title: "Renamed title" }),
+)
+assert.deepEqual(await titleLogLines(), [
+  "tab\trename\tw1:t-test\tGenerated title",
+  "tab\trename\tw1:t-test\tRenamed title",
+])
+
+await writeFile(process.env.HERDR_TITLE_LOG, "")
+await rm(process.env.HERDR_FAIL_MARKER, { force: true })
+process.env.HERDR_FAIL_ONCE = "1"
+const retryHooks = await pluginModule.DotfilesHarnessPlugin(
+  { directory: process.cwd() },
+  { hooksDir: process.env.HARNESS_HOOKS },
+)
+const originalWarn = console.warn
+const warnings = []
+console.warn = (warning) => warnings.push(warning)
+await retryHooks.event(titleEvent("session.created", { id: "retry", title: "Retry title" }))
+await retryHooks.event(titleEvent("session.updated", { id: "retry", title: "Retry title" }))
+console.warn = originalWarn
+assert.equal((await titleLogLines()).length, 2)
+assert.match(warnings.join("\n"), /herdr tab rename exited 7/)
+
+await writeFile(process.env.HERDR_TITLE_LOG, "")
+delete process.env.HERDR_ENV
+delete process.env.HERDR_FAIL_ONCE
+const outsideHerdrHooks = await pluginModule.DotfilesHarnessPlugin(
+  { directory: process.cwd() },
+  { hooksDir: process.env.HARNESS_HOOKS },
+)
+await outsideHerdrHooks.event(
+  titleEvent("session.created", { id: "outside", title: "Outside title" }),
+)
+assert.deepEqual(await titleLogLines(), [])
 JS
 
 printf '%s\n' '{"mcpServers": {}}' >"$CLAUDE"
