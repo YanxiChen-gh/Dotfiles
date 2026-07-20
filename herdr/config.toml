@@ -10,7 +10,7 @@ next_tab = "prefix+right"
 # and an nvim split. Native new_tab (prefix+c) still makes plain tabs.
 [[keys.command]]
 key = "prefix+a"
-type = "pane"
+type = "popup"
 description = "Choose new development tab setup"
 command = "$HOME/dotfiles/herdr/new-agent-tab.sh --select"
 
