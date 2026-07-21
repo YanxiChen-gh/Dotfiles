@@ -106,7 +106,7 @@ This runs:
 
 1. **`sh -n`** on `install.sh`, `install.d/*.sh`, `sync-claude-skills-to-repo.sh`, `sync-cursor-app-to-dotfiles.sh`, `shell/work.sh`, and the verify script itself.
 2. **`node --check`** on OpenCode plugins when Node.js is installed.
-3. **`python3 -m py_compile`** on MCP sync scripts and the agent-rules generator.
+3. **`python3 -m py_compile`** on MCP sync scripts, the agent-rules generator, and the Herdr prompt helper.
 4. **`shellcheck -S error`** on those shell files when `shellcheck` is installed (warnings are ignored so existing style nits do not fail the run).
 5. **Integration:** copies [`test-fixtures/minimal-claude-workspace/`](test-fixtures/minimal-claude-workspace/) to a temp directory, runs `sync-claude-skills-to-repo.sh` on it, and checks that `SKILL.md` was rewritten (`## Required context` and the former `@` path). **Requires `python3`** for that transform.
 6. **E2E:** [`tests/e2e/run.sh`](tests/e2e/run.sh) covers MCP sync and isolated OpenCode config/harness linking without touching real user config. **Requires `python3`.**

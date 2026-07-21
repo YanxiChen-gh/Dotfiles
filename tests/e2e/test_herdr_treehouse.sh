@@ -18,6 +18,9 @@ WORKSPACE_OPEN="$TMP/workspace-open"
 TRANSPORT_FAILURE="$TMP/transport-failure"
 TREEHOUSE_STARTED="$TMP/treehouse-started"
 TREEHOUSE_RELEASE="$TMP/treehouse-release"
+AGENT_READY="$TMP/agent-ready"
+PROMPT_LOG="$TMP/prompt.log"
+PROMPT_INPUT="$TMP/prompt-input.py"
 
 mkdir -p "$HOME_DIR/.local/bin" "$MAIN"
 
@@ -57,6 +60,18 @@ case "$1 $2" in
     if [ -e "${FAKE_SPLIT_FAILURE:-}" ]; then exit 7; fi
     printf '%s\n' '{"result":{"pane":{"pane_id":"test-editor"}}}'
     ;;
+  "wait output")
+    [ "$#" -eq 7 ] || exit 8
+    : > "$FAKE_AGENT_READY"
+    printf '%s\n' '{"result":{"matched_line":"Ask anything","pane_id":"test-pane"}}'
+    ;;
+  "pane run")
+    [ "$#" -eq 4 ] || exit 8
+    if [ -n "${FAKE_INITIAL_PROMPT:-}" ] && [ "$4" = "$FAKE_INITIAL_PROMPT" ]; then
+      [ -e "$FAKE_AGENT_READY" ] || exit 9
+      printf '%s\0' "$4" >> "$FAKE_PROMPT_LOG"
+    fi
+    ;;
 esac
 EOF
 chmod +x "$TMP/herdr"
@@ -79,6 +94,13 @@ printf 'returned status=%s\n' "$status" >> "$FAKE_TREEHOUSE_LOG"
 exit 0
 EOF
 chmod +x "$HOME_DIR/.local/bin/treehouse"
+
+cat > "$PROMPT_INPUT" <<'PY'
+import os
+import sys
+
+sys.stdout.write(os.environ.get("FAKE_INITIAL_PROMPT", ""))
+PY
 
 cat > "$HOME_DIR/.local/bin/fzf" <<'EOF'
 #!/bin/sh
@@ -122,7 +144,8 @@ wait_for_exit() {
 reset_state() {
   : > "$HERDR_LOG"
   : > "$TREEHOUSE_LOG"
-  rm -f "$WORKSPACE_OPEN" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$TMP/split-failure"
+  : > "$PROMPT_LOG"
+  rm -f "$WORKSPACE_OPEN" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure"
 }
 
 export FAKE_HERDR_LOG="$HERDR_LOG"
@@ -131,6 +154,48 @@ export FAKE_ACQUIRED="$ACQUIRED"
 export FAKE_WORKSPACE_OPEN="$WORKSPACE_OPEN"
 export FAKE_TRANSPORT_FAILURE="$TRANSPORT_FAILURE"
 export FAKE_TREEHOUSE_STARTED="$TREEHOUSE_STARTED"
+export FAKE_AGENT_READY="$AGENT_READY"
+export FAKE_PROMPT_LOG="$PROMPT_LOG"
+
+# The prompt editor keeps Enter as a newline and submits the complete buffer on
+# Ctrl+Enter while making that gesture visible in the popup.
+python3 - "$ROOT/herdr/prompt-input.py" <<'PY'
+import os
+import pty
+import select
+import subprocess
+import sys
+import time
+
+editor = sys.argv[1]
+master, slave = pty.openpty()
+process = subprocess.Popen(
+    [sys.executable, editor],
+    stdin=slave,
+    stdout=subprocess.PIPE,
+    stderr=slave,
+    close_fds=True,
+)
+os.close(slave)
+
+screen = b""
+deadline = time.monotonic() + 5
+while b"Ctrl+Enter: submit" not in screen and time.monotonic() < deadline:
+    readable, _, _ = select.select([master], [], [], 0.1)
+    if readable:
+        screen += os.read(master, 4096)
+
+if b"Ctrl+Enter: submit" not in screen:
+    process.kill()
+    raise SystemExit("prompt editor did not show its submit gesture")
+
+os.write(master, b"Review 'quoted' input\rthen keep && literal\x1b[13;5u")
+stdout, _ = process.communicate(timeout=5)
+os.close(master)
+expected = b"Review 'quoted' input\nthen keep && literal"
+if stdout != expected:
+    raise SystemExit(f"prompt editor returned {stdout!r}, expected {expected!r}")
+PY
 
 # Treehouse invokes the wrapper in the acquired checkout and remains the owner
 # until Herdr confirms that the task workspace closed.
@@ -206,6 +271,48 @@ wait_for_log "workspace create --cwd $ACQUIRED --no-focus" "$HERDR_LOG"
 rm -f "$WORKSPACE_OPEN"
 wait_for_log "returned status=0" "$TREEHOUSE_LOG"
 unset FAKE_TREEHOUSE_RELEASE
+
+# OpenCode selection captures a multiline prompt, waits for readiness, and
+# submits the exact prompt once without focusing the new workspace.
+reset_state
+initial_prompt="Review 'quoted' input
+then keep && literal"
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
+FAKE_FZF_CHECKOUT="Current checkout" \
+FAKE_FZF_PRIMARY="OpenCode" \
+FAKE_INITIAL_PROMPT="$initial_prompt" \
+  "$LAUNCHER" --select
+wait_for_log "wait output test-pane --match Ask anything --timeout 30000" "$HERDR_LOG"
+for _ in $(seq 1 500); do
+  [ -s "$PROMPT_LOG" ] && break
+  sleep 0.02
+done
+python3 - "$PROMPT_LOG" "$initial_prompt" <<'PY'
+import sys
+
+with open(sys.argv[1], "rb") as prompt_log:
+    submissions = [value for value in prompt_log.read().split(b"\0") if value]
+expected = sys.argv[2].encode()
+if submissions != [expected]:
+    raise SystemExit(f"prompt submissions were {submissions!r}, expected {[expected]!r}")
+PY
+assert_not_log "workspace focus test-workspace" "$HERDR_LOG"
+
+# An empty prompt still launches OpenCode but does not wait or submit input.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
+FAKE_FZF_CHECKOUT="Current checkout" \
+FAKE_FZF_PRIMARY="OpenCode" \
+  "$LAUNCHER" --select
+wait_for_log "pane run test-pane cd '$LINKED' && clear; opencode --auto" "$HERDR_LOG"
+assert_not_log "wait output" "$HERDR_LOG"
+[ ! -s "$PROMPT_LOG" ] || fail "empty prompt was submitted"
 
 # Treehouse acquisition failures are visible even though shortcut commands run
 # detached without a usable stderr.

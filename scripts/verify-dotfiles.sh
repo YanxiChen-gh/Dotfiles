@@ -77,7 +77,7 @@ if command -v node >/dev/null 2>&1; then
 fi
 
 printf '\n== python3 -m py_compile ==\n'
-for f in scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py agent-rules/build.py; do
+for f in scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py; do
     if [ -f "$f" ]; then
         if ! python3 -m py_compile "$f"; then
             fail "py_compile $f"

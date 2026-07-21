@@ -3,7 +3,8 @@
 #
 # By default, Treehouse opens a worktree and a small shell wrapper creates the
 # Herdr workspace inside it with OpenCode.
-# --select asks for the checkout, primary pane, and optional nvim split first.
+# --select asks for the checkout, primary pane, optional nvim split, and - for
+# OpenCode - an initial prompt first.
 #
 # Treehouse remains the owner: `treehouse get` waits for its shell wrapper, the
 # wrapper waits for the Herdr workspace to close, then Treehouse performs its
@@ -26,6 +27,7 @@ with_editor=false
 select_setup=false
 handoff_ready=""
 treehouse_ready=false
+initial_prompt_file=""
 
 # Detached shells have no visible stderr, so surface failures as a herdr toast,
 # and - once the panes exist - in the panes too, so a failure never leaves them
@@ -60,6 +62,12 @@ while [ "$#" -gt 0 ]; do
       with_worktree=false
       with_agent="${DOTFILES_HERDR_WITH_AGENT:-true}"
       with_editor="${DOTFILES_HERDR_WITH_EDITOR:-false}"
+      initial_prompt_file="${DOTFILES_HERDR_INITIAL_PROMPT_FILE:-}"
+      ;;
+    --initial-prompt-file)
+      [ "$#" -ge 2 ] || die "--initial-prompt-file requires a path"
+      initial_prompt_file="$2"
+      shift
       ;;
     --handoff-ready)
       [ "$#" -ge 2 ] || die "--handoff-ready requires a path"
@@ -70,6 +78,10 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$select_setup" = false ] && [ -n "$initial_prompt_file" ]; then
+  trap 'rm -f "$initial_prompt_file"' EXIT
+fi
 
 if [ -n "$handoff_ready" ]; then
   printf 'ready\n' > "$handoff_ready" || die "could not signal detached launcher readiness"
@@ -98,6 +110,16 @@ if [ "$select_setup" = true ]; then
   [ "$editor" = "nvim right split" ] && with_editor=true
 
   command -v python3 >/dev/null 2>&1 || die "python3 not installed"
+  if [ "$with_agent" = true ]; then
+    prompt_input="${HERDR_PROMPT_INPUT_PATH:-$HOME/dotfiles/herdr/prompt-input.py}"
+    [ -f "$prompt_input" ] || die "prompt input helper does not exist: $prompt_input"
+    initial_prompt_file=$(mktemp "${TMPDIR:-/tmp}/herdr-initial-prompt.XXXXXX") \
+      || die "could not create initial prompt file"
+    if ! python3 "$prompt_input" > "$initial_prompt_file"; then
+      rm -f "$initial_prompt_file"
+      exit 0
+    fi
+  fi
   handoff_ready=$(mktemp "${TMPDIR:-/tmp}/herdr-new-agent-tab.XXXXXX") \
     || die "could not create detached launcher handshake"
   printf 'pending\n' > "$handoff_ready"
@@ -117,6 +139,9 @@ if [ "$select_setup" = true ]; then
     detached_args+=(--with-editor)
   else
     detached_args+=(--without-editor)
+  fi
+  if [ -n "$initial_prompt_file" ]; then
+    detached_args+=(--initial-prompt-file "$initial_prompt_file")
   fi
 
   # start_new_session isolates setup from the popup PTY on both Linux and macOS.
@@ -179,6 +204,7 @@ else
     DOTFILES_HERDR_ORIGINAL_SHELL="${SHELL:-/bin/sh}" \
     DOTFILES_HERDR_WITH_AGENT="$with_agent" \
     DOTFILES_HERDR_WITH_EDITOR="$with_editor" \
+    DOTFILES_HERDR_INITIAL_PROMPT_FILE="$initial_prompt_file" \
     SHELL="$treehouse_shell" \
       treehouse get \
       || die "Treehouse could not prepare a task checkout"
@@ -186,6 +212,14 @@ else
   fi
 
   workspace_cwd="$repo_root"
+fi
+
+initial_prompt=""
+if [ -n "$initial_prompt_file" ]; then
+  [ -f "$initial_prompt_file" ] || die "initial prompt file does not exist"
+  initial_prompt=$(<"$initial_prompt_file")
+  rm -f "$initial_prompt_file"
+  initial_prompt_file=""
 fi
 
 requested_label="shell"
@@ -226,6 +260,12 @@ fi
 if [ "$with_agent" = true ]; then
   "$herdr" pane run "$left" "cd '$workspace_cwd' && clear; $agent_cmd" \
     || die "failed to launch agent in left pane"
+  if [ -n "$initial_prompt" ]; then
+    "$herdr" wait output "$left" --match "Ask anything" --timeout 30000 >/dev/null \
+      || die "timed out waiting for agent prompt input"
+    "$herdr" pane run "$left" "$initial_prompt" \
+      || die "failed to submit initial agent prompt"
+  fi
 fi
 
 toast "Task workspace ready" "Setup finished without changing your current focus."

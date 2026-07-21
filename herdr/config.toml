@@ -9,7 +9,8 @@ previous_workspace = "prefix+up"
 next_workspace = "prefix+down"
 
 # Choose whether a new task workspace uses a treehouse worktree, OpenCode,
-# and an nvim split. Native new_tab (prefix+c) still adds views to a workspace.
+# and an nvim split. OpenCode mode also accepts an initial prompt. Native
+# new_tab (prefix+c) still adds views to a workspace.
 [[keys.command]]
 key = "prefix+a"
 type = "popup"
