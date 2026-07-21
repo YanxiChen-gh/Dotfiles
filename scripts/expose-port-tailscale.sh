@@ -19,6 +19,7 @@ LOCAL_PORT="${1:?usage: expose-port-tailscale.sh <local-port> [verify-path]}"
 VERIFY_PATH="${2:-/}"
 TAILNET_PORT=8080
 SOCKS_PORT=1055
+LOCK_FILE="/tmp/expose-port-tailscale-${TAILNET_PORT}.lock"
 
 if [[ "${IS_ON_ONA:-}" != "true" ]]; then
     echo "Not an Ona CDE (IS_ON_ONA != true) - use 'tailscale serve' directly or the editor port-forward." >&2
@@ -67,12 +68,47 @@ fi
 # 3. Serve. The requested hostname may have been taken (-1 suffix): resolve the
 # real FQDN from the daemon (also avoids hardcoding the tailnet domain).
 HOST=$(tailscale status --json | jq -re '.Self.DNSName | rtrimstr(".")')
-if sudo tailscale serve status --json 2>/dev/null \
-        | jq -e --arg hostport "${HOST}:${TAILNET_PORT}" '.Web[$hostport] != null' >/dev/null; then
-    echo "[expose-port] replacing existing :${TAILNET_PORT} mapping (would shadow it otherwise)" >&2
+
+# Only one ACL-permitted port is available, so helper invocations must not evict
+# each other's live mappings.
+exec 9>"$LOCK_FILE"
+flock 9
+
+if ! SERVE_STATUS=$(sudo tailscale serve status --json 2>/dev/null); then
+    echo "[expose-port] could not read the existing Tailscale Serve mapping; refusing to replace it." >&2
+    exit 1
+fi
+if ! jq -e 'type == "object"' >/dev/null <<<"$SERVE_STATUS"; then
+    echo "[expose-port] existing Tailscale Serve status is invalid; refusing to replace it." >&2
+    exit 1
+fi
+
+TARGET="http://localhost:${LOCAL_PORT}"
+CURRENT_TARGET=$(jq -r --arg hostport "${HOST}:${TAILNET_PORT}" \
+    '.Web[$hostport].Handlers["/"].Proxy // empty' <<<"$SERVE_STATUS")
+MAPPING_CHANGED=false
+
+if [[ -n "$CURRENT_TARGET" && "$CURRENT_TARGET" != "$TARGET" ]]; then
+    if [[ "$CURRENT_TARGET" =~ ^http://localhost:([0-9]+)$ ]]; then
+        CURRENT_PORT="${BASH_REMATCH[1]}"
+        if (exec 3<>"/dev/tcp/localhost/${CURRENT_PORT}") 2>/dev/null; then
+            echo "[expose-port] :${TAILNET_PORT} already exposes live target ${CURRENT_TARGET}; refusing to break its URL." >&2
+            echo "[expose-port] use an editor port-forward for localhost:${LOCAL_PORT}, or stop the existing exposure first." >&2
+            exit 1
+        fi
+    else
+        echo "[expose-port] :${TAILNET_PORT} has unsupported target ${CURRENT_TARGET}; refusing to replace it." >&2
+        exit 1
+    fi
+
+    echo "[expose-port] replacing stale :${TAILNET_PORT} mapping (${CURRENT_TARGET})" >&2
     sudo tailscale serve --http="${TAILNET_PORT}" off >&2
 fi
-sudo tailscale serve --bg --http="${TAILNET_PORT}" "http://localhost:${LOCAL_PORT}" >&2
+
+if [[ "$CURRENT_TARGET" != "$TARGET" ]]; then
+    sudo tailscale serve --bg --http="${TAILNET_PORT}" "$TARGET" >&2
+    MAPPING_CHANGED=true
+fi
 
 URL="http://${HOST}:${TAILNET_PORT}"
 
@@ -83,6 +119,11 @@ STATUS=$(curl -s --max-time 15 --proxy "socks5h://localhost:${SOCKS_PORT}" \
 if [[ "$STATUS" != 2* && "$STATUS" != 3* ]]; then
     echo "[expose-port] verification FAILED (${STATUS}) for ${URL}${VERIFY_PATH}" >&2
     echo "[expose-port] check the app is listening on localhost:${LOCAL_PORT} and 'tailscale serve status'" >&2
+    if [[ "$MAPPING_CHANGED" == true ]]; then
+        if ! sudo tailscale serve --http="${TAILNET_PORT}" off >&2; then
+            echo "[expose-port] cleanup FAILED; remove the invalid mapping with 'sudo tailscale serve --http=${TAILNET_PORT} off'." >&2
+        fi
+    fi
     exit 1
 fi
 
