@@ -29,7 +29,14 @@ const defaultSessionTitle = /^New session - \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\
 
 const createHerdrTitleSync = () => {
   const tabId = Bun.env.HERDR_TAB_ID
-  if (Bun.env.HERDR_ENV !== "1" || !tabId) return async () => {}
+  const workspaceId = Bun.env.HERDR_WORKSPACE_ID
+  const taskWorkspace = Bun.env.DOTFILES_HERDR_TASK_WORKSPACE === "1" && workspaceId
+  const target = taskWorkspace
+    ? { kind: "workspace", id: workspaceId }
+    : tabId
+      ? { kind: "tab", id: tabId }
+      : undefined
+  if (Bun.env.HERDR_ENV !== "1" || !target) return async () => {}
 
   const herdr = Bun.env.HERDR_BIN_PATH ?? "herdr"
   let sessionId
@@ -37,9 +44,9 @@ const createHerdrTitleSync = () => {
   let pendingTitle
   let renameQueue = Promise.resolve()
 
-  const renameTab = async (title) => {
+  const renameTarget = async (title) => {
     try {
-      const process = Bun.spawn([herdr, "tab", "rename", tabId, title], {
+      const process = Bun.spawn([herdr, target.kind, "rename", target.id, title], {
         env: Bun.env,
         stdin: "ignore",
         stdout: "ignore",
@@ -50,12 +57,14 @@ const createHerdrTitleSync = () => {
         process.exited,
       ])
       if (exitCode !== 0) {
-        console.warn(`[dotfiles-harness] herdr tab rename exited ${exitCode}: ${stderr.trim()}`)
+        console.warn(
+          `[dotfiles-harness] herdr ${target.kind} rename exited ${exitCode}: ${stderr.trim()}`,
+        )
         return
       }
       appliedTitle = title
     } catch (error) {
-      console.warn(`[dotfiles-harness] herdr tab rename failed: ${error}`)
+      console.warn(`[dotfiles-harness] herdr ${target.kind} rename failed: ${error}`)
     }
   }
 
@@ -78,7 +87,7 @@ const createHerdrTitleSync = () => {
 
     pendingTitle = title
     renameQueue = renameQueue.then(async () => {
-      await renameTab(title)
+      await renameTarget(title)
       if (pendingTitle === title) pendingTitle = undefined
     })
     await renameQueue

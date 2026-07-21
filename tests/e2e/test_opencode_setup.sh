@@ -21,7 +21,7 @@ export MCP_CLIENT_ID
 export AGENT_MATURITY_HOME
 export HARNESS_HOOKS
 unset MISSING_ENV
-unset HERDR_ENV HERDR_TAB_ID HERDR_BIN_PATH
+unset HERDR_ENV HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_BIN_PATH DOTFILES_HERDR_TASK_WORKSPACE
 
 mkdir -p "$AGENT_MATURITY_HOME/scripts" "$HARNESS_HOOKS"
 cat >"$AGENT_MATURITY_HOME/scripts/scope-gate-userpromptsubmit.sh" <<'EOF'
@@ -404,6 +404,26 @@ assert.deepEqual(await titleLogLines(), [
   "tab\trename\tw1:t-test\tGenerated title",
   "tab\trename\tw1:t-test\tRenamed title",
 ])
+
+await writeFile(process.env.HERDR_TITLE_LOG, "")
+process.env.HERDR_WORKSPACE_ID = "w-task"
+process.env.DOTFILES_HERDR_TASK_WORKSPACE = "1"
+const workspaceTitleHooks = await pluginModule.DotfilesHarnessPlugin(
+  { directory: process.cwd() },
+  { hooksDir: process.env.HARNESS_HOOKS },
+)
+await workspaceTitleHooks.event(
+  titleEvent("session.created", {
+    id: "workspace-root",
+    title: "New session - 2026-07-20T12:34:56.789Z",
+  }),
+)
+await workspaceTitleHooks.event(
+  titleEvent("session.updated", { id: "workspace-root", title: "Task title" }),
+)
+assert.deepEqual(await titleLogLines(), ["workspace\trename\tw-task\tTask title"])
+delete process.env.HERDR_WORKSPACE_ID
+delete process.env.DOTFILES_HERDR_TASK_WORKSPACE
 
 await writeFile(process.env.HERDR_TITLE_LOG, "")
 await rm(process.env.HERDR_FAIL_MARKER, { force: true })

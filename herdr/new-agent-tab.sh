@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# new-agent-tab.sh - Herdr development-tab launcher (bound to prefix+a/shift+a).
+# new-agent-tab.sh - Herdr task-workspace launcher (bound to prefix+a/shift+a).
 #
-# By default, opens a new Herdr tab in a fresh Treehouse worktree with OpenCode.
+# By default, Treehouse opens a worktree and a small shell wrapper creates the
+# Herdr workspace inside it with OpenCode.
 # --select asks for the checkout, primary pane, and optional nvim split first.
 #
-# We lean on Treehouse's own pool lifecycle rather than manage worktrees
-# ourselves: the LEFT pane runs `treehouse get` (NOT --lease), so treehouse owns
-# the worktree and auto-returns it to the pool when the tab's processes exit.
-# Herdr's per-pane foreground cwd identifies the acquired worktree for the editor.
+# Treehouse remains the owner: `treehouse get` waits for its shell wrapper, the
+# wrapper waits for the Herdr workspace to close, then Treehouse performs its
+# normal dirty check, process cleanup, and pool return.
 set -euo pipefail
 
 # herdr runs custom commands via a non-interactive shell that inherits the
@@ -16,7 +16,6 @@ export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/go/bin:/usr/local/bin:/u
 
 herdr="${HERDR_BIN_PATH:-herdr}"
 src_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
-workspace="${HERDR_ACTIVE_WORKSPACE_ID:-}"
 
 # Left pane = coding agent, right pane = editor; change these two lines to taste.
 agent_cmd="opencode --auto"
@@ -26,6 +25,7 @@ with_agent=true
 with_editor=false
 select_setup=false
 handoff_ready=""
+treehouse_ready=false
 
 # Detached shells have no visible stderr, so surface failures as a herdr toast,
 # and - once the panes exist - in the panes too, so a failure never leaves them
@@ -33,9 +33,18 @@ handoff_ready=""
 toast() { "$herdr" notification show "$1" ${2:+--body "$2"} >/dev/null 2>&1 || true; }
 report() {
   [ -n "$1" ] || return 0
-  "$herdr" pane run "$1" "clear; echo '✗ new agent tab: $2'" >/dev/null 2>&1 || true
+  "$herdr" pane run "$1" "clear; echo '✗ new task workspace: $2'" >/dev/null 2>&1 || true
 }
-die() { report "${left:-}" "$1"; report "${right:-}" "$1"; toast "New development tab failed" "$1"; echo "$1" >&2; exit 1; }
+die() {
+  report "${left:-}" "$1"
+  report "${right:-}" "$1"
+  if [ -n "${task_workspace:-}" ]; then
+    "$herdr" workspace close "$task_workspace" >/dev/null 2>&1 || true
+  fi
+  toast "New task workspace failed" "$1"
+  echo "$1" >&2
+  exit 1
+}
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -46,6 +55,12 @@ while [ "$#" -gt 0 ]; do
     --without-agent | --shell) with_agent=false ;;
     --with-editor | --editor) with_editor=true ;;
     --without-editor | --no-editor) with_editor=false ;;
+    --treehouse-ready)
+      treehouse_ready=true
+      with_worktree=false
+      with_agent="${DOTFILES_HERDR_WITH_AGENT:-true}"
+      with_editor="${DOTFILES_HERDR_WITH_EDITOR:-false}"
+      ;;
     --handoff-ready)
       [ "$#" -ge 2 ] || die "--handoff-ready requires a path"
       handoff_ready="$2"
@@ -130,10 +145,6 @@ PY
 fi
 
 command -v jq >/dev/null 2>&1 || die "jq not installed"
-if [ "$with_worktree" = true ]; then
-  command -v treehouse >/dev/null 2>&1 \
-    || die "treehouse not installed (go install github.com/kunchenguid/treehouse@latest)"
-fi
 if [ "$with_agent" = true ]; then
   command -v opencode >/dev/null 2>&1 || die "opencode not installed"
 fi
@@ -141,18 +152,40 @@ if [ "$with_editor" = true ]; then
   command -v nvim >/dev/null 2>&1 || die "nvim not installed"
 fi
 
-repo_root=$(git -C "$src_cwd" rev-parse --show-toplevel 2>/dev/null) \
-  || die "Not a git repo: $src_cwd - open an agent tab from a repo workspace."
+if [ "$treehouse_ready" = true ]; then
+  workspace_cwd="${TREEHOUSE_DIR:-$PWD}"
+  if [ ! -d "$workspace_cwd" ]; then die "Treehouse checkout does not exist: $workspace_cwd"; fi
+else
+  repo_root=$(git -C "$src_cwd" rev-parse --show-toplevel 2>/dev/null) \
+    || die "Not a git repo: $src_cwd - open a task workspace from a repo workspace."
 
-if [ "$with_worktree" = true ]; then
-  # A relative Treehouse root must resolve from the primary checkout, not from
-  # an existing linked worktree, or each nested launch creates another pool.
-  repo_root=$(git -C "$repo_root" worktree list --porcelain \
-    | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')
-  if [ -z "$repo_root" ] || [ ! -d "$repo_root" ]; then die "could not resolve primary checkout"; fi
+  if [ "$with_worktree" = true ]; then
+    command -v treehouse >/dev/null 2>&1 \
+      || die "treehouse not installed (go install github.com/kunchenguid/treehouse@latest)"
 
-  # Prevent a pool directory removed out-of-band from wedging `treehouse get`.
-  git -C "$repo_root" worktree prune 2>/dev/null || true
+    # A relative Treehouse root must resolve from the primary checkout, not from
+    # an existing linked worktree, or each nested launch creates another pool.
+    repo_root=$(git -C "$repo_root" worktree list --porcelain \
+      | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')
+    if [ -z "$repo_root" ] || [ ! -d "$repo_root" ]; then die "could not resolve primary checkout"; fi
+    git -C "$repo_root" worktree prune 2>/dev/null || true
+
+    treehouse_shell="${HERDR_TREEHOUSE_SHELL_PATH:-$HOME/dotfiles/herdr/treehouse-task-shell.sh}"
+    if [ ! -x "$treehouse_shell" ]; then die "Treehouse task shell is not executable: $treehouse_shell"; fi
+
+    toast "Preparing task workspace" "Treehouse is provisioning a checkout in the background."
+    cd "$repo_root"
+    DOTFILES_HERDR_LAUNCHER="$0" \
+    DOTFILES_HERDR_ORIGINAL_SHELL="${SHELL:-/bin/sh}" \
+    DOTFILES_HERDR_WITH_AGENT="$with_agent" \
+    DOTFILES_HERDR_WITH_EDITOR="$with_editor" \
+    SHELL="$treehouse_shell" \
+      treehouse get \
+      || die "Treehouse could not prepare a task checkout"
+    exit 0
+  fi
+
+  workspace_cwd="$repo_root"
 fi
 
 requested_label="shell"
@@ -162,70 +195,61 @@ elif [ "$with_editor" = true ]; then
   requested_label="editor"
 fi
 
-# Create the tab up front, rooted at the repo, so it appears instantly instead
-# of after the multi-second worktree setup.
-tab_args=(tab create --cwd "$repo_root" --focus)
-if [ -n "$workspace" ]; then
-  tab_args+=(--workspace "$workspace")
+workspace_args=(workspace create --cwd "$workspace_cwd" --no-focus \
+  --env DOTFILES_HERDR_TASK_WORKSPACE=1)
+if [ "$treehouse_ready" = true ]; then
+  workspace_args+=(--env "TREEHOUSE_DIR=$workspace_cwd")
 fi
-if [ -n "$requested_label" ]; then
-  tab_args+=(--label "$requested_label")
-fi
-tab_json=$("$herdr" "${tab_args[@]}") || die "herdr tab create failed"
-left=$(printf '%s' "$tab_json" | jq -r '.result.root_pane.pane_id')
-if [ -z "$left" ] || [ "$left" = "null" ]; then die "could not read new pane id from tab create"; fi
+workspace_json=$("$herdr" "${workspace_args[@]}") || die "herdr workspace create failed"
+task_workspace=$(printf '%s' "$workspace_json" | jq -r '.result.workspace.workspace_id')
+task_tab=$(printf '%s' "$workspace_json" | jq -r '.result.tab.tab_id')
+left=$(printf '%s' "$workspace_json" | jq -r '.result.root_pane.pane_id')
+if [ -z "$task_workspace" ] || [ "$task_workspace" = "null" ]; then die "could not read new workspace id"; fi
+if [ -z "$task_tab" ] || [ "$task_tab" = "null" ]; then die "could not read new tab id"; fi
+if [ -z "$left" ] || [ "$left" = "null" ]; then die "could not read new pane id"; fi
+"$herdr" tab rename "$task_tab" "$requested_label" >/dev/null \
+  || die "failed to label task tab"
 
 if [ "$with_editor" = true ]; then
-  split_json=$("$herdr" pane split "$left" --direction right --ratio 0.5 \
-    --cwd "$repo_root" --no-focus) || die "herdr pane split failed"
+  split_args=(pane split "$left" --direction right --ratio 0.5 \
+    --cwd "$workspace_cwd" --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1)
+  if [ "$treehouse_ready" = true ]; then
+    split_args+=(--env "TREEHOUSE_DIR=$workspace_cwd")
+  fi
+  split_json=$("$herdr" "${split_args[@]}") || die "herdr pane split failed"
   right=$(printf '%s' "$split_json" | jq -r '.result.pane.pane_id')
   if [ -z "$right" ] || [ "$right" = "null" ]; then die "could not read split pane id"; fi
-  if [ "$with_worktree" = true ]; then
-    "$herdr" pane run "$right" "clear; echo '🌳 preparing Treehouse worktree...'" || true
-  fi
-fi
-
-if [ "$with_worktree" = false ]; then
-  if [ "$with_editor" = true ]; then
-    "$herdr" pane run "$right" "cd '$repo_root' && clear; $editor_cmd" \
-      || die "failed to launch editor in right pane"
-  fi
-  if [ "$with_agent" = true ]; then
-    "$herdr" pane run "$left" "clear; $agent_cmd" || die "failed to launch agent in left pane"
-  fi
-  exit 0
-fi
-
-# Left pane acquires and owns the worktree via `treehouse get`; its own
-# "Setting up worktree..." output is the progress the user sees there.
-"$herdr" pane send-keys "$left" ctrl+u >/dev/null 2>&1 || true
-"$herdr" pane run "$left" "cd '$repo_root' && treehouse get" || die "failed to start treehouse in left pane"
-
-# Wait for this pane to enter its acquired worktree, then have the subshell
-# launch the agent. Running the agent as a child keeps the get subshell alive as
-# the worktree's owner until the tab closes.
-wt=""
-for _ in $(seq 1 60); do
-  pane_json=$("$herdr" pane get "$left" 2>/dev/null || true)
-  wt=$(printf '%s' "$pane_json" | jq -r '.result.pane.foreground_cwd // empty')
-  if [ -n "$wt" ] && [ "$wt" != "$repo_root" ] && [ -d "$wt" ]; then
-    break
-  fi
-  wt=""
-  sleep 1
-done
-if [ -z "$wt" ]; then die "timed out waiting for the worktree to be ready"; fi
-
-if [ "$with_editor" = false ]; then
-  if [ "$with_agent" = true ]; then
-    "$herdr" pane run "$left" "clear; $agent_cmd" || die "failed to launch agent in left pane"
-  fi
-  exit 0
+  "$herdr" pane run "$right" "cd '$workspace_cwd' && clear; $editor_cmd" \
+    || die "failed to launch editor in right pane"
 fi
 
 if [ "$with_agent" = true ]; then
-  "$herdr" pane run "$left" "clear; $agent_cmd" || die "failed to launch agent in left pane"
+  "$herdr" pane run "$left" "cd '$workspace_cwd' && clear; $agent_cmd" \
+    || die "failed to launch agent in left pane"
 fi
 
-"$herdr" pane send-keys "$right" ctrl+u >/dev/null 2>&1 || true
-"$herdr" pane run "$right" "cd '$wt' && clear; $editor_cmd" || die "failed to launch editor in right pane"
+toast "Task workspace ready" "Setup finished without changing your current focus."
+
+if [ "$treehouse_ready" = false ]; then
+  exit 0
+fi
+
+missing_count=0
+while true; do
+  if workspace_state=$("$herdr" workspace get "$task_workspace" 2>&1); then
+    missing_count=0
+  else
+    error_code=$(printf '%s' "$workspace_state" | jq -r '.error.code // empty' 2>/dev/null || true)
+    if [ "$error_code" = "workspace_not_found" ]; then
+      missing_count=$((missing_count + 1))
+      if [ "$missing_count" -ge 2 ]; then break; fi
+    else
+      missing_count=0
+    fi
+  fi
+  sleep 1
+done
+
+if [ -n "$(git -C "$workspace_cwd" status --porcelain 2>/dev/null)" ]; then
+  toast "Task workspace preserved" "Uncommitted changes remain at $workspace_cwd"
+fi

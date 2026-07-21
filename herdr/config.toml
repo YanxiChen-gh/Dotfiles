@@ -5,17 +5,19 @@ onboarding = false
 prefix = "ctrl+g"
 previous_tab = "prefix+left"
 next_tab = "prefix+right"
+previous_workspace = "prefix+up"
+next_workspace = "prefix+down"
 
-# Choose whether a new development tab uses a treehouse worktree, OpenCode,
-# and an nvim split. Native new_tab (prefix+c) still makes plain tabs.
+# Choose whether a new task workspace uses a treehouse worktree, OpenCode,
+# and an nvim split. Native new_tab (prefix+c) still adds views to a workspace.
 [[keys.command]]
 key = "prefix+a"
 type = "popup"
-description = "Choose new development tab setup"
+description = "Choose new task workspace setup"
 command = "$HOME/dotfiles/herdr/new-agent-tab.sh --select"
 
 [[keys.command]]
 key = "prefix+shift+a"
 type = "shell"
-description = "New agent tab (treehouse worktree: OpenCode + nvim)"
+description = "New task workspace (treehouse worktree: OpenCode + nvim)"
 command = "$HOME/dotfiles/herdr/new-agent-tab.sh --with-editor"
