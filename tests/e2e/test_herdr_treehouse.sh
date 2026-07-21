@@ -11,7 +11,7 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 HOME_DIR="$TMP/home"
 MAIN="$TMP/repo"
 LINKED="$TMP/linked"
-ACQUIRED="$TMP/acquired"
+ACQUIRED="$TMP/treehouse-pool/1/repo"
 HERDR_LOG="$TMP/herdr.log"
 TREEHOUSE_LOG="$TMP/treehouse.log"
 WORKSPACE_OPEN="$TMP/workspace-open"
@@ -22,7 +22,7 @@ AGENT_READY="$TMP/agent-ready"
 PROMPT_LOG="$TMP/prompt.log"
 PROMPT_INPUT="$TMP/prompt-input.py"
 
-mkdir -p "$HOME_DIR/.local/bin" "$MAIN"
+mkdir -p "$HOME_DIR/.local/bin" "$MAIN" "${ACQUIRED%/*}"
 
 git -C "$MAIN" init -q
 git -C "$MAIN" config user.name test
@@ -55,6 +55,9 @@ case "$1 $2" in
     ;;
   "workspace close")
     rm -f "$FAKE_WORKSPACE_OPEN"
+    ;;
+  "workspace report-metadata")
+    if [ -e "${FAKE_METADATA_FAILURE:-}" ]; then exit 10; fi
     ;;
   "pane split")
     if [ -e "${FAKE_SPLIT_FAILURE:-}" ]; then exit 7; fi
@@ -145,7 +148,7 @@ reset_state() {
   : > "$HERDR_LOG"
   : > "$TREEHOUSE_LOG"
   : > "$PROMPT_LOG"
-  rm -f "$WORKSPACE_OPEN" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure"
+  rm -f "$WORKSPACE_OPEN" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure" "$TMP/metadata-failure"
 }
 
 export FAKE_HERDR_LOG="$HERDR_LOG"
@@ -208,6 +211,7 @@ HERDR_ACTIVE_PANE_CWD="$LINKED" \
 launcher_pid=$!
 
 wait_for_log "workspace create --cwd $ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$ACQUIRED" "$HERDR_LOG"
+wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=1" "$HERDR_LOG"
 assert_log "start cwd=$MAIN shell=$TREEHOUSE_SHELL args=get" "$TREEHOUSE_LOG"
 wait_for_log "tab rename test-tab agent" "$HERDR_LOG"
 wait_for_log "pane split test-pane --direction right --ratio 0.5 --cwd $ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$ACQUIRED" "$HERDR_LOG"
@@ -249,7 +253,27 @@ HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
   "$LAUNCHER" --without-worktree --without-agent --without-editor
 assert_log "workspace create --cwd $LINKED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=linked" "$HERDR_LOG"
 assert_not_log "treehouse get" "$TREEHOUSE_LOG"
+
+# The primary checkout uses a stable name instead of repeating the repository.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$MAIN" \
+  "$LAUNCHER" --without-worktree --without-agent --without-editor
+assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=primary" "$HERDR_LOG"
+
+# Metadata is part of workspace setup; failure closes the partial workspace.
+reset_state
+: > "$TMP/metadata-failure"
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_METADATA_FAILURE="$TMP/metadata-failure" \
+  "$LAUNCHER" --without-worktree --without-agent --without-editor >/dev/null 2>&1 \
+  && fail "metadata reporting failure returned success"
+assert_log "workspace close test-workspace" "$HERDR_LOG"
 
 # The popup returns before Treehouse finishes provisioning. Releasing the fake
 # setup later creates the workspace without blocking the selector.
@@ -369,5 +393,16 @@ FAKE_FZF_CANCEL=checkout \
 
 [ "$(git config --file "$ROOT/.gitconfig" --get fetch.prune)" = true ] \
   || fail "fetch.prune is not enabled"
+
+python3 - "$ROOT/herdr/config.toml" <<'PY'
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as config_file:
+    rows = tomllib.load(config_file)["ui"]["sidebar"]["spaces"]["rows"]
+expected = [["state_icon", "workspace"], ["$repo", "$worktree"]]
+if rows != expected:
+    raise SystemExit(f"space rows were {rows!r}, expected {expected!r}")
+PY
 
 echo "Herdr Treehouse tests passed."

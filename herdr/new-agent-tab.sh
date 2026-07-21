@@ -214,6 +214,23 @@ else
   workspace_cwd="$repo_root"
 fi
 
+current_worktree=$(git -C "$workspace_cwd" rev-parse --show-toplevel 2>/dev/null) \
+  || die "could not resolve current worktree"
+primary_worktree=$(git -C "$workspace_cwd" worktree list --porcelain \
+  | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')
+if [ -z "$primary_worktree" ] || [ ! -d "$primary_worktree" ]; then
+  die "could not resolve primary checkout"
+fi
+repo_name=${primary_worktree##*/}
+if [ "$current_worktree" = "$primary_worktree" ]; then
+  worktree_name="primary"
+elif [ "${current_worktree##*/}" = "$repo_name" ]; then
+  worktree_parent=${current_worktree%/*}
+  worktree_name=${worktree_parent##*/}
+else
+  worktree_name=${current_worktree##*/}
+fi
+
 initial_prompt=""
 if [ -n "$initial_prompt_file" ]; then
   [ -f "$initial_prompt_file" ] || die "initial prompt file does not exist"
@@ -241,6 +258,11 @@ left=$(printf '%s' "$workspace_json" | jq -r '.result.root_pane.pane_id')
 if [ -z "$task_workspace" ] || [ "$task_workspace" = "null" ]; then die "could not read new workspace id"; fi
 if [ -z "$task_tab" ] || [ "$task_tab" = "null" ]; then die "could not read new tab id"; fi
 if [ -z "$left" ] || [ "$left" = "null" ]; then die "could not read new pane id"; fi
+"$herdr" workspace report-metadata "$task_workspace" \
+  --source dotfiles:checkout \
+  --token "repo=$repo_name" \
+  --token "worktree=$worktree_name" >/dev/null \
+  || die "failed to report checkout metadata"
 "$herdr" tab rename "$task_tab" "$requested_label" >/dev/null \
   || die "failed to label task tab"
 
