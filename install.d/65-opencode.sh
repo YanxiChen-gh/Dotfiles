@@ -22,6 +22,32 @@ install_opencode() {
     fi
 }
 
+install_herdr_opencode_integration() {
+    herdr_install_dir=${HERDR_INSTALL_DIR:-$HOME/.local/bin}
+    herdr_bin=$(command -v herdr 2>/dev/null || true)
+    if [ -z "$herdr_bin" ] && [ -x "$herdr_install_dir/herdr" ]; then
+        herdr_bin="$herdr_install_dir/herdr"
+    fi
+    if [ -z "$herdr_bin" ]; then
+        echo "⚠️  Herdr is unavailable; skipping its OpenCode integration"
+        return 0
+    fi
+
+    if ! "$herdr_bin" integration install opencode; then
+        echo "⚠️  Warning: Herdr OpenCode integration installation failed"
+        return 1
+    fi
+
+    herdr_plugin="$HOME/.config/opencode/plugins/herdr-agent-state.js"
+    opencode_plugin="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/plugins/herdr-agent-state.js"
+    if [ "$opencode_plugin" != "$herdr_plugin" ]; then
+        mkdir -p "$(dirname "$opencode_plugin")"
+        link_dotfiles_file "$herdr_plugin" "$opencode_plugin" "$herdr_plugin" || return 1
+    fi
+
+    echo "✅ Herdr OpenCode integration installed"
+}
+
 ensure_opencode_path() {
     path_line='export PATH="$HOME/.opencode/bin:$PATH"'
     for profile in "$HOME/.profile" "$HOME/.bash_profile"; do

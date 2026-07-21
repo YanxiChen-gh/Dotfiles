@@ -62,6 +62,11 @@ HERDR_TEST_BIN="$TMP/herdr"
 export HERDR_TITLE_LOG HERDR_FAIL_MARKER HERDR_TEST_BIN
 cat >"$HERDR_TEST_BIN" <<'EOF'
 #!/bin/sh
+if [ "$1 $2 $3" = "integration install opencode" ]; then
+    plugin="$HOME/.config/opencode/plugins/herdr-agent-state.js"
+    mkdir -p "$(dirname "$plugin")"
+    printf '%s\n' '// managed by herdr' >"$plugin"
+fi
 printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$HERDR_TITLE_LOG"
 if [ -n "${HERDR_FAIL_ONCE:-}" ] && [ ! -e "$HERDR_FAIL_MARKER" ]; then
     : >"$HERDR_FAIL_MARKER"
@@ -94,11 +99,23 @@ printf 'existing plugin\n' >"$CONFIG_DIR/plugins/dotfiles-harness.js"
 
 setup_opencode_config >/dev/null
 setup_opencode_config >/dev/null
+ORIGINAL_PATH=$PATH
+HERDR_INSTALL_DIR=$TMP
+PATH=/usr/bin:/bin
+export HERDR_INSTALL_DIR PATH
+install_herdr_opencode_integration >/dev/null
+install_herdr_opencode_integration >/dev/null
+PATH=$ORIGINAL_PATH
+unset HERDR_INSTALL_DIR
+export PATH
 
 [ -L "$CONFIG_DIR/opencode.jsonc" ] || fail "config is not linked"
 [ -L "$CONFIG_DIR/tui.jsonc" ] || fail "TUI config is not linked"
 [ -L "$CONFIG_DIR/AGENTS.md" ] || fail "global rules are not linked"
 [ -L "$CONFIG_DIR/plugins/dotfiles-harness.js" ] || fail "harness plugin is not linked"
+[ -L "$CONFIG_DIR/plugins/herdr-agent-state.js" ] || fail "Herdr plugin is not linked into the custom XDG config"
+[ "$(readlink "$CONFIG_DIR/plugins/herdr-agent-state.js")" = "$HOME/.config/opencode/plugins/herdr-agent-state.js" ] || fail "Herdr plugin links to the wrong source"
+[ "$(grep -cF 'integration' "$HERDR_TITLE_LOG")" -eq 2 ] || fail "Herdr integration installer was not repeatable"
 [ "$(cat "$CONFIG_DIR/opencode.jsonc.pre-dotfiles")" = "existing config" ] || fail "config backup is missing"
 [ "$(cat "$CONFIG_DIR/opencode.json.pre-dotfiles")" = "existing legacy config" ] || fail "legacy config backup is missing"
 [ "$(cat "$CONFIG_DIR/tui.jsonc.pre-dotfiles")" = "existing TUI config" ] || fail "TUI config backup is missing"
