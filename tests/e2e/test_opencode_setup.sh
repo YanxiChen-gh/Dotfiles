@@ -406,6 +406,19 @@ assert.deepEqual(await titleLogLines(), [
 ])
 
 await writeFile(process.env.HERDR_TITLE_LOG, "")
+const resumedTitleHooks = await pluginModule.DotfilesHarnessPlugin(
+  { directory: process.cwd() },
+  { hooksDir: process.env.HARNESS_HOOKS },
+)
+await resumedTitleHooks.event(
+  titleEvent("session.updated", { id: "resumed-root", title: "Resumed title" }),
+)
+await resumedTitleHooks.event(
+  titleEvent("session.updated", { id: "other-resumed-root", title: "Wrong resumed title" }),
+)
+assert.deepEqual(await titleLogLines(), ["tab\trename\tw1:t-test\tResumed title"])
+
+await writeFile(process.env.HERDR_TITLE_LOG, "")
 process.env.HERDR_WORKSPACE_ID = "w-task"
 process.env.DOTFILES_HERDR_TASK_WORKSPACE = "1"
 const workspaceTitleHooks = await pluginModule.DotfilesHarnessPlugin(

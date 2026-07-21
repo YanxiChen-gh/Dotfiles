@@ -75,7 +75,6 @@ const createHerdrTitleSync = () => {
     if (!session || typeof session.id !== "string" || session.parentID) return
 
     if (!sessionId) {
-      if (event.type !== "session.created") return
       sessionId = session.id
     }
     if (session.id !== sessionId || typeof session.title !== "string") return
