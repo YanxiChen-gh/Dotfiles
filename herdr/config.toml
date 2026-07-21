@@ -22,3 +22,6 @@ key = "prefix+shift+a"
 type = "shell"
 description = "New task workspace (treehouse worktree: OpenCode + nvim)"
 command = "$HOME/dotfiles/herdr/new-agent-tab.sh --with-editor"
+
+[ui.toast]
+delivery = "herdr"
