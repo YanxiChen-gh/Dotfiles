@@ -90,7 +90,14 @@ In Zed remote sessions, agent-created worktrees don't appear in the sidebar's "O
 
 Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before giving the user a local-server URL. The script owns environment detection, setup, and verification: Ona uses the Tailscale path, macOS returns localhost, and unknown remotes fail closed. Return the single URL it prints on stdout. Do not ask the user whether the agent is in a CDE or choose the exposure method yourself.
 
-The dispatcher delegates Ona to `expose-port-tailscale.sh`, which encodes two hard-won constraints; don't work around them by hand: serve on **tailnet port 8080 only** (ACLs for `tag:ona-dev` admit only that port - others hang from a laptop while self-tests still pass), and **verify through the tailnet path, not a localhost curl**.
+The dispatcher delegates Ona to `expose-port-tailscale.sh`, which currently manages one root exposure on tailnet port 8080 and verifies it through the tailnet path, not a localhost curl. Other ACL-permitted ports are reserved for Vanta development services, so don't borrow them for agent tools.
+
+One CDE cannot expose both Vanta and Lavish through this helper at the same time. If it reports that port 8080 already exposes a live target, do not infer that an HTTP 502 makes the mapping stale and do not replace it silently. Explain the conflict and ask the user which exposure to keep:
+
+- **Keep Vanta:** leave its Tailscale exposure and local services untouched. End the current Lavish review or use the fallback below only after the user chooses this option.
+- **Keep Lavish:** after the user chooses this option, replace only the Tailscale Serve exposure and retry `expose-port.sh`. Leave Vanta running locally; do not run `just dev-stop-all` or stop its containers.
+
+This choice affects every agent in the CDE because Lavish shares one local server and Tailscale Serve state is host-wide. Never stop another Lavish session, remove an existing Serve mapping, or make either URL unavailable without the explicit choice above.
 
 If the dispatcher rejects an unsupported remote environment, fall back in order:
 
