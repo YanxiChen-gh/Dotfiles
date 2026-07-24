@@ -49,6 +49,7 @@ cat >"$AGENT_MATURITY_HOME/scripts/scope-gate-pretooluse.sh" <<'EOF'
 #!/bin/sh
 input=$(cat)
 case "$input" in
+  *'"session_id":"approved-root"'*) exit 0 ;;
   *'src/app.js'*) ;;
   *'/briefs/'*) exit 0 ;;
 esac
@@ -346,8 +347,16 @@ globalThis.Bun = {
   },
 }
 const pluginModule = await import(pathToFileURL(process.argv[2]))
+const sessionRecords = new Map([["test-session", { id: "test-session" }]])
+const client = {
+  session: {
+    async get({ path }) {
+      return { data: sessionRecords.get(path.id) }
+    },
+  },
+}
 const hooks = await pluginModule.DotfilesHarnessPlugin(
-  { directory: process.cwd() },
+  { client, directory: process.cwd() },
   { hooksDir: process.env.HARNESS_HOOKS },
 )
 const config = {}
@@ -361,6 +370,141 @@ assert.equal(config.mcp.remote_server.oauth.clientId, process.env.MCP_CLIENT_ID)
 const system = []
 await hooks["experimental.chat.system.transform"]({ sessionID: "test-session" }, { system })
 assert.match(system.join("\n"), /scope-gate.*test prompt/)
+
+const sessionEvent = (type, info) => ({ event: { type, properties: { info } } })
+void hooks.event(sessionEvent("session.created", { id: "approved-root" }))
+void hooks.event(
+  sessionEvent("session.created", {
+    id: "approved-child",
+    parentID: "approved-root",
+  }),
+)
+void hooks.event(
+  sessionEvent("session.created", {
+    id: "approved-grandchild",
+    parentID: "approved-child",
+  }),
+)
+
+const childSystem = []
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "approved-child" },
+  { system: childSystem },
+)
+assert.doesNotMatch(childSystem.join("\n"), /scope-gate.*test prompt/)
+assert.match(childSystem.join("\n"), /Do not launch Lavish/)
+
+await hooks["tool.execute.before"](
+  { tool: "write", sessionID: "approved-grandchild", callID: "child-write-call" },
+  { args: { filePath: "src/app.js", content: "const value = true" } },
+)
+assert.ok(
+  spawnedInputs.some(({ command, input }) => {
+    return (
+      command.at(-1).endsWith("scope-gate-pretooluse.sh") &&
+      input.includes('"session_id":"approved-root"')
+    )
+  }),
+)
+
+void hooks.event(sessionEvent("session.created", { id: "unapproved-root" }))
+void hooks.event(
+  sessionEvent("session.created", {
+    id: "unapproved-child",
+    parentID: "unapproved-root",
+  }),
+)
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "write", sessionID: "unapproved-child", callID: "blocked-child-write-call" },
+    { args: { filePath: "src/app.js", content: "const value = true" } },
+  ),
+  (error) => {
+    assert.match(error.message, /return this blocker to the parent/)
+    assert.doesNotMatch(error.message, /scope-gate|Lavish/)
+    return true
+  },
+)
+
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "question", sessionID: "approved-child", callID: "child-question-call" },
+    { args: {} },
+  ),
+  /return questions to their parent/,
+)
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "bash", sessionID: "approved-child", callID: "child-lavish-call" },
+    { args: { command: "bash -lc 'npx -y lavish-axi /tmp/review.html'" } },
+  ),
+  /must not launch Lavish/,
+)
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "bash", sessionID: "approved-child", callID: "child-lavish-substitution-call" },
+    { args: { command: "result=$(npx -y lavish-axi /tmp/review.html)" } },
+  ),
+  /must not launch Lavish/,
+)
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "bash", sessionID: "approved-child", callID: "child-lavish-chain-call" },
+    { args: { command: "command -v lavish-axi && lavish-axi /tmp/review.html" } },
+  ),
+  /must not launch Lavish/,
+)
+await hooks["tool.execute.before"](
+  { tool: "question", sessionID: "test-session", callID: "root-question-call" },
+  { args: {} },
+)
+sessionRecords.set("resumed-grandchild", {
+  id: "resumed-grandchild",
+  parentID: "resumed-child",
+})
+sessionRecords.set("resumed-child", {
+  id: "resumed-child",
+  parentID: "approved-root",
+})
+sessionRecords.set("approved-root", { id: "approved-root" })
+const resumedChildSystem = []
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "resumed-grandchild" },
+  { system: resumedChildSystem },
+)
+assert.match(resumedChildSystem.join("\n"), /Do not launch Lavish/)
+await hooks["tool.execute.before"](
+  { tool: "write", sessionID: "resumed-grandchild", callID: "resumed-child-write-call" },
+  { args: { filePath: "src/app.js", content: "const value = true" } },
+)
+
+void hooks.event(
+  sessionEvent("session.updated", {
+    id: "unresolved-grandchild",
+    parentID: "unresolved-parent",
+  }),
+)
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "write", sessionID: "unresolved-grandchild", callID: "unresolved-child-write-call" },
+    { args: { filePath: "src/app.js", content: "const value = true" } },
+  ),
+  /root session approval could not be resolved.*return this blocker to the parent/,
+)
+
+const unresolvedSystem = []
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "unresolved-session" },
+  { system: unresolvedSystem },
+)
+assert.match(unresolvedSystem.join("\n"), /Do not launch Lavish/)
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "question", sessionID: "unresolved-session", callID: "unresolved-question-call" },
+    { args: {} },
+  ),
+  /return questions to their parent/,
+)
 
 await assert.rejects(
   hooks["tool.execute.before"](
@@ -418,7 +562,6 @@ await assert.rejects(
   /Verify gate/,
 )
 
-const titleEvent = (type, info) => ({ event: { type, properties: { info } } })
 const titleLogLines = async () => {
   const content = (await readFile(process.env.HERDR_TITLE_LOG, "utf8")).trim()
   return content ? content.split("\n") : []
@@ -434,31 +577,31 @@ const titleHooks = await pluginModule.DotfilesHarnessPlugin(
   { hooksDir: process.env.HARNESS_HOOKS },
 )
 await titleHooks.event(
-  titleEvent("session.created", {
+  sessionEvent("session.created", {
     id: "root",
     title: "New session - 2026-07-20T12:34:56.789Z",
   }),
 )
 await titleHooks.event(
-  titleEvent("session.created", { id: "child", parentID: "root", title: "Child work" }),
+  sessionEvent("session.created", { id: "child", parentID: "root", title: "Child work" }),
 )
 await titleHooks.event(
-  titleEvent("session.created", { id: "other-root", title: "Other root" }),
+  sessionEvent("session.created", { id: "other-root", title: "Other root" }),
 )
 assert.deepEqual(await titleLogLines(), [])
 
 await titleHooks.event(
-  titleEvent("session.updated", { id: "root", title: "Generated title" }),
+  sessionEvent("session.updated", { id: "root", title: "Generated title" }),
 )
 await titleHooks.event(
-  titleEvent("session.updated", { id: "root", title: "Generated title" }),
+  sessionEvent("session.updated", { id: "root", title: "Generated title" }),
 )
 await titleHooks.event(
-  titleEvent("session.updated", { id: "other-root", title: "Wrong title" }),
+  sessionEvent("session.updated", { id: "other-root", title: "Wrong title" }),
 )
 assert.deepEqual(await titleLogLines(), ["tab\trename\tw1:t-test\tGenerated title"])
 await titleHooks.event(
-  titleEvent("session.updated", { id: "root", title: "Renamed title" }),
+  sessionEvent("session.updated", { id: "root", title: "Renamed title" }),
 )
 assert.deepEqual(await titleLogLines(), [
   "tab\trename\tw1:t-test\tGenerated title",
@@ -471,10 +614,10 @@ const resumedTitleHooks = await pluginModule.DotfilesHarnessPlugin(
   { hooksDir: process.env.HARNESS_HOOKS },
 )
 await resumedTitleHooks.event(
-  titleEvent("session.updated", { id: "resumed-root", title: "Resumed title" }),
+  sessionEvent("session.updated", { id: "resumed-root", title: "Resumed title" }),
 )
 await resumedTitleHooks.event(
-  titleEvent("session.updated", { id: "other-resumed-root", title: "Wrong resumed title" }),
+  sessionEvent("session.updated", { id: "other-resumed-root", title: "Wrong resumed title" }),
 )
 assert.deepEqual(await titleLogLines(), ["tab\trename\tw1:t-test\tResumed title"])
 
@@ -486,13 +629,13 @@ const workspaceTitleHooks = await pluginModule.DotfilesHarnessPlugin(
   { hooksDir: process.env.HARNESS_HOOKS },
 )
 await workspaceTitleHooks.event(
-  titleEvent("session.created", {
+  sessionEvent("session.created", {
     id: "workspace-root",
     title: "New session - 2026-07-20T12:34:56.789Z",
   }),
 )
 await workspaceTitleHooks.event(
-  titleEvent("session.updated", { id: "workspace-root", title: "Task title" }),
+  sessionEvent("session.updated", { id: "workspace-root", title: "Task title" }),
 )
 assert.deepEqual(await titleLogLines(), ["workspace\trename\tw-task\tTask title"])
 delete process.env.HERDR_WORKSPACE_ID
@@ -508,8 +651,8 @@ const retryHooks = await pluginModule.DotfilesHarnessPlugin(
 const originalWarn = console.warn
 const warnings = []
 console.warn = (warning) => warnings.push(warning)
-await retryHooks.event(titleEvent("session.created", { id: "retry", title: "Retry title" }))
-await retryHooks.event(titleEvent("session.updated", { id: "retry", title: "Retry title" }))
+await retryHooks.event(sessionEvent("session.created", { id: "retry", title: "Retry title" }))
+await retryHooks.event(sessionEvent("session.updated", { id: "retry", title: "Retry title" }))
 console.warn = originalWarn
 assert.equal((await titleLogLines()).length, 2)
 assert.match(warnings.join("\n"), /herdr tab rename exited 7/)
@@ -522,7 +665,7 @@ const outsideHerdrHooks = await pluginModule.DotfilesHarnessPlugin(
   { hooksDir: process.env.HARNESS_HOOKS },
 )
 await outsideHerdrHooks.event(
-  titleEvent("session.created", { id: "outside", title: "Outside title" }),
+  sessionEvent("session.created", { id: "outside", title: "Outside title" }),
 )
 assert.deepEqual(await titleLogLines(), [])
 JS

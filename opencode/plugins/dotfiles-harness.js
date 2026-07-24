@@ -18,10 +18,10 @@ const runHook = async (script, payload, extraEnv = {}) => {
     if (exitCode !== 0 && exitCode !== 2) {
       console.warn(`[dotfiles-harness] hook exited ${exitCode}: ${stderr.trim()}`)
     }
-    return { stdout, stderr, exitCode }
+    return { stdout, stderr, exitCode, failed: false }
   } catch (error) {
     console.warn(`[dotfiles-harness] hook failed open: ${error}`)
-    return { stdout: "", stderr: "", exitCode: 0 }
+    return { stdout: "", stderr: "", exitCode: 0, failed: true }
   }
 }
 
@@ -114,7 +114,14 @@ const resolveEnvironment = (value) => {
   )
 }
 
-export const DotfilesHarnessPlugin = async ({ directory }, options = {}) => {
+const subagentContext = `[subagent]
+This is a child session. Do not launch Lavish, call question or approval tools, or wait for human input. Return findings, questions, and blockers directly to the parent. The parent owns scope approval.`
+
+const invokesLavish = (command) => {
+  return command.includes("lavish-axi")
+}
+
+export const DotfilesHarnessPlugin = async ({ client, directory }, options = {}) => {
   const source = await realpath(fileURLToPath(import.meta.url))
   const dotfiles = dirname(dirname(dirname(source)))
   const home = Bun.env.HOME ?? ""
@@ -125,9 +132,62 @@ export const DotfilesHarnessPlugin = async ({ directory }, options = {}) => {
   const hooks =
     typeof options.hooksDir === "string" ? options.hooksDir : join(dotfiles, "claude/hooks")
   const syncHerdrTitle = createHerdrTitleSync()
+  const parentBySession = new Map()
+  const rootSessions = new Set()
+
+  const rememberSession = (session) => {
+    if (typeof session?.id !== "string") return
+    if (typeof session.parentID === "string") {
+      parentBySession.set(session.id, session.parentID)
+      rootSessions.delete(session.id)
+      return
+    }
+    rootSessions.add(session.id)
+  }
+
+  const hydrateSession = async (sessionID) => {
+    if (parentBySession.has(sessionID) || rootSessions.has(sessionID)) return true
+    if (!client?.session?.get) return false
+    try {
+      const result = await client.session.get({
+        path: { id: sessionID },
+        query: { directory },
+      })
+      rememberSession(result.data)
+      return parentBySession.has(sessionID) || rootSessions.has(sessionID)
+    } catch {
+      return false
+    }
+  }
+
+  const sessionLineage = async (sessionID) => {
+    let current = sessionID
+    let isChild = false
+    const visited = new Set()
+    while (!visited.has(current)) {
+      visited.add(current)
+      if (!(await hydrateSession(current))) return { kind: "unresolved" }
+      const parent = parentBySession.get(current)
+      if (!parent) {
+        return {
+          kind: isChild ? "child" : "root",
+          rootSessionID: current,
+        }
+      }
+      isChild = true
+      current = parent
+    }
+    return { kind: "unresolved" }
+  }
 
   return {
-    event: syncHerdrTitle,
+    event: async (input) => {
+      const session = input.event.properties?.info
+      if (input.event.type === "session.created" || input.event.type === "session.updated") {
+        rememberSession(session)
+      }
+      await syncHerdrTitle(input)
+    },
     config: async (config) => {
       try {
         const local = JSON.parse(
@@ -144,14 +204,37 @@ export const DotfilesHarnessPlugin = async ({ directory }, options = {}) => {
     },
     "experimental.chat.system.transform": async (input, output) => {
       if (!input.sessionID) return
+      const lineage = await sessionLineage(input.sessionID)
+      if (lineage.kind !== "root") {
+        output.system.push(subagentContext)
+        return
+      }
       const result = await runHook(scopePrompt, { session_id: input.sessionID })
       if (result.stdout.trim()) output.system.push(result.stdout.trim())
     },
     "tool.execute.before": async (input, output) => {
       const tool = input.tool.toLowerCase()
       const args = output.args
+      const lineage = await sessionLineage(input.sessionID)
+      const isChild = lineage.kind !== "root"
+
+      if (isChild && tool === "question") {
+        throw new Error("Subagents must return questions to their parent instead of waiting for human input.")
+      }
+      if (isChild && ["bash", "shell"].includes(tool) && invokesLavish(stringArg(args, "command"))) {
+        throw new Error(
+          "Subagents must not launch Lavish; use native search tools for inspection or return the review artifact or blocker to the parent.",
+        )
+      }
+
+      if (lineage.kind === "unresolved" && ["edit", "write", "apply_patch"].includes(tool)) {
+        throw new Error(
+          "The root session approval could not be resolved. Stop and return this blocker to the parent.",
+        )
+      }
+
       const payload = {
-        session_id: input.sessionID,
+        session_id: lineage.kind === "unresolved" ? input.sessionID : lineage.rootSessionID,
         cwd: directory,
         tool_input: {
           command: stringArg(args, "command", "patchText", "patch"),
@@ -163,7 +246,19 @@ export const DotfilesHarnessPlugin = async ({ directory }, options = {}) => {
 
       if (["edit", "write", "apply_patch"].includes(tool)) {
         const result = await runHook(scopeGate, payload)
-        if (result.exitCode === 2) throw new Error(result.stderr.trim())
+        if (isChild && (result.failed || (result.exitCode !== 0 && result.exitCode !== 2))) {
+          throw new Error(
+            "The root session approval could not be verified. Stop and return this blocker to the parent.",
+          )
+        }
+        if (result.exitCode === 2) {
+          if (isChild) {
+            throw new Error(
+              "The root session has not recorded approval for this edit. Stop and return this blocker to the parent.",
+            )
+          }
+          throw new Error(result.stderr.trim())
+        }
       }
 
       if (["bash", "shell"].includes(tool)) {
