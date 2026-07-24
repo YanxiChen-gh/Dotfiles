@@ -1,0 +1,68 @@
+#!/bin/sh
+set -eu
+
+real_opencode=${OPENCODE_REAL_BIN:-$HOME/.opencode/bin/opencode}
+if [ ! -x "$real_opencode" ]; then
+    printf 'OpenCode binary not found: %s\n' "$real_opencode" >&2
+    exit 127
+fi
+
+has_auto=false
+resume_session=false
+for argument in "$@"; do
+    case "$argument" in
+        --auto | --auto=*) has_auto=true ;;
+        -s | -s=* | --session | --session=*) resume_session=true ;;
+    esac
+done
+
+stagger_resume() {
+    interval=${OPENCODE_RESUME_STAGGER_SECONDS:-15}
+    state_file=${OPENCODE_RESUME_STAGGER_STATE:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/opencode-herdr-resume-stagger}
+    python3 - "$state_file" "$interval" <<'PY'
+import fcntl
+import os
+import sys
+import time
+
+state_file = sys.argv[1]
+interval = max(0, float(sys.argv[2]))
+os.makedirs(os.path.dirname(state_file) or ".", exist_ok=True)
+
+with open(state_file, "a+", encoding="utf-8") as state:
+    fcntl.flock(state, fcntl.LOCK_EX)
+    state.seek(0)
+    try:
+        previous_start = float(state.read().strip())
+    except ValueError:
+        previous_start = 0
+    time.sleep(max(0, min(interval, previous_start + interval - time.time())))
+    state.seek(0)
+    state.truncate()
+    state.write(str(time.time()))
+    state.flush()
+PY
+}
+
+if [ "${HERDR_ENV:-}" = "1" ] && [ "$resume_session" = true ]; then
+    stagger_resume
+fi
+
+if [ "${1:-}" = "run" ]; then
+    shift
+    if [ "$has_auto" = true ]; then
+        exec "$real_opencode" run "$@"
+    fi
+    exec "$real_opencode" run --auto "$@"
+fi
+
+case "${1:-}" in
+    completion | acp | mcp | attach | debug | providers | auth | agent | upgrade | uninstall | serve | web | models | stats | export | import | github | pr | session | plugin | plug | db)
+        exec "$real_opencode" "$@"
+        ;;
+esac
+
+if [ "$has_auto" = true ]; then
+    exec "$real_opencode" "$@"
+fi
+exec "$real_opencode" --auto "$@"

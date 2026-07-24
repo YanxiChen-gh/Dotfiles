@@ -13,13 +13,13 @@ set -euo pipefail
 
 # herdr runs custom commands via a non-interactive shell that inherits the
 # server's PATH, not a login shell's, so ensure our tools are searchable.
-export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 herdr="${HERDR_BIN_PATH:-herdr}"
 src_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
 
 # Left pane = coding agent, right pane = editor; change these two lines to taste.
-agent_cmd="opencode --auto"
+agent_cmd="opencode"
 editor_cmd="nvim"
 with_worktree=true
 with_agent=true

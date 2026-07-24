@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TMP="${TMPDIR:-/tmp}/dotfiles-e2e-opencode-$$"
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
-mkdir -p "$TMP/home/custom-config/opencode/plugins"
+mkdir -p "$TMP/home/custom-config/opencode/plugins" "$TMP/home/.opencode/bin"
 HOME="$TMP/home"
 XDG_CONFIG_HOME="$HOME/custom-config"
 EXAMPLE_TOKEN="local-only"
@@ -22,6 +22,22 @@ export AGENT_MATURITY_HOME
 export HARNESS_HOOKS
 unset MISSING_ENV
 unset HERDR_ENV HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_BIN_PATH DOTFILES_HERDR_TASK_WORKSPACE
+
+OPENCODE_ARGS_LOG="$TMP/opencode-args.log"
+OPENCODE_START_LOG="$TMP/opencode-start.log"
+export OPENCODE_ARGS_LOG OPENCODE_START_LOG
+cat >"$HOME/.opencode/bin/opencode" <<'EOF'
+#!/bin/sh
+printf '%s\0' "$@" >>"$OPENCODE_ARGS_LOG"
+python3 - "$OPENCODE_START_LOG" <<'PY'
+import sys
+import time
+
+with open(sys.argv[1], "a", encoding="utf-8") as log:
+    log.write(f"{time.time()}\n")
+PY
+EOF
+chmod +x "$HOME/.opencode/bin/opencode"
 
 mkdir -p "$AGENT_MATURITY_HOME/scripts" "$HARNESS_HOOKS"
 cat >"$AGENT_MATURITY_HOME/scripts/scope-gate-userpromptsubmit.sh" <<'EOF'
@@ -113,6 +129,8 @@ export PATH
 [ -L "$CONFIG_DIR/tui.jsonc" ] || fail "TUI config is not linked"
 [ -L "$CONFIG_DIR/AGENTS.md" ] || fail "global rules are not linked"
 [ -L "$CONFIG_DIR/plugins/dotfiles-harness.js" ] || fail "harness plugin is not linked"
+[ -L "$HOME/.local/bin/opencode" ] || fail "OpenCode wrapper is not linked"
+[ "$(readlink "$HOME/.local/bin/opencode")" = "$ROOT/opencode/opencode" ] || fail "OpenCode wrapper links to the wrong source"
 [ -L "$CONFIG_DIR/plugins/herdr-agent-state.js" ] || fail "Herdr plugin is not linked into the custom XDG config"
 [ "$(readlink "$CONFIG_DIR/plugins/herdr-agent-state.js")" = "$HOME/.config/opencode/plugins/herdr-agent-state.js" ] || fail "Herdr plugin links to the wrong source"
 [ "$(grep -cF 'integration' "$HERDR_TITLE_LOG")" -eq 2 ] || fail "Herdr integration installer was not repeatable"
@@ -128,6 +146,48 @@ touch "$HOME/.bash_profile"
 ensure_opencode_path
 [ "$(grep -cF '.opencode/bin' "$HOME/.profile")" -eq 1 ] || fail "PATH setup is not idempotent"
 [ "$(grep -cF '.opencode/bin' "$HOME/.bash_profile")" -eq 1 ] || fail "bash profile PATH setup is missing"
+grep -qFx 'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"' "$HOME/.profile" || fail "wrapper does not precede the real OpenCode binary"
+
+assert_opencode_args() {
+    expected=$1
+    shift
+    : >"$OPENCODE_ARGS_LOG"
+    "$HOME/.local/bin/opencode" "$@"
+    python3 - "$OPENCODE_ARGS_LOG" "$expected" <<'PY'
+import sys
+
+with open(sys.argv[1], "rb") as log:
+    actual = [value.decode() for value in log.read().split(b"\0") if value]
+expected = sys.argv[2].split("|") if sys.argv[2] else []
+if actual != expected:
+    raise SystemExit(f"OpenCode arguments were {actual!r}, expected {expected!r}")
+PY
+}
+
+assert_opencode_args '--auto'
+assert_opencode_args '--auto|--session|test-session' --session test-session
+assert_opencode_args '--auto|--session|test-session' --auto --session test-session
+assert_opencode_args 'run|--auto|hello' run hello
+assert_opencode_args 'run|hello|--auto' run hello --auto
+assert_opencode_args 'debug|paths' debug paths
+
+: >"$OPENCODE_START_LOG"
+rm -f "$TMP/opencode-resume-stagger"
+HERDR_ENV=1 OPENCODE_RESUME_STAGGER_SECONDS=0.2 OPENCODE_RESUME_STAGGER_STATE="$TMP/opencode-resume-stagger" \
+    "$HOME/.local/bin/opencode" --session first &
+first_resume=$!
+HERDR_ENV=1 OPENCODE_RESUME_STAGGER_SECONDS=0.2 OPENCODE_RESUME_STAGGER_STATE="$TMP/opencode-resume-stagger" \
+    "$HOME/.local/bin/opencode" --session second &
+second_resume=$!
+wait "$first_resume" "$second_resume"
+python3 - "$OPENCODE_START_LOG" <<'PY'
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as log:
+    starts = sorted(float(value) for value in log if value.strip())
+if len(starts) != 2 or starts[1] - starts[0] < 0.15:
+    raise SystemExit(f"restored OpenCode starts were not staggered: {starts!r}")
+PY
 
 python3 - "$CONFIG_DIR/opencode.jsonc" <<'PY'
 import json

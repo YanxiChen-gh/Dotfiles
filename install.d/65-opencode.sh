@@ -49,12 +49,23 @@ install_herdr_opencode_integration() {
 }
 
 ensure_opencode_path() {
-    path_line='export PATH="$HOME/.opencode/bin:$PATH"'
+    path_line='export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"'
+    old_path_line='export PATH="$HOME/.opencode/bin:$PATH"'
     for profile in "$HOME/.profile" "$HOME/.bash_profile"; do
         if [ "$profile" = "$HOME/.bash_profile" ] && [ ! -e "$profile" ]; then
             continue
         fi
-        if [ ! -f "$profile" ] || ! grep -qF '.opencode/bin' "$profile"; then
+        if [ -f "$profile" ] && grep -qFx "$old_path_line" "$profile"; then
+            replacement=$(mktemp "${TMPDIR:-/tmp}/opencode-path.XXXXXX") || return 1
+            while IFS= read -r line || [ -n "$line" ]; do
+                if [ "$line" = "$old_path_line" ]; then
+                    printf '%s\n' "$path_line"
+                else
+                    printf '%s\n' "$line"
+                fi
+            done < "$profile" > "$replacement"
+            mv "$replacement" "$profile"
+        elif [ ! -f "$profile" ] || ! grep -qF '.opencode/bin' "$profile"; then
             printf '\n# OpenCode\n%s\n' "$path_line" >>"$profile"
         fi
     done
@@ -66,7 +77,8 @@ setup_opencode_config() {
     config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
     plugin_dir="$config_dir/plugins"
 
-    mkdir -p "$plugin_dir"
+    mkdir -p "$plugin_dir" "$HOME/.local/bin"
+    link_dotfiles_file "$source_dir/opencode" "$HOME/.local/bin/opencode" || return 1
     if [ -e "$config_dir/opencode.json" ] || [ -L "$config_dir/opencode.json" ]; then
         link_dotfiles_file "$source_dir/opencode.jsonc" "$config_dir/opencode.json" || return 1
         rm -f "$config_dir/opencode.json"

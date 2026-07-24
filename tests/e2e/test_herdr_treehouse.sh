@@ -215,7 +215,7 @@ wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkou
 assert_log "start cwd=$MAIN shell=$TREEHOUSE_SHELL args=get" "$TREEHOUSE_LOG"
 wait_for_log "tab rename test-tab agent" "$HERDR_LOG"
 wait_for_log "pane split test-pane --direction right --ratio 0.5 --cwd $ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$ACQUIRED" "$HERDR_LOG"
-wait_for_log "pane run test-pane cd '$ACQUIRED' && clear; opencode --auto" "$HERDR_LOG"
+wait_for_log "pane run test-pane cd '$ACQUIRED' && clear; opencode" "$HERDR_LOG"
 wait_for_log "pane run test-editor cd '$ACQUIRED' && clear; nvim" "$HERDR_LOG"
 wait_for_log "notification show Task workspace ready --body Setup finished without changing your current focus." "$HERDR_LOG"
 assert_not_log "workspace focus test-workspace" "$HERDR_LOG"
@@ -334,7 +334,7 @@ HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
 FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="OpenCode" \
   "$LAUNCHER" --select
-wait_for_log "pane run test-pane cd '$LINKED' && clear; opencode --auto" "$HERDR_LOG"
+wait_for_log "pane run test-pane cd '$LINKED' && clear; opencode" "$HERDR_LOG"
 assert_not_log "wait output" "$HERDR_LOG"
 [ ! -s "$PROMPT_LOG" ] || fail "empty prompt was submitted"
 
