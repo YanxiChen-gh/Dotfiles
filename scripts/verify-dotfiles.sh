@@ -49,6 +49,7 @@ for f in \
     shell/work.sh \
     tests/e2e/test_agent_rule_scopes.sh \
     tests/e2e/test_opencode_setup.sh \
+    tests/e2e/test_vanta_dev_start_web_ona.sh \
     scripts/verify-dotfiles.sh
 do
     if ! sh -n "$f"; then
@@ -59,7 +60,7 @@ do
 done
 
 printf '\n== bash -n (syntax) ==\n'
-for f in claude/style-eval-engine.sh claude/*-style/eval/*.sh herdr/new-agent-tab.sh scripts/expose-port.sh scripts/expose-port-tailscale.sh tests/e2e/test_expose_port.sh; do
+for f in claude/style-eval-engine.sh claude/*-style/eval/*.sh herdr/new-agent-tab.sh scripts/expose-port.sh scripts/expose-port-tailscale.sh scripts/vanta-dev-start-web-ona.sh tests/e2e/test_expose_port.sh; do
     if ! bash -n "$f"; then
         fail "bash -n $f"
     else
@@ -101,7 +102,7 @@ fi
 
 if command -v shellcheck >/dev/null 2>&1; then
     printf '\n== shellcheck (-S error) ==\n'
-    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh claude/style-eval-engine.sh claude/*-style/eval/*.sh herdr/new-agent-tab.sh herdr/treehouse-task-shell.sh opencode/opencode scripts/expose-port.sh scripts/expose-port-tailscale.sh scripts/setup_work_github_auth.sh scripts/setup_work_google_workspace_auth.sh shell/work.sh scripts/verify-dotfiles.sh tests/e2e/test_agent_rule_scopes.sh tests/e2e/test_expose_port.sh tests/e2e/test_google_workspace_cli.sh tests/e2e/test_herdr_treehouse.sh tests/e2e/test_opencode_setup.sh; do
+    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh claude/style-eval-engine.sh claude/*-style/eval/*.sh herdr/new-agent-tab.sh herdr/treehouse-task-shell.sh opencode/opencode scripts/expose-port.sh scripts/expose-port-tailscale.sh scripts/vanta-dev-start-web-ona.sh scripts/setup_work_github_auth.sh scripts/setup_work_google_workspace_auth.sh shell/work.sh scripts/verify-dotfiles.sh tests/e2e/test_agent_rule_scopes.sh tests/e2e/test_expose_port.sh tests/e2e/test_google_workspace_cli.sh tests/e2e/test_herdr_treehouse.sh tests/e2e/test_opencode_setup.sh tests/e2e/test_vanta_dev_start_web_ona.sh; do
         if out=$(shellcheck -S error -x "$f" 2>&1); then
             pass "shellcheck $f"
         else

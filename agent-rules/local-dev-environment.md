@@ -12,6 +12,8 @@ Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before
 
 The dispatcher delegates Ona to `expose-port-tailscale.sh`, which currently manages one root exposure on tailnet port 8080 and verifies it through the tailnet path, not a localhost curl. Other ACL-permitted ports are reserved for Vanta development services, so don't borrow them for agent tools.
 
+In an Ona CDE, start the Vanta web stack with `~/dotfiles/scripts/vanta-dev-start-web-ona.sh` instead of `just dev-start-web --tailscale`. The personal wrapper gives Parcel a browser-safe public URL, waits for local nginx, and lets Dotfiles own the validated tailnet join and exposure check end to end.
+
 One CDE cannot expose both Vanta and Lavish through this helper at the same time. If it reports that port 8080 already exposes a live target, do not infer that an HTTP 502 makes the mapping stale and do not replace it silently. Explain the conflict and ask the user which exposure to keep:
 
 - **Keep Vanta:** leave its Tailscale exposure and local services untouched. End the current Lavish review or use the fallback below only after the user chooses this option.

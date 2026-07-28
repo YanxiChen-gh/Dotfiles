@@ -24,7 +24,34 @@ EOF
 
 cat >"$TMP/bin/curl" <<'EOF'
 #!/bin/sh
-printf '%s' "${FAKE_CURL_STATUS:-204}"
+output_file=
+write_format=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -o)
+            output_file=$2
+            shift 2
+            ;;
+        -w)
+            write_format=$2
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+if [ -n "$output_file" ] && [ "$output_file" != /dev/null ]; then
+    if [ -n "${FAKE_CURL_BODY_FILE:-}" ]; then
+        cp "$FAKE_CURL_BODY_FILE" "$output_file"
+    else
+        printf '%s' "${FAKE_CURL_BODY:-}" >"$output_file"
+    fi
+fi
+case "$write_format" in
+    *content_type*) printf '%s\n%s' "${FAKE_CURL_STATUS:-204}" "${FAKE_CURL_CONTENT_TYPE:-application/json}" ;;
+    *) printf '%s' "${FAKE_CURL_STATUS:-204}" ;;
+esac
 EOF
 
 cat >"$TMP/fake-tailscale" <<'EOF'
@@ -116,7 +143,14 @@ set -eu
 
 case "$*" in
     "status --self --peers=false")
+        if [ "${FAKE_JOIN_REQUIRED:-}" = true ] && [ ! -e "$FAKE_JOIN_DONE" ]; then
+            exit 1
+        fi
         exit 0
+        ;;
+    up\ *)
+        printf '%s\n' "$*" >"$FAKE_TAILSCALE_UP_ARGS"
+        : >"$FAKE_JOIN_DONE"
         ;;
     "status --json")
         printf '%s\n' '{"Self":{"DNSName":"test-node.example."}}'
@@ -129,14 +163,41 @@ case "$*" in
             printf '%s\n' invalid
             exit 0
         fi
+        if [ "${FAKE_FOREGROUND_HANDLER:-}" = true ]; then
+            target=
+            if [ -s "$FAKE_SERVE_STATE" ]; then
+                IFS= read -r target <"$FAKE_SERVE_STATE"
+            fi
+            if [ -n "$target" ]; then
+                jq -n --arg target "$target" '{
+                    TCP:{"8080":{HTTP:true}},
+                    Web:{"test-node.example:8080":{Handlers:{"/":{Proxy:$target}}}},
+                    Foreground:{"session-1":{
+                        TCP:{"8080":{HTTP:true}},
+                        Web:{"test-node.example:8080":{Handlers:{"/":{Proxy:"http://localhost:9999"}}}}
+                    }}
+                }'
+            else
+                printf '%s\n' '{"TCP":{},"Web":{},"Foreground":{"session-1":{"TCP":{"8080":{"HTTP":true}},"Web":{"test-node.example:8080":{"Handlers":{"/":{"Proxy":"http://localhost:9999"}}}}}}}'
+            fi
+            exit 0
+        fi
         target=
         if [ -s "$FAKE_SERVE_STATE" ]; then
             IFS= read -r target <"$FAKE_SERVE_STATE"
         fi
         if [ -n "$target" ]; then
-            jq -n --arg target "$target" '{TCP:{"8080":{HTTP:true}},Web:{"test-node.example:8080":{Handlers:{"/":{Proxy:$target}}}}}'
+            if [ "${FAKE_EXTRA_HANDLER:-}" = true ]; then
+                jq -n --arg target "$target" '{TCP:{"8080":{HTTP:true}},Web:{"test-node.example:8080":{Handlers:{"/":{Proxy:$target},"/other":{Proxy:"http://localhost:9999"}}}}}'
+            else
+                jq -n --arg target "$target" '{TCP:{"8080":{HTTP:true}},Web:{"test-node.example:8080":{Handlers:{"/":{Proxy:$target}}}}}'
+            fi
         else
-            printf '%s\n' '{"TCP":{},"Web":{}}'
+            if [ "${FAKE_EXTRA_HANDLER:-}" = true ]; then
+                printf '%s\n' '{"TCP":{"8080":{"HTTP":true}},"Web":{"test-node.example:8080":{"Handlers":{"/other":{"Proxy":"http://localhost:9999"}}}}}'
+            else
+                printf '%s\n' '{"TCP":{},"Web":{}}'
+            fi
         fi
         ;;
     "serve --http=8080 off")
@@ -157,18 +218,92 @@ EOF
 
 cat >"$TMP/bin/curl" <<'EOF'
 #!/bin/sh
-printf '%s' "${FAKE_CURL_STATUS:-204}"
+output_file=
+write_format=
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -o)
+            output_file=$2
+            shift 2
+            ;;
+        -w)
+            write_format=$2
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+if [ -n "$output_file" ] && [ "$output_file" != /dev/null ]; then
+    if [ -n "${FAKE_CURL_BODY_FILE:-}" ]; then
+        cp "$FAKE_CURL_BODY_FILE" "$output_file"
+    else
+        printf '%s' "${FAKE_CURL_BODY:-}" >"$output_file"
+    fi
+fi
+if [ -n "${FAKE_CURL_REPLACE_TARGET:-}" ]; then
+    printf '%s\n' "$FAKE_CURL_REPLACE_TARGET" >"$FAKE_SERVE_STATE"
+fi
+case "$write_format" in
+    *content_type*) printf '%s\n%s' "${FAKE_CURL_STATUS:-204}" "${FAKE_CURL_CONTENT_TYPE:-application/json}" ;;
+    *) printf '%s' "${FAKE_CURL_STATUS:-204}" ;;
+esac
 EOF
 
-chmod +x "$TMP/bin/pgrep" "$TMP/bin/sudo" "$TMP/bin/tailscale" "$TMP/bin/curl"
+cat >"$TMP/bin/ona" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >"$FAKE_ONA_ARGS"
+printf '%s' "${FAKE_ONA_OUTPUT:-env-123}"
+EOF
+
+chmod +x "$TMP/bin/pgrep" "$TMP/bin/sudo" "$TMP/bin/tailscale" "$TMP/bin/curl" "$TMP/bin/ona"
 FAKE_SERVE_STATE="$TMP/serve.state"
 FAKE_SERVE_ACTIONS="$TMP/serve.actions"
-export FAKE_SERVE_STATE FAKE_SERVE_ACTIONS
+FAKE_JOIN_DONE="$TMP/join.done"
+FAKE_ONA_ARGS="$TMP/ona.args"
+FAKE_TAILSCALE_UP_ARGS="$TMP/tailscale-up.args"
+export FAKE_SERVE_STATE FAKE_SERVE_ACTIONS FAKE_JOIN_DONE FAKE_ONA_ARGS FAKE_TAILSCALE_UP_ARGS
 
 reset_serve() {
     printf '%s\n' "${1:-}" >"$FAKE_SERVE_STATE"
     : >"$FAKE_SERVE_ACTIONS"
 }
+
+reset_serve
+rm -f "$FAKE_JOIN_DONE"
+FAKE_JOIN_REQUIRED=true
+export FAKE_JOIN_REQUIRED
+output=$(IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /joined 2>"$TMP/join.err")
+unset FAKE_JOIN_REQUIRED
+[ "$output" = "http://test-node.example:8080/joined" ] || fail "joined URL mismatch: $output"
+[ "$(cat "$FAKE_ONA_ARGS")" = "environment get --context environment --field id" ] || fail "wrong Ona derivation command"
+grep -q -- '--hostname=env-123' "$FAKE_TAILSCALE_UP_ARGS" || fail "derived Ona hostname was not passed to tailscale up"
+grep -q -- '--advertise-tags=tag:ona-dev' "$FAKE_TAILSCALE_UP_ARGS" || fail "Ona tailnet tag was not passed to tailscale up"
+
+reset_serve
+rm -f "$FAKE_JOIN_DONE"
+FAKE_JOIN_REQUIRED=true
+FAKE_ONA_OUTPUT='first
+second'
+export FAKE_JOIN_REQUIRED FAKE_ONA_OUTPUT
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /joined >"$TMP/join-invalid.out" 2>"$TMP/join-invalid.err"; then
+    fail "multiple Ona environment IDs were accepted"
+fi
+unset FAKE_JOIN_REQUIRED FAKE_ONA_OUTPUT
+[ ! -s "$FAKE_SERVE_ACTIONS" ] || fail "invalid Ona ID changed Serve"
+grep -q "expected exactly one non-empty Ona environment ID" "$TMP/join-invalid.err" || fail "invalid Ona ID diagnostic missing"
+
+rm -f "$FAKE_JOIN_DONE"
+FAKE_JOIN_REQUIRED=true
+FAKE_ONA_OUTPUT='invalid_name'
+export FAKE_JOIN_REQUIRED FAKE_ONA_OUTPUT
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /joined >"$TMP/join-label.out" 2>"$TMP/join-label.err"; then
+    fail "invalid Ona DNS label was accepted"
+fi
+unset FAKE_JOIN_REQUIRED FAKE_ONA_OUTPUT
+[ ! -s "$FAKE_SERVE_ACTIONS" ] || fail "invalid Ona DNS label changed Serve"
+grep -q "expected one DNS label" "$TMP/join-label.err" || fail "invalid Ona DNS label diagnostic missing"
 
 reset_serve 'http://localhost:1055'
 output=$(IS_ON_ONA=true "$TAILSCALE_SCRIPT" 1055 /same 2>"$TMP/same.err")
@@ -194,6 +329,101 @@ reset_serve
 output=$(IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /fresh 2>"$TMP/fresh.err")
 [ "$output" = "http://test-node.example:8080/fresh" ] || fail "fresh URL mismatch: $output"
 [ "$(cat "$FAKE_SERVE_ACTIONS")" = 'set http://localhost:4387' ] || fail "fresh mapping actions mismatch"
+
+reset_serve
+FAKE_CURL_STATUS=200
+FAKE_CURL_CONTENT_TYPE='text/html; charset=utf-8'
+FAKE_CURL_BODY_FILE="$TMP/curl-body"
+printf '%s' '<html><script src="http://127.0.0.1:9000/app.js"></script></html>' >"$FAKE_CURL_BODY_FILE"
+export FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /loopback >"$TMP/loopback.out" 2>"$TMP/loopback.err"; then
+    fail "loopback HTML asset should fail verification"
+fi
+unset FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE
+[ ! -s "$FAKE_SERVE_STATE" ] || fail "loopback verification left a newly created Serve mapping"
+[ "$(cat "$FAKE_SERVE_ACTIONS")" = "set http://localhost:4387
+off" ] || fail "loopback verification cleanup actions mismatch"
+grep -q 'http://127.0.0.1:9000/app.js' "$TMP/loopback.err" || fail "loopback diagnostic omitted offending URL"
+
+reset_serve
+FAKE_CURL_STATUS=200
+FAKE_CURL_CONTENT_TYPE='text/html'
+FAKE_CURL_BODY_FILE="$TMP/curl-body"
+printf '%s' '<script src="http://127.0.0.2:9000/app.js"></script>' >"$FAKE_CURL_BODY_FILE"
+export FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /loopback-range >"$TMP/loopback-range.out" 2>"$TMP/loopback-range.err"; then
+    fail "IPv4 loopback-range HTML asset should fail verification"
+fi
+unset FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE
+[ ! -s "$FAKE_SERVE_STATE" ] || fail "IPv4 loopback-range failure left a new Serve mapping"
+
+reset_serve 'http://localhost:1055'
+FAKE_CURL_STATUS=200
+FAKE_CURL_CONTENT_TYPE='text/html'
+FAKE_CURL_BODY_FILE="$TMP/curl-body"
+printf '%s' '<link href="http://localhost:9000/app.css" rel="stylesheet">' >"$FAKE_CURL_BODY_FILE"
+export FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 1055 /same-loopback >"$TMP/same-loopback.out" 2>"$TMP/same-loopback.err"; then
+    fail "loopback HTML asset on unchanged mapping should fail verification"
+fi
+unset FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE
+[ "$(cat "$FAKE_SERVE_STATE")" = 'http://localhost:1055' ] || fail "unchanged mapping was cleaned up after validation failure"
+[ ! -s "$FAKE_SERVE_ACTIONS" ] || fail "unchanged mapping was mutated after validation failure"
+
+reset_serve
+FAKE_CURL_STATUS=200
+FAKE_CURL_CONTENT_TYPE='application/json'
+FAKE_CURL_BODY_FILE="$TMP/curl-body"
+printf '%s' '{"example":"<script src=\"http://localhost:9000/app.js\"></script>"}' >"$FAKE_CURL_BODY_FILE"
+export FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE
+output=$(IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /json 2>"$TMP/json.err")
+unset FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE
+[ "$output" = "http://test-node.example:8080/json" ] || fail "non-HTML endpoint was rejected"
+
+reset_serve
+FAKE_EXTRA_HANDLER=true
+export FAKE_EXTRA_HANDLER
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /mixed >"$TMP/mixed.out" 2>"$TMP/mixed.err"; then
+    fail "unrelated Serve handler should block mutation"
+fi
+unset FAKE_EXTRA_HANDLER
+[ ! -s "$FAKE_SERVE_ACTIONS" ] || fail "mixed-handler mapping was mutated"
+grep -q 'unrelated Serve handlers' "$TMP/mixed.err" || fail "mixed-handler diagnostic missing"
+
+reset_serve
+FAKE_FOREGROUND_HANDLER=true
+export FAKE_FOREGROUND_HANDLER
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /foreground >"$TMP/foreground.out" 2>"$TMP/foreground.err"; then
+    fail "foreground Serve handler should block mutation"
+fi
+unset FAKE_FOREGROUND_HANDLER
+[ ! -s "$FAKE_SERVE_ACTIONS" ] || fail "foreground mapping was mutated"
+grep -q 'unrelated Serve handlers' "$TMP/foreground.err" || fail "foreground-handler diagnostic missing"
+
+reset_serve 'http://localhost:4387'
+FAKE_FOREGROUND_HANDLER=true
+export FAKE_FOREGROUND_HANDLER
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /foreground >"$TMP/foreground-combined.out" 2>"$TMP/foreground-combined.err"; then
+    fail "foreground handler should override and invalidate a matching background mapping"
+fi
+unset FAKE_FOREGROUND_HANDLER
+[ ! -s "$FAKE_SERVE_ACTIONS" ] || fail "combined foreground mapping was mutated"
+grep -q 'unrelated Serve handlers' "$TMP/foreground-combined.err" || fail "combined foreground-handler diagnostic missing"
+
+reset_serve
+FAKE_CURL_STATUS=200
+FAKE_CURL_CONTENT_TYPE='text/html'
+FAKE_CURL_BODY_FILE="$TMP/curl-body"
+FAKE_CURL_REPLACE_TARGET='http://localhost:7777'
+printf '%s' '<script src="http://localhost:9000/app.js"></script>' >"$FAKE_CURL_BODY_FILE"
+export FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE FAKE_CURL_REPLACE_TARGET
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /ownership-race >"$TMP/ownership-race.out" 2>"$TMP/ownership-race.err"; then
+    fail "loopback HTML asset should fail during ownership-race test"
+fi
+unset FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY_FILE FAKE_CURL_REPLACE_TARGET
+[ "$(cat "$FAKE_SERVE_STATE")" = 'http://localhost:7777' ] || fail "cleanup removed a mapping replaced by another process"
+[ "$(cat "$FAKE_SERVE_ACTIONS")" = 'set http://localhost:4387' ] || fail "cleanup mutated a mapping replaced by another process"
+grep -q 'no longer exclusively owned' "$TMP/ownership-race.err" || fail "ownership-race cleanup diagnostic missing"
 
 reset_serve
 FAKE_CURL_STATUS=500
