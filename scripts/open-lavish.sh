@@ -68,7 +68,11 @@ open_artifact() {
     elif ! output=$(run_lavish "$HTML_FILE" "$@"); then
         die "Lavish failed to open $HTML_FILE."
     fi
-    printf '%s\n' "$output" >&2
+    if [[ -n "$allowed_host" ]]; then
+        printf '%s\n' "$output" | sed 's/lavish-axi/lavish-axi-safe/g' >&2
+    else
+        printf '%s\n' "$output" >&2
+    fi
     printf '%s\n' "$output" | sed -n 's/^[[:space:]]*url: "\([^"]*\)"[[:space:]]*$/\1/p' | tail -n 1
 }
 

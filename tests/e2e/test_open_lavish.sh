@@ -28,7 +28,8 @@ printf '%s\n' configured >"$FAKE_SERVER_STATE"
 printf '%s\n' 'session:' \
     '  file: /tmp/plan.html' \
     '  url: "http://127.0.0.1:4387/session/0123456789abcdef?no-gate=1"' \
-    '  status: opened'
+    '  status: opened' \
+    'next_step: "Run `lavish-axi poll /tmp/plan.html`."'
 EOF
 
 cat >"$TMP/bin/curl" <<'EOF'
@@ -106,6 +107,7 @@ output=$(run_open 2>"$TMP/fresh.err")
 [ "$output" = 'http://test-node.example:8080/session/0123456789abcdef?no-gate=1' ] || fail "fresh URL mismatch: $output"
 grep -q "$(printf '^test-node.example\t/tmp/plan.html$')" "$FAKE_NPX_LOG" || fail "fresh start omitted the exact allowed host"
 [ "$(cat "$FAKE_EXPOSE_LOG")" = '4387 /session/0123456789abcdef?no-gate=1' ] || fail "session path was not delegated"
+grep -q 'lavish-axi-safe poll /tmp/plan.html' "$TMP/fresh.err" || fail "open guidance did not preserve the safe follow-up command"
 
 : >"$FAKE_NPX_LOG"
 printf '%s\n' configured >"$FAKE_SERVER_STATE"
