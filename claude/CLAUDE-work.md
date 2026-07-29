@@ -59,7 +59,7 @@ When writing a design doc, RFC, spec, runbook, or playbook, use a doc-authoring 
 
 ### Planning artifacts
 
-For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser (`npx -y lavish-axi <file>`), not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs), then `npx -y lavish-axi poll` for feedback and iterate. After Lavish prints its local URL, always pass that port and session path to `~/dotfiles/scripts/expose-port.sh` and give the user the URL that script returns; do not reason about CDE versus local execution yourself. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
+For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser, not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs). Open it with `open-lavish <file>` and give the user the single verified URL that command returns; it owns Lavish startup and browser exposure for the current environment. Use `lavish-axi-safe poll <file>` and `lavish-axi-safe end <file>` for follow-up commands so a server start or version upgrade retains the same host-safe configuration. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
 
 ## Git & Generated Files
 
@@ -96,6 +96,8 @@ In Zed remote sessions, agent-created worktrees don't appear in the sidebar's "O
 ### Resolving browser URLs
 
 Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before giving the user a local-server URL. The script owns environment detection, setup, and verification: Ona uses the Tailscale path, macOS returns localhost, and unknown remotes fail closed. Return the single URL it prints on stdout. Do not ask the user whether the agent is in a CDE or choose the exposure method yourself.
+
+For Lavish artifacts, use `open-lavish <file>` instead of opening with `npx -y lavish-axi` directly, and use `lavish-axi-safe` for later `poll` or `end` commands. These helpers keep Lavish on loopback, allow the current Ona tailnet hostname whenever a CLI command starts or upgrades the server, safely reuse or repair shared state, and delegate final URL verification to `expose-port.sh`. Do not manually stop the shared Lavish server to repair a 403; the opener distinguishes a state-preserving server restart from ending another agent's session.
 
 The dispatcher delegates Ona to `expose-port-tailscale.sh`, which currently manages one root exposure on tailnet port 8080 and verifies it through the tailnet path, not a localhost curl. Other ACL-permitted ports are reserved for Vanta development services, so don't borrow them for agent tools.
 

@@ -4,6 +4,7 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SCRIPT="$ROOT/scripts/expose-port.sh"
 TAILSCALE_SCRIPT="$ROOT/scripts/expose-port-tailscale.sh"
+PREPARE_SCRIPT="$ROOT/scripts/prepare-ona-tailnet.sh"
 TMP="${TMPDIR:-/tmp}/dotfiles-e2e-expose-port-$$"
 SOCKS_PID=
 
@@ -150,6 +151,8 @@ case "$*" in
         ;;
     up\ *)
         printf '%s\n' "$*" >"$FAKE_TAILSCALE_UP_ARGS"
+        printf '%s\n' up >>"$FAKE_TAILSCALE_UP_ACTIONS"
+        sleep "${FAKE_UP_DELAY:-0}"
         : >"$FAKE_JOIN_DONE"
         ;;
     "status --json")
@@ -263,7 +266,8 @@ FAKE_SERVE_ACTIONS="$TMP/serve.actions"
 FAKE_JOIN_DONE="$TMP/join.done"
 FAKE_ONA_ARGS="$TMP/ona.args"
 FAKE_TAILSCALE_UP_ARGS="$TMP/tailscale-up.args"
-export FAKE_SERVE_STATE FAKE_SERVE_ACTIONS FAKE_JOIN_DONE FAKE_ONA_ARGS FAKE_TAILSCALE_UP_ARGS
+FAKE_TAILSCALE_UP_ACTIONS="$TMP/tailscale-up.actions"
+export FAKE_SERVE_STATE FAKE_SERVE_ACTIONS FAKE_JOIN_DONE FAKE_ONA_ARGS FAKE_TAILSCALE_UP_ARGS FAKE_TAILSCALE_UP_ACTIONS
 
 reset_serve() {
     printf '%s\n' "${1:-}" >"$FAKE_SERVE_STATE"
@@ -274,12 +278,27 @@ reset_serve
 rm -f "$FAKE_JOIN_DONE"
 FAKE_JOIN_REQUIRED=true
 export FAKE_JOIN_REQUIRED
-output=$(IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /joined 2>"$TMP/join.err")
+output=$(IS_ON_ONA=true ONA_TAILNET_LOCK_FILE="$TMP/tailnet.lock" "$PREPARE_SCRIPT" 2>"$TMP/join.err")
 unset FAKE_JOIN_REQUIRED
-[ "$output" = "http://test-node.example:8080/joined" ] || fail "joined URL mismatch: $output"
+[ "$output" = "test-node.example" ] || fail "joined hostname mismatch: $output"
 [ "$(cat "$FAKE_ONA_ARGS")" = "environment get --context environment --field id" ] || fail "wrong Ona derivation command"
 grep -q -- '--hostname=env-123' "$FAKE_TAILSCALE_UP_ARGS" || fail "derived Ona hostname was not passed to tailscale up"
 grep -q -- '--advertise-tags=tag:ona-dev' "$FAKE_TAILSCALE_UP_ARGS" || fail "Ona tailnet tag was not passed to tailscale up"
+
+rm -f "$FAKE_JOIN_DONE"
+: >"$FAKE_TAILSCALE_UP_ACTIONS"
+FAKE_JOIN_REQUIRED=true
+FAKE_UP_DELAY=0.1
+export FAKE_JOIN_REQUIRED FAKE_UP_DELAY
+IS_ON_ONA=true ONA_TAILNET_LOCK_FILE="$TMP/concurrent-tailnet.lock" "$PREPARE_SCRIPT" >"$TMP/concurrent-one.out" 2>"$TMP/concurrent-one.err" &
+first_prepare=$!
+IS_ON_ONA=true ONA_TAILNET_LOCK_FILE="$TMP/concurrent-tailnet.lock" "$PREPARE_SCRIPT" >"$TMP/concurrent-two.out" 2>"$TMP/concurrent-two.err" &
+second_prepare=$!
+wait "$first_prepare" "$second_prepare"
+unset FAKE_JOIN_REQUIRED FAKE_UP_DELAY
+[ "$(wc -l <"$FAKE_TAILSCALE_UP_ACTIONS" | tr -d ' ')" = 1 ] || fail "concurrent preparation joined the tailnet more than once"
+[ "$(cat "$TMP/concurrent-one.out")" = test-node.example ] || fail "first concurrent preparation returned the wrong host"
+[ "$(cat "$TMP/concurrent-two.out")" = test-node.example ] || fail "second concurrent preparation returned the wrong host"
 
 reset_serve
 rm -f "$FAKE_JOIN_DONE"
@@ -287,7 +306,7 @@ FAKE_JOIN_REQUIRED=true
 FAKE_ONA_OUTPUT='first
 second'
 export FAKE_JOIN_REQUIRED FAKE_ONA_OUTPUT
-if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /joined >"$TMP/join-invalid.out" 2>"$TMP/join-invalid.err"; then
+if IS_ON_ONA=true ONA_TAILNET_LOCK_FILE="$TMP/tailnet.lock" "$PREPARE_SCRIPT" >"$TMP/join-invalid.out" 2>"$TMP/join-invalid.err"; then
     fail "multiple Ona environment IDs were accepted"
 fi
 unset FAKE_JOIN_REQUIRED FAKE_ONA_OUTPUT
@@ -298,12 +317,20 @@ rm -f "$FAKE_JOIN_DONE"
 FAKE_JOIN_REQUIRED=true
 FAKE_ONA_OUTPUT='invalid_name'
 export FAKE_JOIN_REQUIRED FAKE_ONA_OUTPUT
-if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /joined >"$TMP/join-label.out" 2>"$TMP/join-label.err"; then
+if IS_ON_ONA=true ONA_TAILNET_LOCK_FILE="$TMP/tailnet.lock" "$PREPARE_SCRIPT" >"$TMP/join-label.out" 2>"$TMP/join-label.err"; then
     fail "invalid Ona DNS label was accepted"
 fi
 unset FAKE_JOIN_REQUIRED FAKE_ONA_OUTPUT
 [ ! -s "$FAKE_SERVE_ACTIONS" ] || fail "invalid Ona DNS label changed Serve"
 grep -q "expected one DNS label" "$TMP/join-label.err" || fail "invalid Ona DNS label diagnostic missing"
+
+cat >"$TMP/fake-prepare" <<'EOF'
+#!/bin/sh
+printf '%s\n' test-node.example
+EOF
+chmod +x "$TMP/fake-prepare"
+PREPARE_ONA_TAILNET_SCRIPT="$TMP/fake-prepare"
+export PREPARE_ONA_TAILNET_SCRIPT
 
 reset_serve 'http://localhost:1055'
 output=$(IS_ON_ONA=true "$TAILSCALE_SCRIPT" 1055 /same 2>"$TMP/same.err")
@@ -329,6 +356,18 @@ reset_serve
 output=$(IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /fresh 2>"$TMP/fresh.err")
 [ "$output" = "http://test-node.example:8080/fresh" ] || fail "fresh URL mismatch: $output"
 [ "$(cat "$FAKE_SERVE_ACTIONS")" = 'set http://localhost:4387' ] || fail "fresh mapping actions mismatch"
+
+reset_serve
+FAKE_CURL_STATUS=403
+FAKE_CURL_CONTENT_TYPE='application/json'
+FAKE_CURL_BODY='{"error":"forbidden host"}'
+export FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY
+if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /forbidden-host >"$TMP/forbidden-host.out" 2>"$TMP/forbidden-host.err"; then
+    fail "Lavish forbidden-host response should fail verification"
+fi
+unset FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY
+grep -q "open the artifact with 'open-lavish'" "$TMP/forbidden-host.err" || fail "forbidden-host remedy missing"
+[ ! -s "$FAKE_SERVE_STATE" ] || fail "forbidden-host verification left a newly created Serve mapping"
 
 reset_serve
 FAKE_CURL_STATUS=200

@@ -4,10 +4,9 @@
 # Usage: expose-port-tailscale.sh <local-port> [verify-path]
 #   expose-port-tailscale.sh 4387 /session/abc123
 #
-# Handles the full chain: userspace tailscaled (with a SOCKS proxy for
-# self-verification), WIF tailnet join, `tailscale serve` on :8080, and an
-# end-to-end curl through the tailnet path. The final URL is the only stdout;
-# progress and errors go to stderr.
+# Prepares the shared Ona tailnet connection, configures `tailscale serve` on
+# :8080, and verifies the URL through the tailnet path. The final URL is the
+# only stdout; progress and errors go to stderr.
 #
 # Why always :8080 - tailnet ACLs for tag:ona-dev nodes only admit the port
 # the Vanta dev flow uses (NGINX_PORT, 8080). Serving on any other port makes
@@ -18,88 +17,23 @@ set -euo pipefail
 LOCAL_PORT="${1:?usage: expose-port-tailscale.sh <local-port> [verify-path]}"
 VERIFY_PATH="${2:-/}"
 TAILNET_PORT=8080
-SOCKS_PORT=1055
+SOCKS_PORT="${ONA_TAILNET_SOCKS_PORT:-1055}"
 LOCK_FILE="/tmp/expose-port-tailscale-${TAILNET_PORT}.lock"
-# Non-sensitive WIF client identifier shared by personal Ona exposure tooling.
-TAILSCALE_CLIENT_ID="TJLHJThSEY81CNTRL-kYU8kYS49721CNTRL"
-TAILSCALE_AUDIENCE="api.tailscale.com/${TAILSCALE_CLIENT_ID}"
-
-die() {
-    echo "[expose-port] $*" >&2
-    exit 1
-}
-
-validate_hostname() {
-    local value="$1"
-    if [[ ! "$value" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
-        die "invalid Ona environment ID $(printf '%q' "$value"); expected one DNS label (1-63 letters, digits, or hyphens, beginning and ending with a letter or digit)."
-    fi
-}
-
-current_ona_hostname() {
-    local environment_output
-    local -a environment_ids
-
-    if ! environment_output=$(ona environment get --context environment --field id 2>/dev/null); then
-        die "could not derive the current Ona environment ID; check 'ona environment get --context environment --field id'."
-    fi
-    mapfile -t environment_ids <<<"$environment_output"
-    if (( ${#environment_ids[@]} != 1 )) || [[ -z "${environment_ids[0]}" ]]; then
-        die "expected exactly one non-empty Ona environment ID from the current environment context."
-    fi
-    validate_hostname "${environment_ids[0]}"
-    printf '%s\n' "${environment_ids[0]}"
-}
 
 if [[ "${IS_ON_ONA:-}" != "true" ]]; then
     echo "Not an Ona CDE (IS_ON_ONA != true) - use 'tailscale serve' directly or the editor port-forward." >&2
     exit 1
 fi
 
-# 1. tailscaled: userspace networking (no TUN in the CDE). The SOCKS flag is
-# what lets this node test its own tailnet URL later - if the daemon is up
-# without it, restart it (login state persists in --state; no re-join needed).
-if pgrep -x tailscaled >/dev/null \
-        && ! (exec 3<>"/dev/tcp/localhost/${SOCKS_PORT}") 2>/dev/null; then
-    echo "[expose-port] tailscaled running without SOCKS proxy - restarting it" >&2
-    sudo pkill -x tailscaled
-    for _ in $(seq 20); do pgrep -x tailscaled >/dev/null || break; sleep 0.5; done
+# The helper serializes daemon repair, WIF join, and DNS-name resolution across
+# agents before this script takes the separate Serve-mapping lock.
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+PREPARE_SCRIPT="${PREPARE_ONA_TAILNET_SCRIPT:-$SCRIPT_DIR/prepare-ona-tailnet.sh}"
+if [[ ! -x "$PREPARE_SCRIPT" ]]; then
+    echo "[expose-port] Ona tailnet helper is not executable: $PREPARE_SCRIPT" >&2
+    exit 1
 fi
-if ! pgrep -x tailscaled >/dev/null; then
-    echo "[expose-port] starting tailscaled (userspace networking)..." >&2
-    sudo mkdir -p /var/lib/tailscale /var/run/tailscale
-    # setsid + stdin redirect: without them the daemon dies with the agent shell
-    # The caller intentionally owns this /tmp log.
-    # shellcheck disable=SC2024
-    sudo setsid tailscaled --tun=userspace-networking \
-        --state=/var/lib/tailscale/tailscaled.state \
-        --socket=/var/run/tailscale/tailscaled.sock \
-        --socks5-server="localhost:${SOCKS_PORT}" \
-        >> /tmp/tailscaled.log 2>&1 < /dev/null &
-    # ready = daemon answering, even if not yet joined ("Logged out")
-    for _ in $(seq 30); do
-        tailscale status >/dev/null 2>&1 && break
-        tailscale status 2>&1 | grep -q 'Logged out' && break
-        sleep 0.5
-    done
-fi
-
-# 2. Join the tailnet if needed using the current Ona environment ID.
-if ! tailscale status --self --peers=false >/dev/null 2>&1; then
-    ONA_HOSTNAME=$(current_ona_hostname)
-    echo "[expose-port] joining tailnet as ${ONA_HOSTNAME}..." >&2
-    sudo tailscale up \
-        --client-id="${TAILSCALE_CLIENT_ID}?ephemeral=true&preauthorized=true" \
-        --audience="${TAILSCALE_AUDIENCE}" \
-        --advertise-tags=tag:ona-dev \
-        --hostname="$ONA_HOSTNAME" \
-        --accept-dns=false \
-        --reset >&2
-fi
-
-# 3. Serve. The requested hostname may have been taken (-1 suffix): resolve the
-# real FQDN from the daemon (also avoids hardcoding the tailnet domain).
-HOST=$(tailscale status --json | jq -re '.Self.DNSName | rtrimstr(".")')
+HOST=$($PREPARE_SCRIPT)
 
 # Only one ACL-permitted port is available, so helper invocations must not evict
 # each other's live mappings.
@@ -217,7 +151,12 @@ else
 fi
 if [[ "$STATUS" != 2* && "$STATUS" != 3* ]]; then
     echo "[expose-port] verification FAILED (${STATUS}) for ${URL}${VERIFY_PATH}" >&2
-    echo "[expose-port] check the app is listening on localhost:${LOCAL_PORT} and 'tailscale serve status'" >&2
+    if [[ "$STATUS" == 403 ]] \
+            && jq -e '.error == "forbidden host"' "$RESPONSE_BODY" >/dev/null 2>&1; then
+        echo "[expose-port] Lavish rejected the tailnet hostname; open the artifact with 'open-lavish' so its startup allowlist is configured." >&2
+    else
+        echo "[expose-port] check the app is listening on localhost:${LOCAL_PORT} and 'tailscale serve status'" >&2
+    fi
     cleanup_changed_mapping
     exit 1
 fi

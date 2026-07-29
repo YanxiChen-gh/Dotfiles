@@ -17,6 +17,8 @@ In Zed remote sessions, agent-created worktrees don't appear in the sidebar's "O
 
 Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before giving the user a local-server URL. The script owns environment detection, setup, and verification: Ona uses the Tailscale path, macOS returns localhost, and unknown remotes fail closed. Return the single URL it prints on stdout. Do not ask the user whether the agent is in a CDE or choose the exposure method yourself.
 
+For Lavish artifacts, use `open-lavish <file>` instead of opening with `npx -y lavish-axi` directly, and use `lavish-axi-safe` for later `poll` or `end` commands. These helpers keep Lavish on loopback, allow the current Ona tailnet hostname whenever a CLI command starts or upgrades the server, safely reuse or repair shared state, and delegate final URL verification to `expose-port.sh`. Do not manually stop the shared Lavish server to repair a 403; the opener distinguishes a state-preserving server restart from ending another agent's session.
+
 The dispatcher delegates Ona to `expose-port-tailscale.sh`, which currently manages one root exposure on tailnet port 8080 and verifies it through the tailnet path, not a localhost curl. Other ACL-permitted ports are reserved for Vanta development services, so don't borrow them for agent tools.
 
 In an Ona CDE, start the Vanta web stack with `~/dotfiles/scripts/vanta-dev-start-web-ona.sh` instead of `just dev-start-web --tailscale`. The personal wrapper gives Parcel a browser-safe public URL, waits for local nginx, and lets Dotfiles own the validated tailnet join and exposure check end to end.

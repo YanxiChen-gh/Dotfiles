@@ -56,6 +56,7 @@ install_node_if_missing
 install_typescript_language_service
 
 create_symlinks
+setup_agent_helpers
 install_neovim
 setup_nvim_config
 setup_cloudev_tasks
