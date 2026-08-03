@@ -8,6 +8,9 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 mkdir -p "$TMP/home/custom-config/opencode/plugins" "$TMP/home/.opencode/bin"
 HOME="$TMP/home"
 XDG_CONFIG_HOME="$HOME/custom-config"
+OPENCODE_PRIMARY="$TMP/opencode-repo"
+OPENCODE_LINKED="$TMP/opencode-linked"
+OPENCODE_POOL="$TMP/treehouse-pool/7/opencode-repo"
 EXAMPLE_TOKEN="local-only"
 MCP_HOST="example.com"
 MCP_CLIENT_ID="client-value"
@@ -20,6 +23,7 @@ export MCP_HOST
 export MCP_CLIENT_ID
 export AGENT_MATURITY_HOME
 export HARNESS_HOOKS
+export OPENCODE_PRIMARY OPENCODE_LINKED OPENCODE_POOL
 unset MISSING_ENV
 unset HERDR_ENV HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_BIN_PATH DOTFILES_HERDR_TASK_WORKSPACE
 
@@ -74,9 +78,10 @@ exit 0
 EOF
 
 HERDR_TITLE_LOG="$TMP/herdr-title.log"
+HERDR_COMMAND_LOG="$TMP/herdr-command.log"
 HERDR_FAIL_MARKER="$TMP/herdr-title-failed"
 HERDR_TEST_BIN="$TMP/herdr"
-export HERDR_TITLE_LOG HERDR_FAIL_MARKER HERDR_TEST_BIN
+export HERDR_TITLE_LOG HERDR_COMMAND_LOG HERDR_FAIL_MARKER HERDR_TEST_BIN
 cat >"$HERDR_TEST_BIN" <<'EOF'
 #!/bin/sh
 if [ "$1 $2 $3" = "integration install opencode" ]; then
@@ -84,13 +89,30 @@ if [ "$1 $2 $3" = "integration install opencode" ]; then
     mkdir -p "$(dirname "$plugin")"
     printf '%s\n' '// managed by herdr' >"$plugin"
 fi
-printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$HERDR_TITLE_LOG"
+if [ "$1 $2" != "workspace report-metadata" ]; then
+    printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$HERDR_TITLE_LOG"
+fi
+printf '%s\n' "$*" >>"$HERDR_COMMAND_LOG"
+if [ -n "${HERDR_FAIL_METADATA_ONCE:-}" ] && [ "$1 $2" = "workspace report-metadata" ] && [ ! -e "$HERDR_FAIL_MARKER" ]; then
+    : >"$HERDR_FAIL_MARKER"
+    exit 7
+fi
 if [ -n "${HERDR_FAIL_ONCE:-}" ] && [ ! -e "$HERDR_FAIL_MARKER" ]; then
     : >"$HERDR_FAIL_MARKER"
     exit 7
 fi
 EOF
 chmod +x "$HERDR_TEST_BIN"
+
+mkdir -p "$OPENCODE_PRIMARY" "${OPENCODE_POOL%/*}"
+git -C "$OPENCODE_PRIMARY" init -q
+git -C "$OPENCODE_PRIMARY" config user.name test
+git -C "$OPENCODE_PRIMARY" config user.email test@example.com
+printf 'fixture\n' >"$OPENCODE_PRIMARY/fixture.txt"
+git -C "$OPENCODE_PRIMARY" add fixture.txt
+git -C "$OPENCODE_PRIMARY" commit -qm fixture
+git -C "$OPENCODE_PRIMARY" worktree add --detach "$OPENCODE_LINKED" >/dev/null
+git -C "$OPENCODE_PRIMARY" worktree add --detach "$OPENCODE_POOL" >/dev/null
 
 resolve_script_dir() {
 	printf '%s\n' "$ROOT"
@@ -566,11 +588,16 @@ const titleLogLines = async () => {
   const content = (await readFile(process.env.HERDR_TITLE_LOG, "utf8")).trim()
   return content ? content.split("\n") : []
 }
+const commandLogLines = async () => {
+  const content = (await readFile(process.env.HERDR_COMMAND_LOG, "utf8")).trim()
+  return content ? content.split("\n") : []
+}
 
 process.env.HERDR_ENV = "1"
 process.env.HERDR_TAB_ID = "w1:t-test"
 process.env.HERDR_BIN_PATH = process.env.HERDR_TEST_BIN
 await writeFile(process.env.HERDR_TITLE_LOG, "")
+await writeFile(process.env.HERDR_COMMAND_LOG, "")
 
 const titleHooks = await pluginModule.DotfilesHarnessPlugin(
   { directory: process.cwd() },
@@ -620,24 +647,60 @@ await resumedTitleHooks.event(
   sessionEvent("session.updated", { id: "other-resumed-root", title: "Wrong resumed title" }),
 )
 assert.deepEqual(await titleLogLines(), ["tab\trename\tw1:t-test\tResumed title"])
+assert.equal(
+  (await commandLogLines()).some((command) => command.startsWith("workspace report-metadata")),
+  false,
+)
 
-await writeFile(process.env.HERDR_TITLE_LOG, "")
 process.env.HERDR_WORKSPACE_ID = "w-task"
 process.env.DOTFILES_HERDR_TASK_WORKSPACE = "1"
-const workspaceTitleHooks = await pluginModule.DotfilesHarnessPlugin(
-  { directory: process.cwd() },
+const checkoutCases = [
+  { directory: process.env.OPENCODE_PRIMARY, worktree: "primary" },
+  { directory: process.env.OPENCODE_LINKED, worktree: "opencode-linked" },
+  { directory: process.env.OPENCODE_POOL, worktree: "7" },
+]
+for (const [index, checkout] of checkoutCases.entries()) {
+  await writeFile(process.env.HERDR_TITLE_LOG, "")
+  await writeFile(process.env.HERDR_COMMAND_LOG, "")
+  const workspaceHooks = await pluginModule.DotfilesHarnessPlugin(
+    { directory: checkout.directory },
+    { hooksDir: process.env.HARNESS_HOOKS },
+  )
+  await workspaceHooks.event(
+    sessionEvent("session.updated", { id: `workspace-root-${index}`, title: "Task title" }),
+  )
+  assert.deepEqual(await titleLogLines(), ["workspace\trename\tw-task\tTask title"])
+  assert.deepEqual(await commandLogLines(), [
+    `workspace report-metadata w-task --source dotfiles:checkout --token repo=opencode-repo --token worktree=${checkout.worktree}`,
+    "workspace rename w-task Task title",
+  ])
+}
+
+await writeFile(process.env.HERDR_TITLE_LOG, "")
+await writeFile(process.env.HERDR_COMMAND_LOG, "")
+await rm(process.env.HERDR_FAIL_MARKER, { force: true })
+process.env.HERDR_FAIL_METADATA_ONCE = "1"
+const metadataRetryHooks = await pluginModule.DotfilesHarnessPlugin(
+  { directory: process.env.OPENCODE_POOL },
   { hooksDir: process.env.HARNESS_HOOKS },
 )
-await workspaceTitleHooks.event(
-  sessionEvent("session.created", {
-    id: "workspace-root",
-    title: "New session - 2026-07-20T12:34:56.789Z",
-  }),
+const originalWarn = console.warn
+const warnings = []
+console.warn = (warning) => warnings.push(warning)
+await metadataRetryHooks.event(
+  sessionEvent("session.created", { id: "metadata-retry", title: "Retry metadata" }),
 )
-await workspaceTitleHooks.event(
-  sessionEvent("session.updated", { id: "workspace-root", title: "Task title" }),
+await metadataRetryHooks.event(
+  sessionEvent("session.updated", { id: "metadata-retry", title: "Retry metadata" }),
 )
-assert.deepEqual(await titleLogLines(), ["workspace\trename\tw-task\tTask title"])
+console.warn = originalWarn
+assert.deepEqual(await commandLogLines(), [
+  "workspace report-metadata w-task --source dotfiles:checkout --token repo=opencode-repo --token worktree=7",
+  "workspace rename w-task Retry metadata",
+  "workspace report-metadata w-task --source dotfiles:checkout --token repo=opencode-repo --token worktree=7",
+])
+assert.match(warnings.join("\n"), /herdr workspace report-metadata exited 7/)
+delete process.env.HERDR_FAIL_METADATA_ONCE
 delete process.env.HERDR_WORKSPACE_ID
 delete process.env.DOTFILES_HERDR_TASK_WORKSPACE
 
@@ -648,14 +711,13 @@ const retryHooks = await pluginModule.DotfilesHarnessPlugin(
   { directory: process.cwd() },
   { hooksDir: process.env.HARNESS_HOOKS },
 )
-const originalWarn = console.warn
-const warnings = []
-console.warn = (warning) => warnings.push(warning)
+const titleWarnings = []
+console.warn = (warning) => titleWarnings.push(warning)
 await retryHooks.event(sessionEvent("session.created", { id: "retry", title: "Retry title" }))
 await retryHooks.event(sessionEvent("session.updated", { id: "retry", title: "Retry title" }))
 console.warn = originalWarn
 assert.equal((await titleLogLines()).length, 2)
-assert.match(warnings.join("\n"), /herdr tab rename exited 7/)
+assert.match(titleWarnings.join("\n"), /herdr tab rename exited 7/)
 
 await writeFile(process.env.HERDR_TITLE_LOG, "")
 delete process.env.HERDR_ENV

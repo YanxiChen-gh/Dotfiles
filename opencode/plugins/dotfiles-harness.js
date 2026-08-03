@@ -1,5 +1,5 @@
 import { readFile, realpath } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const runHook = async (script, payload, extraEnv = {}) => {
@@ -27,7 +27,7 @@ const runHook = async (script, payload, extraEnv = {}) => {
 
 const defaultSessionTitle = /^New session - \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 
-const createHerdrTitleSync = () => {
+const createHerdrTitleSync = (directory) => {
   const tabId = Bun.env.HERDR_TAB_ID
   const workspaceId = Bun.env.HERDR_WORKSPACE_ID
   const taskWorkspace = Bun.env.DOTFILES_HERDR_TASK_WORKSPACE === "1" && workspaceId
@@ -43,6 +43,88 @@ const createHerdrTitleSync = () => {
   let appliedTitle
   let pendingTitle
   let renameQueue = Promise.resolve()
+  let metadataApplied = !taskWorkspace
+  let metadataPromise
+
+  const gitOutput = async (...args) => {
+    const process = Bun.spawn(["git", "-C", directory, ...args], {
+      env: Bun.env,
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(process.stdout).text(),
+      new Response(process.stderr).text(),
+      process.exited,
+    ])
+    if (exitCode !== 0) {
+      throw new Error(`git ${args.join(" ")} exited ${exitCode}: ${stderr.trim()}`)
+    }
+    return stdout.trim()
+  }
+
+  const reportCheckoutMetadata = async () => {
+    try {
+      const currentWorktree = await gitOutput("rev-parse", "--show-toplevel")
+      const worktreeList = await gitOutput("worktree", "list", "--porcelain")
+      const primaryWorktree = worktreeList
+        .split("\n")
+        .find((line) => line.startsWith("worktree "))
+        ?.slice("worktree ".length)
+      if (!primaryWorktree) throw new Error("git worktree list returned no primary checkout")
+
+      const repoName = basename(primaryWorktree)
+      let worktreeName = basename(currentWorktree)
+      if (currentWorktree === primaryWorktree) {
+        worktreeName = "primary"
+      } else if (worktreeName === repoName) {
+        worktreeName = basename(dirname(currentWorktree))
+      }
+
+      const process = Bun.spawn(
+        [
+          herdr,
+          "workspace",
+          "report-metadata",
+          workspaceId,
+          "--source",
+          "dotfiles:checkout",
+          "--token",
+          `repo=${repoName}`,
+          "--token",
+          `worktree=${worktreeName}`,
+        ],
+        {
+          env: Bun.env,
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "pipe",
+        },
+      )
+      const [stderr, exitCode] = await Promise.all([
+        new Response(process.stderr).text(),
+        process.exited,
+      ])
+      if (exitCode !== 0) {
+        console.warn(
+          `[dotfiles-harness] herdr workspace report-metadata exited ${exitCode}: ${stderr.trim()}`,
+        )
+        return
+      }
+      metadataApplied = true
+    } catch (error) {
+      console.warn(`[dotfiles-harness] checkout metadata sync failed: ${error}`)
+    }
+  }
+
+  const syncCheckoutMetadata = async () => {
+    if (metadataApplied) return
+    metadataPromise ??= reportCheckoutMetadata().finally(() => {
+      metadataPromise = undefined
+    })
+    await metadataPromise
+  }
 
   const renameTarget = async (title) => {
     try {
@@ -78,6 +160,8 @@ const createHerdrTitleSync = () => {
       sessionId = session.id
     }
     if (session.id !== sessionId || typeof session.title !== "string") return
+
+    await syncCheckoutMetadata()
 
     const title = session.title.trim()
     if (!title || defaultSessionTitle.test(title) || title === appliedTitle || title === pendingTitle) {
@@ -131,7 +215,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   const scopeGate = join(maturity, "scripts/scope-gate-pretooluse.sh")
   const hooks =
     typeof options.hooksDir === "string" ? options.hooksDir : join(dotfiles, "claude/hooks")
-  const syncHerdrTitle = createHerdrTitleSync()
+  const syncHerdrTitle = createHerdrTitleSync(directory)
   const parentBySession = new Map()
   const rootSessions = new Set()
 
@@ -179,7 +263,6 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
     }
     return { kind: "unresolved" }
   }
-
   return {
     event: async (input) => {
       const session = input.event.properties?.info
