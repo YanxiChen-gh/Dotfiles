@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync Claude Code user MCP servers into an OpenCode-local config overlay."""
+"""Sync Claude Code's Glean MCP server into an OpenCode-local config overlay."""
 
 import argparse
 import json
@@ -7,6 +7,8 @@ import os
 import re
 import shutil
 import sys
+
+OPENCODE_MCP_SERVERS = {"glean_default"}
 
 
 def replace_environment_values(value, environment):
@@ -169,6 +171,8 @@ def sync(claude_path, opencode_path):
     converted = {}
     skipped = []
     for name, config in raw.items():
+        if name not in OPENCODE_MCP_SERVERS:
+            continue
         entry = to_opencode_entry(config, os.environ)
         if entry:
             converted[name] = entry

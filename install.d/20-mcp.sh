@@ -189,7 +189,7 @@ sync_cursor_mcp_from_claude() {
     python3 "$script_dir/scripts/sync_cursor_mcp_from_claude.py" || return $?
 }
 
-# Convert Claude Code user MCP servers into an untracked OpenCode overlay.
+# Convert Claude Code's Glean MCP server into an untracked OpenCode overlay.
 # The OpenCode harness plugin merges this file into the resolved runtime config.
 sync_opencode_mcp_from_claude() {
     if ! command -v python3 >/dev/null 2>&1; then

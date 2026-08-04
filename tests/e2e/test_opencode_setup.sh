@@ -221,6 +221,10 @@ with open(sys.argv[1], encoding="utf-8") as file:
 
 assert config["$schema"] == "https://opencode.ai/config.json"
 assert config["model"] == "openai/gpt-5.6-sol"
+assert config["agent"]["build"]["variant"] == "high"
+assert config["agent"]["plan"]["variant"] == "high"
+assert config["agent"]["general"]["variant"] == "high"
+assert config["agent"]["explore"]["variant"] == "medium"
 assert "opencode-claude-auth@1.5.4" in config["plugin"]
 assert "provider" not in config
 PY
@@ -251,7 +255,7 @@ cat >"$CLAUDE" <<'EOF'
       "args": ["example-mcp", "--token", "local-only", "--fallback", "${MISSING_ENV:-fallback-token}"],
       "env": {"EXAMPLE_TOKEN": "local-only"}
     },
-    "remote_server": {
+    "glean_default": {
       "type": "streamable-http",
       "url": "https://${MCP_HOST:-fallback.example.com}/mcp",
       "headers": {"Authorization": "Bearer local-only"},
@@ -291,20 +295,7 @@ path = sys.argv[1]
 with open(path, encoding="utf-8") as file:
     servers = json.load(file)["mcp"]
 
-assert servers["local_server"] == {
-    "type": "local",
-    "command": [
-        "uvx",
-        "example-mcp",
-        "--token",
-        "{env:EXAMPLE_TOKEN}",
-        "--fallback",
-        "{env:MISSING_ENV:-fallback-token}",
-    ],
-    "enabled": True,
-    "environment": {"EXAMPLE_TOKEN": "{env:EXAMPLE_TOKEN}"},
-}
-assert servers["remote_server"] == {
+assert servers == {"glean_default": {
     "type": "remote",
     "url": "https://{env:MCP_HOST:-fallback.example.com}/mcp",
     "enabled": True,
@@ -314,9 +305,7 @@ assert servers["remote_server"] == {
         "scope": "tools:read tools:write",
     },
     "timeout": 9000,
-}
-assert "unsupported_server" not in servers
-assert "stale_server" not in servers
+}}
 assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
 PY
 
@@ -384,10 +373,10 @@ const hooks = await pluginModule.DotfilesHarnessPlugin(
 const config = {}
 await hooks.config(config)
 
-assert.ok(config.mcp.local_server.command.includes(process.env.EXAMPLE_TOKEN))
-assert.equal(config.mcp.local_server.command.at(-1), "fallback-token")
-assert.equal(config.mcp.remote_server.url, `https://${process.env.MCP_HOST}/mcp`)
-assert.equal(config.mcp.remote_server.oauth.clientId, process.env.MCP_CLIENT_ID)
+assert.deepEqual(Object.keys(config.mcp), ["glean_default"])
+assert.equal(config.mcp.glean_default.url, `https://${process.env.MCP_HOST}/mcp`)
+assert.equal(config.mcp.glean_default.headers.Authorization, `Bearer ${process.env.EXAMPLE_TOKEN}`)
+assert.equal(config.mcp.glean_default.oauth.clientId, process.env.MCP_CLIENT_ID)
 
 const system = []
 await hooks["experimental.chat.system.transform"]({ sessionID: "test-session" }, { system })
