@@ -7,6 +7,8 @@ if [ ! -x "$real_opencode" ]; then
     exit 127
 fi
 
+export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="${OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS:-true}"
+
 has_auto=false
 resume_session=false
 for argument in "$@"; do

@@ -29,10 +29,12 @@ unset HERDR_ENV HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_BIN_PATH DOTFILES_HERDR_TA
 
 OPENCODE_ARGS_LOG="$TMP/opencode-args.log"
 OPENCODE_START_LOG="$TMP/opencode-start.log"
-export OPENCODE_ARGS_LOG OPENCODE_START_LOG
+OPENCODE_ENV_LOG="$TMP/opencode-env.log"
+export OPENCODE_ARGS_LOG OPENCODE_START_LOG OPENCODE_ENV_LOG
 cat >"$HOME/.opencode/bin/opencode" <<'EOF'
 #!/bin/sh
 printf '%s\0' "$@" >>"$OPENCODE_ARGS_LOG"
+printf '%s\n' "${OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS:-unset}" >>"$OPENCODE_ENV_LOG"
 python3 - "$OPENCODE_START_LOG" <<'PY'
 import sys
 import time
@@ -193,6 +195,15 @@ assert_opencode_args '--auto|--session|test-session' --auto --session test-sessi
 assert_opencode_args 'run|--auto|hello' run hello
 assert_opencode_args 'run|hello|--auto' run hello --auto
 assert_opencode_args 'debug|paths' debug paths
+
+: >"$OPENCODE_ENV_LOG"
+unset OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS
+"$HOME/.local/bin/opencode" debug paths
+[ "$(cat "$OPENCODE_ENV_LOG")" = "true" ] || fail "background subagents are not enabled by default"
+
+: >"$OPENCODE_ENV_LOG"
+OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=false "$HOME/.local/bin/opencode" debug paths
+[ "$(cat "$OPENCODE_ENV_LOG")" = "false" ] || fail "background subagent override was not preserved"
 
 : >"$OPENCODE_START_LOG"
 rm -f "$TMP/opencode-resume-stagger"
