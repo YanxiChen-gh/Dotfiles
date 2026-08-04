@@ -75,8 +75,6 @@ export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --follow --glob "!.g
 
 # ------------------- PATH ------------------------
 
-export PATH="$HOME/.opencode/bin:$PATH"
-export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
 export PATH="$HOME/.rvm/bin:$PATH"
 export PATH="$GOPATH/bin:$PATH"
@@ -191,6 +189,10 @@ elif [ -s "$HOME/.nvm/nvm.sh" ]; then
     source "$NVM_DIR/nvm.sh"
     [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion"
 fi
+
+# NVM prepends its active version, so restore wrapper precedence afterwards.
+export PATH="$HOME/.opencode/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 
 # opam (OCaml)
 [ -r "$HOME/.opam/opam-init/init.zsh" ] && source "$HOME/.opam/opam-init/init.zsh" > /dev/null 2> /dev/null

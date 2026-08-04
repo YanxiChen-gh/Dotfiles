@@ -173,6 +173,40 @@ ensure_opencode_path
 [ "$(grep -cF '.opencode/bin' "$HOME/.bash_profile")" -eq 1 ] || fail "bash profile PATH setup is missing"
 grep -qFx 'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"' "$HOME/.profile" || fail "wrapper does not precede the real OpenCode binary"
 
+if command -v zsh >/dev/null 2>&1; then
+    mkdir -p "$HOME/.oh-my-zsh" "$HOME/.nvm/versions/node/test/bin"
+    : >"$HOME/.oh-my-zsh/oh-my-zsh.sh"
+    cat >"$HOME/.antigen.zsh" <<'EOF'
+antigen() { :; }
+EOF
+    cat >"$HOME/.nvm/nvm.sh" <<'EOF'
+nvm() { :; }
+export NVM_BIN="$HOME/.nvm/versions/node/test/bin"
+export PATH="$NVM_BIN:$PATH"
+EOF
+    : >"$HOME/.nvm/bash_completion"
+    cat >"$HOME/.nvm/versions/node/test/bin/node" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+    cat >"$HOME/.nvm/versions/node/test/bin/opencode" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+    chmod +x "$HOME/.nvm/versions/node/test/bin/node" "$HOME/.nvm/versions/node/test/bin/opencode"
+    ln -s "$ROOT/.zshrc" "$HOME/.zshrc"
+
+    resolved_opencode=$(ZDOTDIR="$HOME" zsh -dlic 'command -v opencode')
+    [ "$resolved_opencode" = "$HOME/.local/bin/opencode" ] || fail "clean zsh resolved OpenCode to $resolved_opencode"
+    resolved_node=$(ZDOTDIR="$HOME" zsh -dlic 'command -v node')
+    [ "$resolved_node" = "$HOME/.nvm/versions/node/test/bin/node" ] || fail "clean zsh did not preserve NVM Node resolution"
+    opencode_locations=$(ZDOTDIR="$HOME" zsh -dlic 'type -a opencode')
+    case "$opencode_locations" in
+        *"$HOME/.local/bin/opencode"*"$HOME/.opencode/bin/opencode"*"$HOME/.nvm/versions/node/test/bin/opencode"*) ;;
+        *) fail "clean zsh did not retain the wrapper, real binary, and NVM installation" ;;
+    esac
+fi
+
 assert_opencode_args() {
     expected=$1
     shift
@@ -195,6 +229,7 @@ assert_opencode_args '--auto|--session|test-session' --auto --session test-sessi
 assert_opencode_args 'run|--auto|hello' run hello
 assert_opencode_args 'run|hello|--auto' run hello --auto
 assert_opencode_args 'debug|paths' debug paths
+assert_opencode_args '--auto|--version' --version
 
 : >"$OPENCODE_ENV_LOG"
 unset OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS
