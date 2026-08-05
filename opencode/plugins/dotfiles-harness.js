@@ -27,7 +27,14 @@ const runHook = async (script, payload, extraEnv = {}) => {
 
 const defaultSessionTitle = /^New session - \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 
-const createHerdrTitleSync = (directory) => {
+const sessionIDFromEvent = ({ event }) => {
+  const properties = event.properties ?? {}
+  if (typeof properties.info?.id === "string") return properties.info.id
+  if (typeof properties.sessionID === "string") return properties.sessionID
+  return undefined
+}
+
+const createHerdrTitleSync = (directory, rootSession) => {
   const tabId = Bun.env.HERDR_TAB_ID
   const workspaceId = Bun.env.HERDR_WORKSPACE_ID
   const taskWorkspace = Bun.env.DOTFILES_HERDR_TASK_WORKSPACE === "1" && workspaceId
@@ -39,7 +46,6 @@ const createHerdrTitleSync = (directory) => {
   if (Bun.env.HERDR_ENV !== "1" || !target) return async () => {}
 
   const herdr = Bun.env.HERDR_BIN_PATH ?? "herdr"
-  let sessionId
   let appliedTitle
   let pendingTitle
   let renameQueue = Promise.resolve()
@@ -151,15 +157,22 @@ const createHerdrTitleSync = (directory) => {
   }
 
   return async ({ event }) => {
+    const eventSessionID = sessionIDFromEvent({ event })
+    if (event.type === "session.deleted" && eventSessionID === rootSession.id) {
+      rootSession.id = undefined
+      appliedTitle = undefined
+      pendingTitle = undefined
+      return
+    }
     if (event.type !== "session.created" && event.type !== "session.updated") return
 
     const session = event.properties?.info
     if (!session || typeof session.id !== "string" || session.parentID) return
 
-    if (!sessionId) {
-      sessionId = session.id
+    if (!rootSession.id) {
+      rootSession.id = session.id
     }
-    if (session.id !== sessionId || typeof session.title !== "string") return
+    if (session.id !== rootSession.id || typeof session.title !== "string") return
 
     await syncCheckoutMetadata()
 
@@ -174,6 +187,178 @@ const createHerdrTitleSync = (directory) => {
       if (pendingTitle === title) pendingTitle = undefined
     })
     await renameQueue
+  }
+}
+
+const createHerdrSubagentSync = ({ rootSession, sessionLineage }) => {
+  const paneId = Bun.env.HERDR_PANE_ID
+  if (Bun.env.HERDR_ENV !== "1" || !paneId) return async () => {}
+
+  const herdr = Bun.env.HERDR_BIN_PATH ?? "herdr"
+  const tokenNames = ["subagent_1", "subagent_2", "subagent_3", "subagent_summary"]
+  const children = new Map()
+  let trackedRootSessionID
+  let completedCount = 0
+  let updateOrder = 0
+  let appliedSignature
+
+  const childTitle = (session) => {
+    const value =
+      typeof session?.title === "string" && session.title.trim()
+        ? session.title.trim().replace(/\s+\(@[^)]+ subagent\)$/, "")
+        : typeof session?.agent === "string" && session.agent.trim()
+          ? session.agent.trim()
+          : "subagent"
+    return value.slice(0, 64)
+  }
+
+  const reportMetadata = async (values) => {
+    const args = [
+      herdr,
+      "pane",
+      "report-metadata",
+      paneId,
+      "--source",
+      "dotfiles:opencode-subagents",
+      "--agent",
+      "opencode",
+    ]
+    for (const name of tokenNames) {
+      const value = values[name]
+      if (value) {
+        args.push("--token", `${name}=${value}`)
+      } else {
+        args.push("--clear-token", name)
+      }
+    }
+
+    let failure
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const process = Bun.spawn(args, {
+          env: Bun.env,
+          stdin: "ignore",
+          stdout: "ignore",
+          stderr: "pipe",
+        })
+        const [stderr, exitCode] = await Promise.all([
+          new Response(process.stderr).text(),
+          process.exited,
+        ])
+        if (exitCode === 0) return true
+        failure = `exited ${exitCode}: ${stderr.trim()}`
+      } catch (error) {
+        failure = `failed: ${error}`
+      }
+    }
+    console.warn(`[dotfiles-harness] herdr pane report-metadata ${failure}`)
+    return false
+  }
+
+  const syncMetadata = async () => {
+    const priority = { blocked: 0, error: 1, retry: 2, working: 3 }
+    const active = [...children.values()]
+      .filter((child) => child.state !== "idle")
+      .sort((left, right) => priority[left.state] - priority[right.state] || right.order - left.order)
+    const prefixes = { blocked: "[ask]", error: "[error]", retry: "[retry]", working: "[run]" }
+    const values = {}
+    for (const [index, child] of active.slice(0, 3).entries()) {
+      values[`subagent_${index + 1}`] = `${prefixes[child.state]} ${child.title}`
+    }
+
+    const summary = []
+    if (active.length > 3) summary.push(`+${active.length - 3} active`)
+    if (completedCount > 0) summary.push(`${completedCount} completed`)
+    if (summary.length > 0) values.subagent_summary = summary.join(" / ")
+
+    const signature = JSON.stringify(values)
+    if (signature === appliedSignature) return
+    if (await reportMetadata(values)) appliedSignature = signature
+  }
+
+  const resetForRoot = async (rootSessionID) => {
+    if (trackedRootSessionID === rootSessionID) return false
+    trackedRootSessionID = rootSessionID
+    children.clear()
+    completedCount = 0
+    await syncMetadata()
+    return true
+  }
+
+  return async (input) => {
+    const { event } = input
+    const eventSessionID = sessionIDFromEvent(input)
+    await resetForRoot(rootSession.id)
+
+    if (event.type === "session.deleted" && eventSessionID === trackedRootSessionID) {
+      trackedRootSessionID = undefined
+      children.clear()
+      completedCount = 0
+      await syncMetadata()
+      return
+    }
+    if (!eventSessionID || !trackedRootSessionID) return
+
+    const lineage = await sessionLineage(eventSessionID)
+    if (lineage.kind !== "child" || lineage.rootSessionID !== trackedRootSessionID) return
+
+    const session = event.properties?.info
+    let child = children.get(eventSessionID)
+    if (!child) {
+      child = { title: childTitle(session), state: "idle", order: 0, completed: false }
+      children.set(eventSessionID, child)
+    } else if (session) {
+      child.title = childTitle(session)
+    }
+
+    const markActive = (state) => {
+      child.state = state
+      child.completed = false
+      updateOrder += 1
+      child.order = updateOrder
+    }
+    const markCompleted = () => {
+      if (!child.completed && child.state !== "idle") completedCount += 1
+      child.state = "idle"
+      child.completed = true
+    }
+
+    switch (event.type) {
+      case "session.created":
+        markActive("working")
+        break
+      case "session.status": {
+        const status =
+          typeof event.properties?.status === "string"
+            ? event.properties.status
+            : event.properties?.status?.type
+        if (status === "idle") markCompleted()
+        else if (status === "retry") markActive("retry")
+        else if (status === "busy") markActive("working")
+        break
+      }
+      case "session.idle":
+        markCompleted()
+        break
+      case "permission.asked":
+      case "question.asked":
+        markActive("blocked")
+        break
+      case "permission.replied":
+      case "question.replied":
+      case "question.rejected":
+        markActive("working")
+        break
+      case "session.error":
+        markActive("error")
+        break
+      case "session.deleted":
+        children.delete(eventSessionID)
+        break
+      default:
+        break
+    }
+    await syncMetadata()
   }
 }
 
@@ -215,7 +400,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   const scopeGate = join(maturity, "scripts/scope-gate-pretooluse.sh")
   const hooks =
     typeof options.hooksDir === "string" ? options.hooksDir : join(dotfiles, "claude/hooks")
-  const syncHerdrTitle = createHerdrTitleSync(directory)
+  const rootSession = {}
   const parentBySession = new Map()
   const rootSessions = new Set()
 
@@ -263,13 +448,34 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
     }
     return { kind: "unresolved" }
   }
-  return {
-    event: async (input) => {
-      const session = input.event.properties?.info
-      if (input.event.type === "session.created" || input.event.type === "session.updated") {
-        rememberSession(session)
-      }
+  const syncHerdrTitle = createHerdrTitleSync(directory, rootSession)
+  const syncHerdrSubagents = createHerdrSubagentSync({ rootSession, sessionLineage })
+  const handleEvent = async (input) => {
+    if (input.event.type === "session.deleted") {
+      await syncHerdrSubagents(input)
       await syncHerdrTitle(input)
+      const sessionID = sessionIDFromEvent(input)
+      if (sessionID) {
+        parentBySession.delete(sessionID)
+        rootSessions.delete(sessionID)
+      }
+      return
+    }
+    await syncHerdrTitle(input)
+    await syncHerdrSubagents(input)
+  }
+  let eventQueue = Promise.resolve()
+
+  return {
+    event: (input) => {
+      if (input.event.type === "session.created" || input.event.type === "session.updated") {
+        rememberSession(input.event.properties?.info)
+      }
+      const pending = eventQueue.then(() => handleEvent(input))
+      eventQueue = pending.catch((error) => {
+        console.warn(`[dotfiles-harness] event sync failed: ${error}`)
+      })
+      return pending
     },
     config: async (config) => {
       try {

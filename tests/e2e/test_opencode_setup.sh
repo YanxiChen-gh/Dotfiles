@@ -91,11 +91,15 @@ if [ "$1 $2 $3" = "integration install opencode" ]; then
     mkdir -p "$(dirname "$plugin")"
     printf '%s\n' '// managed by herdr' >"$plugin"
 fi
-if [ "$1 $2" != "workspace report-metadata" ]; then
+if [ "$2" != "report-metadata" ]; then
     printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"$HERDR_TITLE_LOG"
 fi
 printf '%s\n' "$*" >>"$HERDR_COMMAND_LOG"
 if [ -n "${HERDR_FAIL_METADATA_ONCE:-}" ] && [ "$1 $2" = "workspace report-metadata" ] && [ ! -e "$HERDR_FAIL_MARKER" ]; then
+    : >"$HERDR_FAIL_MARKER"
+    exit 7
+fi
+if [ -n "${HERDR_FAIL_PANE_METADATA_ONCE:-}" ] && [ "$1 $2" = "pane report-metadata" ] && [ ! -e "$HERDR_FAIL_MARKER" ]; then
     : >"$HERDR_FAIL_MARKER"
     exit 7
 fi
@@ -288,6 +292,23 @@ assert config["attention"] == {
     "notifications": True,
     "sound": False,
 }
+PY
+
+python3 - "$ROOT/herdr/config.toml" <<'PY'
+import sys
+import tomllib
+
+with open(sys.argv[1], "rb") as file:
+    config = tomllib.load(file)
+
+assert config["ui"]["sidebar"]["agents"]["rows_by_agent"]["opencode"] == [
+    ["state_icon", "workspace", "tab"],
+    ["agent"],
+    ["$subagent_1"],
+    ["$subagent_2"],
+    ["$subagent_3"],
+    ["$subagent_summary"],
+]
 PY
 
 CLAUDE="$TMP/claude.json"
@@ -627,12 +648,23 @@ const commandLogLines = async () => {
   const content = (await readFile(process.env.HERDR_COMMAND_LOG, "utf8")).trim()
   return content ? content.split("\n") : []
 }
+const subagentMetadataCommands = async () => {
+  return (await commandLogLines()).filter((command) =>
+    command.startsWith("pane report-metadata"),
+  )
+}
+const workspaceCommands = async () => {
+  return (await commandLogLines()).filter((command) => command.startsWith("workspace "))
+}
 
 process.env.HERDR_ENV = "1"
 process.env.HERDR_TAB_ID = "w1:t-test"
+process.env.HERDR_PANE_ID = "w1:p-test"
 process.env.HERDR_BIN_PATH = process.env.HERDR_TEST_BIN
 await writeFile(process.env.HERDR_TITLE_LOG, "")
 await writeFile(process.env.HERDR_COMMAND_LOG, "")
+await rm(process.env.HERDR_FAIL_MARKER, { force: true })
+process.env.HERDR_FAIL_PANE_METADATA_ONCE = "1"
 
 const titleHooks = await pluginModule.DotfilesHarnessPlugin(
   { directory: process.cwd() },
@@ -644,6 +676,10 @@ await titleHooks.event(
     title: "New session - 2026-07-20T12:34:56.789Z",
   }),
 )
+let subagentCommands = await subagentMetadataCommands()
+assert.equal(subagentCommands.length, 2)
+assert.equal(subagentCommands[0], subagentCommands[1])
+delete process.env.HERDR_FAIL_PANE_METADATA_ONCE
 await titleHooks.event(
   sessionEvent("session.created", { id: "child", parentID: "root", title: "Child work" }),
 )
@@ -651,6 +687,71 @@ await titleHooks.event(
   sessionEvent("session.created", { id: "other-root", title: "Other root" }),
 )
 assert.deepEqual(await titleLogLines(), [])
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--token subagent_1=\[run\] Child work/)
+
+await titleHooks.event({
+  event: {
+    type: "session.status",
+    properties: { sessionID: "child", status: { type: "retry" } },
+  },
+})
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--token subagent_1=\[retry\] Child work/)
+
+await Promise.all([
+  titleHooks.event({
+    event: {
+      type: "session.status",
+      properties: { sessionID: "child", status: { type: "busy" } },
+    },
+  }),
+  titleHooks.event({
+    event: {
+      type: "session.status",
+      properties: { sessionID: "child", status: { type: "retry" } },
+    },
+  }),
+  titleHooks.event({
+    event: {
+      type: "session.status",
+      properties: { sessionID: "child", status: { type: "busy" } },
+    },
+  }),
+])
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--token subagent_1=\[run\] Child work/)
+
+await titleHooks.event({
+  event: { type: "question.asked", properties: { sessionID: "child" } },
+})
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--token subagent_1=\[ask\] Child work/)
+
+for (const index of [2, 3, 4]) {
+  await titleHooks.event(
+    sessionEvent("session.created", {
+      id: `child-${index}`,
+      parentID: "root",
+      title: `Child ${index} (@explore subagent)`,
+    }),
+  )
+}
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--token subagent_1=\[ask\] Child work/)
+assert.match(subagentCommands.at(-1), /--token subagent_2=\[run\] Child 4/)
+assert.match(subagentCommands.at(-1), /--token subagent_3=\[run\] Child 3/)
+assert.match(subagentCommands.at(-1), /--token subagent_summary=\+1 active/)
+assert.doesNotMatch(subagentCommands.at(-1), /subagent_4/)
+
+await titleHooks.event({
+  event: {
+    type: "session.status",
+    properties: { sessionID: "child", status: { type: "idle" } },
+  },
+})
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--token subagent_summary=1 completed/)
 
 await titleHooks.event(
   sessionEvent("session.updated", { id: "root", title: "Generated title" }),
@@ -669,6 +770,25 @@ assert.deepEqual(await titleLogLines(), [
   "tab\trename\tw1:t-test\tGenerated title",
   "tab\trename\tw1:t-test\tRenamed title",
 ])
+
+await Promise.all([
+  titleHooks.event(sessionEvent("session.deleted", { id: "root" })),
+  titleHooks.event(
+    sessionEvent("session.updated", { id: "other-root", title: "Replacement title" }),
+  ),
+])
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--clear-token subagent_1/)
+assert.match(subagentCommands.at(-1), /--clear-token subagent_summary/)
+await titleHooks.event(
+  sessionEvent("session.created", {
+    id: "replacement-child",
+    parentID: "other-root",
+    title: "Replacement child",
+  }),
+)
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--token subagent_1=\[run\] Replacement child/)
 
 await writeFile(process.env.HERDR_TITLE_LOG, "")
 const resumedTitleHooks = await pluginModule.DotfilesHarnessPlugin(
@@ -705,7 +825,7 @@ for (const [index, checkout] of checkoutCases.entries()) {
     sessionEvent("session.updated", { id: `workspace-root-${index}`, title: "Task title" }),
   )
   assert.deepEqual(await titleLogLines(), ["workspace\trename\tw-task\tTask title"])
-  assert.deepEqual(await commandLogLines(), [
+  assert.deepEqual(await workspaceCommands(), [
     `workspace report-metadata w-task --source dotfiles:checkout --token repo=opencode-repo --token worktree=${checkout.worktree}`,
     "workspace rename w-task Task title",
   ])
@@ -729,7 +849,7 @@ await metadataRetryHooks.event(
   sessionEvent("session.updated", { id: "metadata-retry", title: "Retry metadata" }),
 )
 console.warn = originalWarn
-assert.deepEqual(await commandLogLines(), [
+assert.deepEqual(await workspaceCommands(), [
   "workspace report-metadata w-task --source dotfiles:checkout --token repo=opencode-repo --token worktree=7",
   "workspace rename w-task Retry metadata",
   "workspace report-metadata w-task --source dotfiles:checkout --token repo=opencode-repo --token worktree=7",

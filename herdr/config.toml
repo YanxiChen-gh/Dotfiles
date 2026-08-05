@@ -31,3 +31,13 @@ rows = [
   ["state_icon", "workspace"],
   ["$repo", "$worktree"],
 ]
+
+[ui.sidebar.agents.rows_by_agent]
+opencode = [
+  ["state_icon", "workspace", "tab"],
+  ["agent"],
+  ["$subagent_1"],
+  ["$subagent_2"],
+  ["$subagent_3"],
+  ["$subagent_summary"],
+]
