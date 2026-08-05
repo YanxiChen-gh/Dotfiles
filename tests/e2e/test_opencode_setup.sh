@@ -162,6 +162,8 @@ export PATH
 [ -L "$CONFIG_DIR/plugins/dotfiles-harness.js" ] || fail "harness plugin is not linked"
 [ -L "$HOME/.local/bin/opencode" ] || fail "OpenCode wrapper is not linked"
 [ "$(readlink "$HOME/.local/bin/opencode")" = "$ROOT/opencode/opencode" ] || fail "OpenCode wrapper links to the wrong source"
+[ -L "$HOME/.local/bin/slack-webhook-post.sh" ] || fail "Slack notifier is not linked"
+[ "$(readlink "$HOME/.local/bin/slack-webhook-post.sh")" = "$ROOT/opencode/scripts/slack-webhook-post.sh" ] || fail "Slack notifier links to the wrong source"
 [ -L "$CONFIG_DIR/plugins/herdr-agent-state.js" ] || fail "Herdr plugin is not linked into the custom XDG config"
 [ "$(readlink "$CONFIG_DIR/plugins/herdr-agent-state.js")" = "$HOME/.config/opencode/plugins/herdr-agent-state.js" ] || fail "Herdr plugin links to the wrong source"
 [ "$(grep -cF 'integration' "$HERDR_TITLE_LOG")" -eq 2 ] || fail "Herdr integration installer was not repeatable"
@@ -298,6 +300,73 @@ assert config["attention"] == {
 }
 PY
 
+SLACK_CURL_DIR="$TMP/slack-curl"
+SLACK_CURL_ARGS="$TMP/slack-curl-args"
+SLACK_CURL_CONFIG="$TMP/slack-curl-config"
+SLACK_CURL_PAYLOAD="$TMP/slack-curl-payload"
+export SLACK_CURL_ARGS SLACK_CURL_CONFIG SLACK_CURL_PAYLOAD
+mkdir -p "$SLACK_CURL_DIR" "$HOME/.claude/secrets"
+cat >"$SLACK_CURL_DIR/curl" <<'EOF'
+#!/bin/sh
+config=$(cat)
+printf '%s\n' "$config" >"$SLACK_CURL_CONFIG"
+printf '%s\0' "$@" >"$SLACK_CURL_ARGS"
+for argument in "$@"; do
+    case "$argument" in
+        @*) cp "${argument#@}" "$SLACK_CURL_PAYLOAD" ;;
+    esac
+done
+exit "${SLACK_CURL_EXIT:-0}"
+EOF
+chmod +x "$SLACK_CURL_DIR/curl"
+
+printf '%s\n' 'https://hooks.slack.com/services/test/fixture/value' >"$HOME/.claude/secrets/slack-webhook.txt"
+chmod 600 "$HOME/.claude/secrets/slack-webhook.txt"
+printf '%s\n' 'OpenCode notification fixture' >"$TMP/slack-message.txt"
+PATH="$SLACK_CURL_DIR:$PATH" "$HOME/.local/bin/slack-webhook-post.sh" default "$TMP/slack-message.txt"
+
+python3 - "$SLACK_CURL_ARGS" "$SLACK_CURL_CONFIG" "$SLACK_CURL_PAYLOAD" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "rb") as file:
+    args = [value.decode() for value in file.read().split(b"\0") if value]
+with open(sys.argv[2], encoding="utf-8") as file:
+    config = file.read()
+with open(sys.argv[3], encoding="utf-8") as file:
+    payload = json.load(file)
+
+assert "--connect-timeout" in args
+assert args[args.index("--connect-timeout") + 1] == "2"
+assert "--max-time" in args
+assert args[args.index("--max-time") + 1] == "5"
+assert "--output" in args
+assert args[args.index("--output") + 1] == "/dev/null"
+assert not any("hooks.slack.com" in value for value in args)
+assert config == 'url = "https://hooks.slack.com/services/test/fixture/value"\n'
+assert payload == {"text": "OpenCode notification fixture\n"}
+PY
+
+chmod 644 "$HOME/.claude/secrets/slack-webhook.txt"
+if PATH="$SLACK_CURL_DIR:$PATH" "$HOME/.local/bin/slack-webhook-post.sh" default "$TMP/slack-message.txt" >/dev/null 2>&1; then
+    fail "Slack notifier accepted an insecure webhook file mode"
+fi
+chmod 600 "$HOME/.claude/secrets/slack-webhook.txt"
+mv "$HOME/.claude/secrets/slack-webhook.txt" "$TMP/slack-webhook.txt"
+set +e
+PATH="$SLACK_CURL_DIR:$PATH" "$HOME/.local/bin/slack-webhook-post.sh" default "$TMP/slack-message.txt" >/dev/null 2>&1
+missing_webhook_exit=$?
+set -e
+[ "$missing_webhook_exit" -eq 2 ] || fail "Slack notifier did not return 2 for a missing webhook"
+mv "$TMP/slack-webhook.txt" "$HOME/.claude/secrets/slack-webhook.txt"
+set +e
+SLACK_CURL_EXIT=28 PATH="$SLACK_CURL_DIR:$PATH" "$HOME/.local/bin/slack-webhook-post.sh" default "$TMP/slack-message.txt" >/dev/null 2>&1
+curl_failure_exit=$?
+set -e
+[ "$curl_failure_exit" -eq 28 ] || fail "Slack notifier did not preserve curl failure status"
+
+export AGENT_SLACK_NOTIFICATIONS=0
+
 python3 - "$ROOT/herdr/config.toml" <<'PY'
 import sys
 import tomllib
@@ -433,6 +502,7 @@ const sessionRecords = new Map([["test-session", { id: "test-session" }]])
 const summarizeCalls = []
 const promptCalls = []
 const summarizeFailures = new Set()
+const slackNotifications = []
 const client = {
   session: {
     async get({ path }) {
@@ -451,7 +521,10 @@ const client = {
 }
 const hooks = await pluginModule.DotfilesHarnessPlugin(
   { client, directory: process.cwd() },
-  { hooksDir: process.env.HARNESS_HOOKS },
+  {
+    hooksDir: process.env.HARNESS_HOOKS,
+    slackNotify: async (message) => slackNotifications.push(message),
+  },
 )
 const config = {}
 await hooks.config(config)
@@ -467,6 +540,10 @@ assert.match(system.join("\n"), /scope-gate.*test prompt/)
 
 const sessionEvent = (type, info) => ({ event: { type, properties: { info } } })
 const event = (type, properties) => ({ event: { type, properties } })
+const sessionIDEvent = (type, sessionID, properties = {}) => ({
+  event: { type, properties: { sessionID, ...properties } },
+})
+const flushNotifications = () => new Promise((resolve) => setImmediate(resolve))
 void hooks.event(sessionEvent("session.created", { id: "approved-root" }))
 void hooks.event(
   sessionEvent("session.created", {
@@ -480,6 +557,110 @@ void hooks.event(
     parentID: "approved-child",
   }),
 )
+
+await hooks.event(sessionIDEvent("session.status", "test-session", { status: { type: "idle" } }))
+await flushNotifications()
+assert.deepEqual(slackNotifications, [])
+
+await hooks["chat.message"]({ sessionID: "test-session" })
+await hooks.event(sessionIDEvent("permission.asked", "test-session"))
+await flushNotifications()
+assert.equal(slackNotifications.length, 1)
+assert.match(slackNotifications[0], /waiting for a permission decision/)
+assert.doesNotMatch(slackNotifications[0], /test-session|fixture|\/workspaces/)
+
+await hooks.event(sessionIDEvent("permission.asked", "test-session"))
+await hooks.event(sessionIDEvent("session.idle", "test-session"))
+await hooks.event(sessionIDEvent("question.asked", "approved-child"))
+await flushNotifications()
+assert.equal(slackNotifications.length, 1)
+
+await hooks.event(sessionIDEvent("permission.replied", "test-session"))
+await hooks.event(sessionIDEvent("session.status", "test-session", { status: { type: "idle" } }))
+await hooks.event(sessionIDEvent("session.idle", "test-session"))
+await flushNotifications()
+assert.equal(slackNotifications.length, 2)
+assert.match(slackNotifications[1], /completed its current work/)
+
+await hooks.event(
+  sessionIDEvent("session.error", "test-session", {
+    error: { name: "MessageAbortedError", data: { message: "secret fixture" } },
+  }),
+)
+await hooks.event(sessionIDEvent("session.idle", "test-session"))
+await hooks.event(
+  sessionIDEvent("session.error", "test-session", {
+    error: { name: "ContextOverflowError", data: { message: "secret fixture" } },
+  }),
+)
+await hooks.event(sessionIDEvent("session.idle", "test-session"))
+await flushNotifications()
+assert.equal(slackNotifications.length, 3)
+assert.match(slackNotifications[2], /error that needs attention/)
+
+await hooks.event(
+  sessionIDEvent("session.status", "test-session", { status: { type: "busy" } }),
+)
+await hooks.event(
+  sessionIDEvent("session.error", "test-session", {
+    error: { name: "APIError", data: { message: "secret fixture", isRetryable: true } },
+  }),
+)
+await hooks.event(
+  sessionIDEvent("session.error", "test-session", {
+    error: { name: "UnknownError", data: { message: "other fixture" } },
+  }),
+)
+await flushNotifications()
+assert.equal(slackNotifications.length, 4)
+assert.match(slackNotifications[3], /error that needs attention/)
+assert.doesNotMatch(slackNotifications[3], /secret|other|test-session/)
+
+void hooks.event(sessionEvent("session.created", { id: "second-root" }))
+await hooks.event(sessionIDEvent("session.status", "second-root", { status: { type: "busy" } }))
+await hooks.event(sessionIDEvent("session.idle", "second-root"))
+await flushNotifications()
+assert.equal(slackNotifications.length, 5)
+
+let releaseNotification
+const stalledNotification = new Promise((resolve) => {
+  releaseNotification = resolve
+})
+const nonblockingHooks = await pluginModule.DotfilesHarnessPlugin(
+  { client, directory: process.cwd() },
+  {
+    hooksDir: process.env.HARNESS_HOOKS,
+    slackNotify: () => stalledNotification,
+  },
+)
+await nonblockingHooks.event(sessionEvent("session.created", { id: "nonblocking-root" }))
+await nonblockingHooks.event(
+  sessionIDEvent("session.status", "nonblocking-root", { status: { type: "busy" } }),
+)
+await Promise.race([
+  nonblockingHooks.event(sessionIDEvent("session.idle", "nonblocking-root")),
+  new Promise((_, reject) => setTimeout(() => reject(new Error("notification blocked event hook")), 100)),
+])
+releaseNotification()
+
+const orderedNotifications = []
+const orderedHooks = await pluginModule.DotfilesHarnessPlugin(
+  { client, directory: process.cwd() },
+  {
+    hooksDir: process.env.HARNESS_HOOKS,
+    slackNotify: async (message) => orderedNotifications.push(message),
+  },
+)
+await orderedHooks.event(sessionEvent("session.created", { id: "ordered-root" }))
+await orderedHooks.event(
+  sessionIDEvent("session.status", "ordered-root", { status: { type: "busy" } }),
+)
+const previousIdle = orderedHooks.event(sessionIDEvent("session.idle", "ordered-root"))
+const nextPrompt = orderedHooks["chat.message"]({ sessionID: "ordered-root" })
+await Promise.all([previousIdle, nextPrompt])
+await orderedHooks.event(sessionIDEvent("session.idle", "ordered-root"))
+await flushNotifications()
+assert.equal(orderedNotifications.length, 2)
 
 const childSystem = []
 await hooks["experimental.chat.system.transform"](

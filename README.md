@@ -76,6 +76,25 @@ OpenCode gets the same generated global rules, auto-discovers skills under `~/.c
 
 After changing OpenCode config or plugins, quit and restart OpenCode. To use Claude SSO, authenticate Claude Code first, then select an Anthropic model in OpenCode.
 
+#### Slack attention notifications
+
+OpenCode can notify a private Slack channel when a root session waits for permission or an answer, stops with an error, or returns idle after doing work. Child sessions and duplicate idle events are suppressed. Notifications contain only a fixed status message; they never include prompts, paths, session titles, errors, tool output, or repository content. Delivery is best-effort with a five-second timeout and never blocks the agent.
+
+The notifier uses a personal Slack app because Slack suppresses notifications for messages posted as yourself. Set it up once:
+
+1. Create a private one-person notification channel in Slack and set its channel notifications to every new message.
+2. At [api.slack.com/apps](https://api.slack.com/apps), create an app from scratch, request workspace approval if prompted, enable **Incoming Webhooks**, and add a webhook for the private channel.
+3. Capture the copied webhook without putting it in chat, source control, or shell history. Run the command below in your own terminal, paste when prompted, and press Enter. It refuses to overwrite an existing credential.
+
+   ```sh
+   (file="$HOME/.claude/secrets/slack-webhook.txt"; mkdir -p "$(dirname "$file")"; chmod 700 "$(dirname "$file")"; test ! -e "$file" || { printf 'Webhook already exists: %s\n' "$file" >&2; exit 1; }; umask 177; printf 'Paste Slack webhook: ' >&2; IFS= read -r -s webhook; printf '\n' >&2; printf '%s\n' "$webhook" >"$file"; unset webhook)
+   ```
+
+4. Quit and restart OpenCode so it loads the updated harness plugin.
+5. Test delivery with `printf 'OpenCode Slack notification test\n' >/tmp/slack-notify-test.txt && ~/.local/bin/slack-webhook-post.sh default /tmp/slack-notify-test.txt`.
+
+The installer links the transport at `~/.local/bin/slack-webhook-post.sh` but never creates or modifies the secret. Set `AGENT_SLACK_NOTIFICATIONS=0` before launching OpenCode to disable delivery temporarily. Rotate a leaked webhook in the Slack app settings, then replace the local file using the same mode-600 boundary.
+
 ### Shared global skills (Claude + OpenCode + Cursor + Codex)
 
 Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. Claude Code, Codex, OpenCode, and Cursor discover them natively. Cursor-only meta-skills stay under `cursor/skills/`.

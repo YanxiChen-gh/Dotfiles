@@ -79,6 +79,7 @@ setup_opencode_config() {
 
     mkdir -p "$plugin_dir" "$HOME/.local/bin"
     link_dotfiles_file "$source_dir/opencode" "$HOME/.local/bin/opencode" || return 1
+    link_dotfiles_file "$source_dir/scripts/slack-webhook-post.sh" "$HOME/.local/bin/slack-webhook-post.sh" || return 1
     if [ -e "$config_dir/opencode.json" ] || [ -L "$config_dir/opencode.json" ]; then
         link_dotfiles_file "$source_dir/opencode.jsonc" "$config_dir/opencode.json" || return 1
         rm -f "$config_dir/opencode.json"
@@ -121,5 +122,5 @@ setup_opencode_config() {
         rmdir "$doc_discovery_dir" 2>/dev/null || true
     fi
 
-    echo "✅ OpenCode config, TUI settings, $instruction_scope rules, and harness linked"
+    echo "✅ OpenCode config, TUI settings, $instruction_scope rules, harness, and Slack notifier linked"
 }

@@ -362,6 +362,168 @@ const createHerdrSubagentSync = ({ rootSession, sessionLineage }) => {
   }
 }
 
+const createSlackSender = (home) => {
+  const executable = Bun.env.SLACK_NOTIFY_BIN ?? join(home, ".local/bin/slack-webhook-post.sh")
+
+  return (message) => {
+    if (Bun.env.AGENT_SLACK_NOTIFICATIONS === "0") return
+
+    try {
+      const process = Bun.spawn([executable, "default", "-"], {
+        env: Bun.env,
+        stdin: new Blob([message]),
+        stdout: "ignore",
+        stderr: "ignore",
+      })
+      void process.exited
+        .then((exitCode) => {
+          if (exitCode !== 0 && exitCode !== 2) {
+            console.warn(`[dotfiles-harness] Slack notification failed (exit ${exitCode})`)
+          }
+        })
+        .catch(() => {
+          console.warn("[dotfiles-harness] Slack notification failed")
+        })
+    } catch {
+      console.warn("[dotfiles-harness] Slack notification failed")
+    }
+  }
+}
+
+const slackMessages = {
+  blockedPermission:
+    "*OpenCode needs your input*\nA root session is waiting for a permission decision.",
+  blockedQuestion: "*OpenCode needs your input*\nA root session is waiting for your answer.",
+  error: "*OpenCode needs attention*\nA root session encountered an error that needs attention.",
+  finished: "*OpenCode finished*\nA root session completed its current work.",
+}
+
+const createSlackNotificationSync = ({ sessionLineage, notify }) => {
+  const states = new Map()
+
+  const stateFor = (sessionID) => {
+    let state = states.get(sessionID)
+    if (!state) {
+      state = { active: false, waiting: undefined, notification: undefined }
+      states.set(sessionID, state)
+    }
+    return state
+  }
+
+  const dispatch = (message) => {
+    queueMicrotask(() => {
+      try {
+        void Promise.resolve(notify(message)).catch(() => {
+          console.warn("[dotfiles-harness] Slack notification failed")
+        })
+      } catch {
+        console.warn("[dotfiles-harness] Slack notification failed")
+      }
+    })
+  }
+
+  const markWorking = async (sessionID) => {
+    if (!sessionID) return
+    const lineage = await sessionLineage(sessionID)
+    if (lineage.kind !== "root") return
+
+    const state = stateFor(lineage.rootSessionID)
+    state.active = true
+    state.waiting = undefined
+    state.notification = undefined
+  }
+
+  const handleEvent = async (input) => {
+    const sessionID = sessionIDFromEvent(input)
+    if (!sessionID) return
+
+    const lineage = await sessionLineage(sessionID)
+    if (lineage.kind !== "root") return
+    const rootSessionID = lineage.rootSessionID
+
+    if (input.event.type === "session.deleted") {
+      states.delete(rootSessionID)
+      return
+    }
+
+    const state = stateFor(rootSessionID)
+    const markActive = () => {
+      state.active = true
+      state.waiting = undefined
+      state.notification = undefined
+    }
+    const markBlocked = (notification, message) => {
+      if (state.waiting) return
+      state.waiting = "input"
+      state.notification = notification
+      dispatch(message)
+    }
+    const markIdle = () => {
+      if (state.waiting === "overflow") {
+        state.active = false
+        state.waiting = "error"
+        state.notification = "error"
+        dispatch(slackMessages.error)
+      } else if (state.active && !state.waiting && state.notification !== "finished") {
+        state.active = false
+        state.notification = "finished"
+        dispatch(slackMessages.finished)
+      }
+    }
+
+    switch (input.event.type) {
+      case "session.status": {
+        const status =
+          typeof input.event.properties?.status === "string"
+            ? input.event.properties.status
+            : input.event.properties?.status?.type
+        if (status === "busy" || status === "retry") {
+          markActive()
+        } else if (status === "idle") markIdle()
+        break
+      }
+      case "session.idle":
+        markIdle()
+        break
+      case "tool.execute.before":
+      case "tool.execute.after":
+      case "permission.replied":
+      case "question.replied":
+      case "question.rejected":
+        markActive()
+        break
+      case "permission.asked":
+        markBlocked("blocked-permission", slackMessages.blockedPermission)
+        break
+      case "question.asked":
+        markBlocked("blocked-question", slackMessages.blockedQuestion)
+        break
+      case "session.error":
+        if (input.event.properties?.error?.name === "MessageAbortedError") {
+          state.active = false
+          state.waiting = undefined
+          state.notification = undefined
+          break
+        }
+        if (input.event.properties?.error?.name === "ContextOverflowError") {
+          state.waiting = "overflow"
+          state.notification = undefined
+          break
+        }
+        state.waiting = "error"
+        if (state.notification !== "error") {
+          state.notification = "error"
+          dispatch(slackMessages.error)
+        }
+        break
+      default:
+        break
+    }
+  }
+
+  return { handleEvent, markWorking }
+}
+
 const stringArg = (args, ...names) => {
   for (const name of names) {
     if (typeof args?.[name] === "string") return args[name]
@@ -840,6 +1002,11 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
     stateHome,
     sessionLineage,
   })
+  const slackNotifications = createSlackNotificationSync({
+    sessionLineage,
+    notify:
+      typeof options.slackNotify === "function" ? options.slackNotify : createSlackSender(home),
+  })
   const handleEvent = async (input) => {
     if (input.event.type === "session.deleted") {
       await syncHerdrSubagents(input)
@@ -857,17 +1024,34 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
     await checkpoints.event(input.event)
   }
   let eventQueue = Promise.resolve()
+  let notificationQueue = Promise.resolve()
+  const enqueueEvent = (operation) => {
+    const pending = eventQueue.then(operation)
+    eventQueue = pending.catch((error) => {
+      console.warn(`[dotfiles-harness] event sync failed: ${error}`)
+    })
+    return pending
+  }
+  const enqueueNotification = (operation) => {
+    const pending = notificationQueue.then(operation)
+    notificationQueue = pending.catch((error) => {
+      console.warn(`[dotfiles-harness] notification state sync failed: ${error}`)
+    })
+    return pending
+  }
 
   return {
+    "chat.message": ({ sessionID }) =>
+      enqueueNotification(() => slackNotifications.markWorking(sessionID)),
     event: (input) => {
       if (input.event.type === "session.created" || input.event.type === "session.updated") {
         rememberSession(input.event.properties?.info)
       }
-      const pending = eventQueue.then(() => handleEvent(input))
-      eventQueue = pending.catch((error) => {
-        console.warn(`[dotfiles-harness] event sync failed: ${error}`)
+      const notification = enqueueNotification(() => slackNotifications.handleEvent(input))
+      return enqueueEvent(async () => {
+        if (input.event.type === "session.deleted") await notification
+        await handleEvent(input)
       })
-      return pending
     },
     config: async (config) => {
       checkpoints.configure(config)
