@@ -1,4 +1,4 @@
-import { readFile, realpath } from "node:fs/promises"
+import { appendFile, mkdir, readFile, realpath } from "node:fs/promises"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -386,6 +386,388 @@ const resolveEnvironment = (value) => {
 const subagentContext = `[subagent]
 This is a child session. Do not launch Lavish, call question or approval tools, or wait for human input. Return findings, questions, and blockers directly to the parent. The parent owns scope approval.`
 
+const checkpointToolName = "context_checkpoint"
+const compactionTimeoutMs = 60_000
+
+const ratioFromEnvironment = (name, fallback) => {
+  const value = Number(Bun.env[name])
+  return Number.isFinite(value) && value > 0 && value < 1 ? value : fallback
+}
+
+const tokenCount = (tokens) => {
+  if (Number.isFinite(tokens?.total)) return tokens.total
+  return [
+    tokens?.input,
+    tokens?.output,
+    tokens?.cache?.read,
+    tokens?.cache?.write,
+  ].reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0)
+}
+
+const usableContext = (model, reserved) => {
+  const input = model?.limit?.input
+  const context = model?.limit?.context
+  const output = Number.isFinite(model?.limit?.output) ? model.limit.output : 0
+  const buffer = Number.isFinite(reserved) ? reserved : Math.min(20_000, output)
+  if (Number.isFinite(input) && input > 0) return Math.max(0, input - buffer)
+  if (Number.isFinite(context) && context > 0) return Math.max(0, context - output)
+  return 0
+}
+
+const checkpointCompactionContext = `[context checkpoint]
+Produce a task-continuation checkpoint, not a conversation recap. Preserve only durable information needed to continue correctly:
+- the user's current objective and the exact approved scope or scope brief reference
+- decisions and constraints that still govern the work
+- changed files and the meaningful state of the worktree
+- verification already completed and its result
+- unresolved blockers, risks, and user decisions
+- the single next action and any remaining ordered work
+Treat the repository, artifacts, and test results as sources of truth. Omit superseded exploration, repetitive tool output, and completed implementation detail that can be reconstructed from the code.`
+
+const createCheckpointAutomation = ({ client, directory, home, stateHome, sessionLineage }) => {
+  const softRatio = ratioFromEnvironment("OPENCODE_CHECKPOINT_SOFT_RATIO", 0.5)
+  const hardRatio = Math.max(
+    softRatio,
+    ratioFromEnvironment("OPENCODE_CHECKPOINT_HARD_RATIO", 0.75),
+  )
+  const auditDirectory = join(stateHome ?? join(home, ".local/state"), "opencode")
+  const auditPath = join(auditDirectory, "context-checkpoints.jsonl")
+  const sessions = new Map()
+  let compactionReserved
+  let auditQueue = Promise.resolve()
+
+  const stateFor = (sessionID) => {
+    let state = sessions.get(sessionID)
+    if (!state) {
+      state = {
+        status: "ready",
+        level: "none",
+        auditedLevel: "none",
+      }
+      sessions.set(sessionID, state)
+    }
+    return state
+  }
+
+  const audit = async (event, sessionID, details = {}) => {
+    const record = `${JSON.stringify({
+      timestamp: new Date().toISOString(),
+      event,
+      session_id: sessionID,
+      directory,
+      ...details,
+    })}\n`
+    auditQueue = auditQueue
+      .then(async () => {
+        await mkdir(auditDirectory, { recursive: true })
+        await appendFile(auditPath, record, { encoding: "utf8", mode: 0o600 })
+      })
+      .catch((error) => {
+        console.warn(`[dotfiles-harness] checkpoint audit failed: ${error}`)
+      })
+    await auditQueue
+  }
+
+  const updatePressure = async (sessionID, state, model = state.model) => {
+    if (!state.usage || !model || ["scheduled", "compacting", "awaiting", "continuing"].includes(state.status)) {
+      return
+    }
+    const usable = usableContext(model, compactionReserved)
+    if (!usable) return
+
+    const tokens = tokenCount(state.usage)
+    const ratio = tokens / usable
+    const level = ratio >= hardRatio ? "hard" : ratio >= softRatio ? "soft" : "none"
+    state.model = model
+    state.tokens = tokens
+    state.usable = usable
+    state.ratio = ratio
+    state.level = level
+
+    if (level === "none") {
+      if (state.auditedLevel !== "none") {
+        await audit("eligibility_reset", sessionID, { tokens, usable, ratio })
+      }
+      state.auditedLevel = "none"
+      if (state.status === "eligible" || state.status === "failed") state.status = "ready"
+      return
+    }
+
+    if (state.status === "ready") state.status = "eligible"
+    if (state.status !== "eligible" || state.auditedLevel === level) return
+    state.auditedLevel = level
+    await audit("checkpoint_eligible", sessionID, { level, tokens, usable, ratio })
+  }
+
+  const failCompaction = async (sessionID, state, error) => {
+    if (!["scheduled", "starting", "compacting", "awaiting", "compacted"].includes(state.status)) return
+    if (state.timeout) clearTimeout(state.timeout)
+    state.timeout = undefined
+    state.status = "failed"
+    state.compactionConfirmed = false
+    state.summarizeResolved = false
+    await audit("compaction_failed", sessionID, {
+      origin: state.origin,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    state.origin = undefined
+  }
+
+  const continueSession = (sessionID, state) => {
+    if (
+      !state.compactionConfirmed ||
+      !state.summarizeResolved ||
+      !state.postCompactionIdle ||
+      state.continuationStarted
+    ) return
+    if (state.timeout) clearTimeout(state.timeout)
+    state.timeout = undefined
+    state.continuationStarted = true
+    state.status = "continuing"
+    queueMicrotask(async () => {
+      await audit("continuation_started", sessionID, { origin: state.origin })
+      try {
+        const result = await client.session.prompt({
+          path: { id: sessionID },
+          query: { directory },
+          body: {
+            agent: state.agent,
+            model: state.modelID
+              ? { providerID: state.providerID, modelID: state.modelID }
+              : undefined,
+            parts: [
+              {
+                type: "text",
+                synthetic: true,
+                text: "Continue from the context checkpoint. Proceed with remaining next steps if any; otherwise stop.",
+              },
+            ],
+          },
+        })
+        if (result?.error || result?.data?.info?.error) {
+          throw new Error(String(result?.error ?? result.data.info.error))
+        }
+        state.status = "ready"
+        await audit("continuation_completed", sessionID, { origin: state.origin })
+        state.origin = undefined
+        await updatePressure(sessionID, state)
+      } catch (error) {
+        state.status = "failed"
+        await audit("continuation_failed", sessionID, {
+          origin: state.origin,
+          message: error instanceof Error ? error.message : String(error),
+        })
+        state.origin = undefined
+      }
+    })
+  }
+
+  const startCompaction = async (sessionID, state) => {
+    if (state.status !== "starting") return
+    state.status = "compacting"
+    state.compactionConfirmed = false
+    state.summarizeResolved = false
+    state.postCompactionIdle = false
+    state.continuationStarted = false
+    await audit("compaction_started", sessionID, {
+      origin: state.origin,
+      level: state.level,
+      tokens: state.tokens,
+      usable: state.usable,
+      ratio: state.ratio,
+    })
+    state.timeout = setTimeout(() => {
+      void failCompaction(sessionID, state, new Error("Timed out waiting for compaction completion"))
+    }, compactionTimeoutMs)
+    state.timeout.unref?.()
+    if (!state.providerID || !state.modelID) {
+      await failCompaction(sessionID, state, new Error("No completed model usage is available for compaction"))
+      return
+    }
+
+    try {
+      const result = await client.session.summarize({
+        path: { id: sessionID },
+        query: { directory },
+        body: { providerID: state.providerID, modelID: state.modelID },
+      })
+      if (result?.error || result?.data === false) {
+        throw new Error(String(result?.error ?? "OpenCode rejected the compaction request"))
+      }
+      if (state.status === "failed") return
+      state.summarizeResolved = true
+      if (!state.compactionConfirmed) {
+        state.status = "awaiting"
+      }
+      continueSession(sessionID, state)
+    } catch (error) {
+      await failCompaction(sessionID, state, error)
+    }
+  }
+
+  return {
+    configure(config) {
+      compactionReserved = config.compaction?.reserved
+    },
+    tool: {
+      description:
+        "Schedule a same-session context checkpoint after the current response becomes idle. Call only after completing and verifying a durable milestone, when the system checkpoint guidance says the session is eligible. Do not call mid-operation.",
+      args: {},
+      async execute(_args, context) {
+        const lineage = await sessionLineage(context.sessionID)
+        if (lineage.kind !== "root") return "Context checkpoints are available only to root sessions."
+
+        const state = stateFor(context.sessionID)
+        if (state.status !== "eligible") return "Context checkpoint is not currently eligible."
+        if (!state.providerID || !state.modelID) return "Context checkpoint has no completed model usage yet."
+
+        state.status = "scheduled"
+        state.origin = "automatic"
+        state.agent = context.agent
+        await audit("checkpoint_scheduled", context.sessionID, {
+          origin: state.origin,
+          level: state.level,
+          tokens: state.tokens,
+          usable: state.usable,
+          ratio: state.ratio,
+        })
+        return {
+          title: "Context checkpoint queued",
+          output: "The checkpoint will run after this response reaches idle.",
+          metadata: { level: state.level, ratio: state.ratio },
+        }
+      },
+    },
+    async system(input, output) {
+      if (!input.sessionID) return
+      const lineage = await sessionLineage(input.sessionID)
+      if (lineage.kind !== "root") return
+      const state = stateFor(input.sessionID)
+      state.model = input.model ?? state.model
+      await updatePressure(input.sessionID, state)
+      if (state.status !== "eligible") return
+
+      const percentage = Math.round(state.ratio * 100)
+      const urgency = state.level === "hard"
+        ? "Do not begin another non-trivial milestone before checkpointing."
+        : "Finish the current atomic work; checkpoint at the next durable verified milestone."
+      output.system.push(`[context-checkpoint]
+This root session is using ${percentage}% of its usable model context. ${urgency}
+At a safe boundary, call ${checkpointToolName} exactly once. Do not mention context housekeeping to the user. Do not checkpoint while edits, verification, review, or a user decision are incomplete.`)
+    },
+    async compacting(input, output) {
+      const lineage = await sessionLineage(input.sessionID)
+      if (lineage.kind !== "root") return
+      output.context.push(checkpointCompactionContext)
+    },
+    async command(input, output) {
+      if (input.command !== "checkpoint") return
+      const lineage = await sessionLineage(input.sessionID)
+      if (lineage.kind !== "root") return
+
+      for (const part of output.parts ?? []) {
+        if (part.type === "text") part.synthetic = true
+      }
+
+      const state = stateFor(input.sessionID)
+      if (["scheduled", "starting", "compacting", "awaiting", "compacted", "continuing"].includes(state.status)) {
+        await audit("manual_checkpoint_ignored", input.sessionID, { status: state.status })
+        return
+      }
+
+      state.status = "scheduled"
+      state.origin = "manual"
+      state.level = "manual"
+      await audit("manual_checkpoint_scheduled", input.sessionID, {
+        origin: state.origin,
+        tokens: state.tokens,
+        usable: state.usable,
+        ratio: state.ratio,
+      })
+    },
+    async event(event) {
+      if (event.type === "message.updated") {
+        const info = event.properties?.info
+        if (!info || typeof info.sessionID !== "string") return
+        const lineage = await sessionLineage(info.sessionID)
+        if (lineage.kind !== "root") return
+        const state = stateFor(info.sessionID)
+
+        if (info.role === "user") {
+          if (state.status === "failed") {
+            state.status = "ready"
+            await audit("checkpoint_rearmed", info.sessionID)
+            await updatePressure(info.sessionID, state)
+          }
+          return
+        }
+        if (info.role !== "assistant" || info.summary || !info.finish || !info.tokens) return
+        const usageKey = `${info.id}:${tokenCount(info.tokens)}`
+        if (state.usageKey === usageKey) return
+        state.usageKey = usageKey
+        state.usage = info.tokens
+        state.providerID = info.providerID
+        state.modelID = info.modelID
+        state.agent = info.agent ?? info.mode ?? state.agent
+        await updatePressure(info.sessionID, state)
+        return
+      }
+
+      if (event.type === "session.idle") {
+        const sessionID = event.properties?.sessionID
+        const state = sessions.get(sessionID)
+        if (!state) return
+        if (state.status === "scheduled") {
+          state.status = "starting"
+          queueMicrotask(() => {
+            void startCompaction(sessionID, state)
+          })
+          return
+        }
+        if (state.status === "compacted") {
+          state.postCompactionIdle = true
+          continueSession(sessionID, state)
+        }
+        return
+      }
+
+      if (event.type === "session.compacted") {
+        const sessionID = event.properties?.sessionID
+        if (typeof sessionID !== "string") return
+        const state = stateFor(sessionID)
+        const requested = ["compacting", "awaiting"].includes(state.status)
+        state.compactionConfirmed = true
+        state.usage = undefined
+        state.usageKey = undefined
+        state.level = "none"
+        state.auditedLevel = "none"
+        state.status = requested ? "compacted" : "ready"
+        await audit(requested ? "compaction_succeeded" : "native_compaction_observed", sessionID, {
+          origin: state.origin,
+        })
+        if (requested) {
+          continueSession(sessionID, state)
+        } else {
+          state.origin = undefined
+        }
+        return
+      }
+
+      if (event.type === "session.error") {
+        const sessionID = event.properties?.sessionID
+        const state = sessions.get(sessionID)
+        if (state) await failCompaction(sessionID, state, event.properties?.error ?? "Session error")
+        return
+      }
+
+      if (event.type === "session.deleted") {
+        const sessionID = event.properties?.info?.id
+        if (typeof sessionID === "string") sessions.delete(sessionID)
+      }
+    },
+  }
+}
+
 const invokesLavish = (command) => {
   return command.includes("lavish-axi")
 }
@@ -395,6 +777,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   const dotfiles = dirname(dirname(dirname(source)))
   const home = Bun.env.HOME ?? ""
   const configHome = Bun.env.XDG_CONFIG_HOME ?? join(home, ".config")
+  const stateHome = Bun.env.XDG_STATE_HOME
   const maturity = Bun.env.AGENT_MATURITY_HOME ?? join(home, "agent-maturity")
   const scopePrompt = join(maturity, "scripts/scope-gate-userpromptsubmit.sh")
   const scopeGate = join(maturity, "scripts/scope-gate-pretooluse.sh")
@@ -450,10 +833,18 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   }
   const syncHerdrTitle = createHerdrTitleSync(directory, rootSession)
   const syncHerdrSubagents = createHerdrSubagentSync({ rootSession, sessionLineage })
+  const checkpoints = createCheckpointAutomation({
+    client,
+    directory,
+    home,
+    stateHome,
+    sessionLineage,
+  })
   const handleEvent = async (input) => {
     if (input.event.type === "session.deleted") {
       await syncHerdrSubagents(input)
       await syncHerdrTitle(input)
+      await checkpoints.event(input.event)
       const sessionID = sessionIDFromEvent(input)
       if (sessionID) {
         parentBySession.delete(sessionID)
@@ -463,6 +854,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
     }
     await syncHerdrTitle(input)
     await syncHerdrSubagents(input)
+    await checkpoints.event(input.event)
   }
   let eventQueue = Promise.resolve()
 
@@ -478,6 +870,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
       return pending
     },
     config: async (config) => {
+      checkpoints.configure(config)
       try {
         const local = JSON.parse(
           await readFile(join(configHome, "opencode/mcp.json"), "utf8"),
@@ -500,7 +893,17 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
       }
       const result = await runHook(scopePrompt, { session_id: input.sessionID })
       if (result.stdout.trim()) output.system.push(result.stdout.trim())
+      await checkpoints.system(input, output)
     },
+    "experimental.session.compacting": async (input, output) => {
+      await checkpoints.compacting(input, output)
+      const lineage = await sessionLineage(input.sessionID)
+      if (lineage.kind !== "root") return
+      const result = await runHook(scopePrompt, { session_id: input.sessionID })
+      if (result.stdout.trim()) output.context.push(result.stdout.trim())
+    },
+    "command.execute.before": checkpoints.command,
+    tool: { [checkpointToolName]: checkpoints.tool },
     "tool.execute.before": async (input, output) => {
       const tool = input.tool.toLowerCase()
       const args = output.args

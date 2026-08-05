@@ -8,6 +8,7 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 mkdir -p "$TMP/home/custom-config/opencode/plugins" "$TMP/home/.opencode/bin"
 HOME="$TMP/home"
 XDG_CONFIG_HOME="$HOME/custom-config"
+XDG_STATE_HOME="$HOME/custom-state"
 OPENCODE_PRIMARY="$TMP/opencode-repo"
 OPENCODE_LINKED="$TMP/opencode-linked"
 OPENCODE_POOL="$TMP/treehouse-pool/7/opencode-repo"
@@ -18,6 +19,7 @@ AGENT_MATURITY_HOME="$HOME/agent-maturity"
 HARNESS_HOOKS="$HOME/harness-hooks"
 export HOME
 export XDG_CONFIG_HOME
+export XDG_STATE_HOME
 export EXAMPLE_TOKEN
 export MCP_HOST
 export MCP_CLIENT_ID
@@ -271,6 +273,8 @@ with open(sys.argv[1], encoding="utf-8") as file:
 
 assert config["$schema"] == "https://opencode.ai/config.json"
 assert config["model"] == "openai/gpt-5.6-sol"
+assert config["compaction"] == {"prune": True}
+assert config["command"]["checkpoint"]["description"] == "Checkpoint context and continue in the same session"
 assert config["agent"]["build"]["variant"] == "high"
 assert config["agent"]["plan"]["variant"] == "high"
 assert config["agent"]["general"]["variant"] == "high"
@@ -426,10 +430,22 @@ globalThis.Bun = {
 }
 const pluginModule = await import(pathToFileURL(process.argv[2]))
 const sessionRecords = new Map([["test-session", { id: "test-session" }]])
+const summarizeCalls = []
+const promptCalls = []
+const summarizeFailures = new Set()
 const client = {
   session: {
     async get({ path }) {
       return { data: sessionRecords.get(path.id) }
+    },
+    async summarize(input) {
+      summarizeCalls.push(input)
+      if (summarizeFailures.has(input.path.id)) return { error: "compaction failed" }
+      return { data: true }
+    },
+    async prompt(input) {
+      promptCalls.push(input)
+      return { data: true }
     },
   },
 }
@@ -450,6 +466,7 @@ await hooks["experimental.chat.system.transform"]({ sessionID: "test-session" },
 assert.match(system.join("\n"), /scope-gate.*test prompt/)
 
 const sessionEvent = (type, info) => ({ event: { type, properties: { info } } })
+const event = (type, properties) => ({ event: { type, properties } })
 void hooks.event(sessionEvent("session.created", { id: "approved-root" }))
 void hooks.event(
   sessionEvent("session.created", {
@@ -471,6 +488,270 @@ await hooks["experimental.chat.system.transform"](
 )
 assert.doesNotMatch(childSystem.join("\n"), /scope-gate.*test prompt/)
 assert.match(childSystem.join("\n"), /Do not launch Lavish/)
+
+const checkpointModel = {
+  id: "test-model",
+  providerID: "test-provider",
+  limit: { context: 1100, input: 1000, output: 100 },
+}
+const checkpointTokens = {
+  input: 500,
+  output: 10,
+  reasoning: 0,
+  cache: { read: 0, write: 0 },
+}
+await hooks.event(
+  event("message.updated", {
+    info: {
+      id: "checkpoint-message",
+      sessionID: "approved-root",
+      role: "assistant",
+      finish: "stop",
+      tokens: checkpointTokens,
+      providerID: "test-provider",
+      modelID: "test-model",
+      agent: "build",
+    },
+  }),
+)
+const checkpointSystem = []
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "approved-root", model: checkpointModel },
+  { system: checkpointSystem },
+)
+assert.match(checkpointSystem.join("\n"), /call context_checkpoint exactly once/)
+
+const checkpointResult = await hooks.tool.context_checkpoint.execute(
+  {},
+  { sessionID: "approved-root", agent: "build" },
+)
+assert.equal(checkpointResult.title, "Context checkpoint queued")
+await hooks.event(event("session.idle", { sessionID: "approved-root" }))
+await hooks.event(event("session.idle", { sessionID: "approved-root" }))
+await new Promise((resolve) => setTimeout(resolve, 10))
+assert.equal(summarizeCalls.length, 1)
+assert.deepEqual(summarizeCalls[0], {
+  path: { id: "approved-root" },
+  query: { directory: process.cwd() },
+  body: { providerID: "test-provider", modelID: "test-model" },
+})
+
+const compactionOutput = { context: [] }
+await hooks["experimental.session.compacting"](
+  { sessionID: "approved-root" },
+  compactionOutput,
+)
+assert.match(compactionOutput.context.join("\n"), /approved scope/)
+assert.match(compactionOutput.context.join("\n"), /verification already completed/)
+assert.match(compactionOutput.context.join("\n"), /scope-gate.*test prompt/)
+
+const compactedEvent = hooks.event(event("session.compacted", { sessionID: "approved-root" }))
+assert.equal(promptCalls.length, 0)
+await hooks.event(event("session.idle", { sessionID: "approved-root" }))
+await compactedEvent
+await new Promise((resolve) => setTimeout(resolve, 10))
+assert.equal(promptCalls.length, 1)
+assert.equal(promptCalls[0].path.id, "approved-root")
+assert.equal(promptCalls[0].body.parts[0].synthetic, true)
+assert.match(promptCalls[0].body.parts[0].text, /Continue from the context checkpoint/)
+
+await hooks.event(
+  event("message.updated", {
+    info: {
+      id: "compaction-summary",
+      sessionID: "approved-root",
+      role: "assistant",
+      summary: true,
+      finish: "stop",
+      tokens: checkpointTokens,
+      providerID: "test-provider",
+      modelID: "test-model",
+    },
+  }),
+)
+const postCompactionSystem = []
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "approved-root", model: checkpointModel },
+  { system: postCompactionSystem },
+)
+assert.doesNotMatch(postCompactionSystem.join("\n"), /context_checkpoint/)
+
+await hooks.event(
+  event("message.updated", {
+    info: {
+      id: "child-checkpoint-message",
+      sessionID: "approved-child",
+      role: "assistant",
+      finish: "stop",
+      tokens: checkpointTokens,
+      providerID: "test-provider",
+      modelID: "test-model",
+      agent: "general",
+    },
+  }),
+)
+const childCheckpointResult = await hooks.tool.context_checkpoint.execute(
+  {},
+  { sessionID: "approved-child", agent: "general" },
+)
+assert.match(childCheckpointResult, /only to root sessions/)
+
+void hooks.event(sessionEvent("session.created", { id: "checkpoint-failure" }))
+summarizeFailures.add("checkpoint-failure")
+await hooks.event(
+  event("message.updated", {
+    info: {
+      id: "checkpoint-failure-message",
+      sessionID: "checkpoint-failure",
+      role: "assistant",
+      finish: "stop",
+      tokens: checkpointTokens,
+      providerID: "test-provider",
+      modelID: "test-model",
+      agent: "build",
+    },
+  }),
+)
+const failureSystem = []
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "checkpoint-failure", model: checkpointModel },
+  { system: failureSystem },
+)
+await hooks.tool.context_checkpoint.execute(
+  {},
+  { sessionID: "checkpoint-failure", agent: "build" },
+)
+await hooks.event(event("session.idle", { sessionID: "checkpoint-failure" }))
+await hooks.event(event("session.idle", { sessionID: "checkpoint-failure" }))
+await new Promise((resolve) => setTimeout(resolve, 10))
+assert.equal(
+  summarizeCalls.filter((call) => call.path.id === "checkpoint-failure").length,
+  1,
+)
+await hooks.event(
+  event("message.updated", {
+    info: { id: "checkpoint-failure-rearm", sessionID: "checkpoint-failure", role: "user" },
+  }),
+)
+const rearmedSystem = []
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "checkpoint-failure", model: checkpointModel },
+  { system: rearmedSystem },
+)
+assert.match(rearmedSystem.join("\n"), /context_checkpoint/)
+
+void hooks.event(sessionEvent("session.created", { id: "checkpoint-error-before-idle" }))
+await hooks.event(
+  event("message.updated", {
+    info: {
+      id: "checkpoint-error-message",
+      sessionID: "checkpoint-error-before-idle",
+      role: "assistant",
+      finish: "stop",
+      tokens: checkpointTokens,
+      providerID: "test-provider",
+      modelID: "test-model",
+      agent: "build",
+    },
+  }),
+)
+const errorSystem = []
+await hooks["experimental.chat.system.transform"](
+  { sessionID: "checkpoint-error-before-idle", model: checkpointModel },
+  { system: errorSystem },
+)
+await hooks.tool.context_checkpoint.execute(
+  {},
+  { sessionID: "checkpoint-error-before-idle", agent: "build" },
+)
+await hooks.event(
+  event("session.error", {
+    sessionID: "checkpoint-error-before-idle",
+    error: { name: "APIError" },
+  }),
+)
+await hooks.event(event("session.idle", { sessionID: "checkpoint-error-before-idle" }))
+await new Promise((resolve) => setTimeout(resolve, 10))
+assert.equal(
+  summarizeCalls.filter((call) => call.path.id === "checkpoint-error-before-idle").length,
+  0,
+)
+
+void hooks.event(sessionEvent("session.created", { id: "manual-checkpoint" }))
+await hooks.event(
+  event("message.updated", {
+    info: {
+      id: "manual-checkpoint-prior-message",
+      sessionID: "manual-checkpoint",
+      role: "assistant",
+      finish: "stop",
+      tokens: {
+        input: 100,
+        output: 10,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      providerID: "test-provider",
+      modelID: "test-model",
+      agent: "build",
+    },
+  }),
+)
+const manualCommandOutput = {
+  parts: [{ type: "text", text: "Manual checkpoint command" }],
+}
+await hooks["command.execute.before"](
+  { command: "checkpoint", sessionID: "manual-checkpoint", arguments: "" },
+  manualCommandOutput,
+)
+const duplicateManualCommandOutput = {
+  parts: [{ type: "text", text: "Duplicate manual checkpoint command" }],
+}
+await hooks["command.execute.before"](
+  { command: "checkpoint", sessionID: "manual-checkpoint", arguments: "" },
+  duplicateManualCommandOutput,
+)
+assert.equal(manualCommandOutput.parts[0].synthetic, true)
+assert.equal(duplicateManualCommandOutput.parts[0].synthetic, true)
+await hooks.event(event("session.idle", { sessionID: "manual-checkpoint" }))
+await hooks.event(event("session.idle", { sessionID: "manual-checkpoint" }))
+await new Promise((resolve) => setTimeout(resolve, 10))
+assert.equal(
+  summarizeCalls.filter((call) => call.path.id === "manual-checkpoint").length,
+  1,
+)
+const manualCompactedEvent = hooks.event(
+  event("session.compacted", { sessionID: "manual-checkpoint" }),
+)
+await hooks.event(event("session.idle", { sessionID: "manual-checkpoint" }))
+await manualCompactedEvent
+await new Promise((resolve) => setTimeout(resolve, 10))
+assert.equal(promptCalls.filter((call) => call.path.id === "manual-checkpoint").length, 1)
+await hooks.event(event("session.compacted", { sessionID: "manual-checkpoint" }))
+
+const checkpointAudit = await readFile(
+  `${process.env.XDG_STATE_HOME}/opencode/context-checkpoints.jsonl`,
+  "utf8",
+)
+assert.match(checkpointAudit, /"event":"checkpoint_eligible"/)
+assert.match(checkpointAudit, /"event":"checkpoint_scheduled"/)
+assert.match(checkpointAudit, /"event":"compaction_started"/)
+assert.match(checkpointAudit, /"event":"compaction_succeeded"/)
+assert.match(checkpointAudit, /"event":"compaction_failed"/)
+assert.match(checkpointAudit, /"event":"continuation_completed"/)
+const checkpointAuditRecords = checkpointAudit.trim().split("\n").map(JSON.parse)
+assert.equal(
+  checkpointAuditRecords.find((record) => record.event === "manual_checkpoint_scheduled").origin,
+  "manual",
+)
+assert.equal(
+  checkpointAuditRecords.find((record) => record.event === "checkpoint_scheduled").origin,
+  "automatic",
+)
+assert.equal(
+  checkpointAuditRecords.filter((record) => record.event === "native_compaction_observed").at(-1).origin,
+  undefined,
+)
 
 await hooks["tool.execute.before"](
   { tool: "write", sessionID: "approved-grandchild", callID: "child-write-call" },
