@@ -498,14 +498,31 @@ globalThis.Bun = {
   },
 }
 const pluginModule = await import(pathToFileURL(process.argv[2]))
-const sessionRecords = new Map([["test-session", { id: "test-session" }]])
+const sessionRecords = new Map([
+  [
+    "test-session",
+    {
+      id: "test-session",
+      title: "Ship <alerts> & *details*",
+      directory: "/workspaces/.treehouse/obsidian-a0a22d/8/obsidian",
+      agent: "build",
+      summary: { files: 3, additions: 24, deletions: 7 },
+    },
+  ],
+])
+const sessionGetIDs = []
 const summarizeCalls = []
 const promptCalls = []
 const summarizeFailures = new Set()
 const slackNotifications = []
+let releaseApprovedRootPrompt
+const approvedRootPrompt = new Promise((resolve) => {
+  releaseApprovedRootPrompt = resolve
+})
 const client = {
   session: {
     async get({ path }) {
+      sessionGetIDs.push(path.id)
       return { data: sessionRecords.get(path.id) }
     },
     async summarize(input) {
@@ -515,6 +532,7 @@ const client = {
     },
     async prompt(input) {
       promptCalls.push(input)
+      if (input.path.id === "approved-root") await approvedRootPrompt
       return { data: true }
     },
   },
@@ -524,6 +542,7 @@ const hooks = await pluginModule.DotfilesHarnessPlugin(
   {
     hooksDir: process.env.HARNESS_HOOKS,
     slackNotify: async (message) => slackNotifications.push(message),
+    slackPermissionDelayMs: 10,
   },
 )
 const config = {}
@@ -563,24 +582,135 @@ await flushNotifications()
 assert.deepEqual(slackNotifications, [])
 
 await hooks["chat.message"]({ sessionID: "test-session" })
-await hooks.event(sessionIDEvent("permission.asked", "test-session"))
-await flushNotifications()
-assert.equal(slackNotifications.length, 1)
-assert.match(slackNotifications[0], /waiting for a permission decision/)
-assert.doesNotMatch(slackNotifications[0], /test-session|fixture|\/workspaces/)
+await hooks.event(
+  sessionIDEvent("permission.asked", "test-session", {
+    id: "auto-approved",
+    permission: "external_directory",
+    patterns: ["/home/vscode/dotfiles/*"],
+  }),
+)
+await hooks.event(
+  sessionIDEvent("permission.replied", "test-session", {
+    requestID: "auto-approved",
+    reply: "once",
+  }),
+)
+await new Promise((resolve) => setTimeout(resolve, 20))
+assert.deepEqual(slackNotifications, [])
 
-await hooks.event(sessionIDEvent("permission.asked", "test-session"))
+await hooks.event(
+  sessionIDEvent("permission.asked", "approved-child", {
+    id: "child-permission",
+    permission: "bash",
+    patterns: ["git status"],
+  }),
+)
+await new Promise((resolve) => setTimeout(resolve, 20))
+assert.deepEqual(slackNotifications, [])
+
+await hooks.event(
+  sessionIDEvent("permission.asked", "test-session", {
+    id: "pending-directory",
+    permission: "external_directory",
+    patterns: ["/home/vscode/dotfiles/<private>"],
+  }),
+)
+await hooks.event(
+  sessionIDEvent("permission.asked", "test-session", {
+    id: "pending-bash",
+    permission: "bash",
+    patterns: ["git status"],
+  }),
+)
 await hooks.event(sessionIDEvent("session.idle", "test-session"))
 await hooks.event(sessionIDEvent("question.asked", "approved-child"))
+await new Promise((resolve) => setTimeout(resolve, 20))
+assert.equal(slackNotifications.length, 1)
+assert.match(slackNotifications[0], /Ship &lt;alerts&gt; &amp; \\[*]details\\[*]/)
+assert.match(slackNotifications[0], /Workspace:\* obsidian \/ worktree 8/)
+assert.match(slackNotifications[0], /Agent:\* build/)
+assert.match(slackNotifications[0], /Permission: external\\_directory, bash/)
+assert.match(slackNotifications[0], /Requests:\* 2/)
+assert.doesNotMatch(slackNotifications[0], /private|git status|test-session|\/workspaces/)
+
+await hooks.event(
+  sessionIDEvent("permission.asked", "test-session", {
+    id: "late-pending-permission",
+    permission: "bash",
+    patterns: ["printenv SECRET_VALUE"],
+  }),
+)
+await hooks.event(
+  sessionIDEvent("permission.replied", "test-session", {
+    requestID: "wrong-request",
+    reply: "once",
+  }),
+)
+await new Promise((resolve) => setTimeout(resolve, 20))
+await hooks.event(sessionIDEvent("session.idle", "test-session"))
 await flushNotifications()
 assert.equal(slackNotifications.length, 1)
 
-await hooks.event(sessionIDEvent("permission.replied", "test-session"))
+await hooks.event(
+  sessionIDEvent("permission.replied", "test-session", {
+    requestID: "pending-directory",
+    reply: "once",
+  }),
+)
+await hooks.event(
+  sessionIDEvent("permission.replied", "test-session", {
+    requestID: "late-pending-permission",
+    reply: "once",
+  }),
+)
+await hooks.event(
+  sessionIDEvent("permission.replied", "test-session", {
+    requestID: "pending-bash",
+    reply: "once",
+  }),
+)
 await hooks.event(sessionIDEvent("session.status", "test-session", { status: { type: "idle" } }))
 await hooks.event(sessionIDEvent("session.idle", "test-session"))
 await flushNotifications()
 assert.equal(slackNotifications.length, 2)
-assert.match(slackNotifications[1], /completed its current work/)
+assert.match(slackNotifications[1], /OpenCode finished/)
+assert.match(slackNotifications[1], /Changes:\* 3 files \/ \+24 \/ -7/)
+
+await hooks["chat.message"]({ sessionID: "test-session" })
+await hooks.event(
+  sessionIDEvent("question.asked", "test-session", {
+    id: "root-question",
+    questions: [{ header: "Deploy <now>?", question: "Continue?", options: [] }],
+  }),
+)
+await flushNotifications()
+assert.equal(slackNotifications.length, 3)
+assert.match(slackNotifications[2], /Question:\* Deploy &lt;now&gt;\?/)
+assert.doesNotMatch(slackNotifications[2], /Continue\?/)
+await hooks.event(
+  sessionIDEvent("question.asked", "test-session", {
+    id: "second-root-question",
+    questions: [{ header: "Choose region", question: "Where?", options: [] }],
+  }),
+)
+await hooks.event(
+  sessionIDEvent("question.replied", "test-session", {
+    requestID: "root-question",
+    answers: [["Yes"]],
+  }),
+)
+await hooks.event(sessionIDEvent("session.idle", "test-session"))
+await flushNotifications()
+assert.equal(slackNotifications.length, 3)
+await hooks.event(
+  sessionIDEvent("question.replied", "test-session", {
+    requestID: "second-root-question",
+    answers: [["us-west-2"]],
+  }),
+)
+await hooks.event(sessionIDEvent("session.idle", "test-session"))
+await flushNotifications()
+assert.equal(slackNotifications.length, 4)
 
 await hooks.event(
   sessionIDEvent("session.error", "test-session", {
@@ -595,8 +725,8 @@ await hooks.event(
 )
 await hooks.event(sessionIDEvent("session.idle", "test-session"))
 await flushNotifications()
-assert.equal(slackNotifications.length, 3)
-assert.match(slackNotifications[2], /error that needs attention/)
+assert.equal(slackNotifications.length, 5)
+assert.match(slackNotifications[4], /Context limit recovery did not resume/)
 
 await hooks.event(
   sessionIDEvent("session.status", "test-session", { status: { type: "busy" } }),
@@ -612,15 +742,15 @@ await hooks.event(
   }),
 )
 await flushNotifications()
-assert.equal(slackNotifications.length, 4)
-assert.match(slackNotifications[3], /error that needs attention/)
-assert.doesNotMatch(slackNotifications[3], /secret|other|test-session/)
+assert.equal(slackNotifications.length, 6)
+assert.match(slackNotifications[5], /Reason:\* APIError/)
+assert.doesNotMatch(slackNotifications[5], /secret|other|test-session/)
 
 void hooks.event(sessionEvent("session.created", { id: "second-root" }))
 await hooks.event(sessionIDEvent("session.status", "second-root", { status: { type: "busy" } }))
 await hooks.event(sessionIDEvent("session.idle", "second-root"))
 await flushNotifications()
-assert.equal(slackNotifications.length, 5)
+assert.equal(slackNotifications.length, 7)
 
 let releaseNotification
 const stalledNotification = new Promise((resolve) => {
@@ -662,6 +792,68 @@ await orderedHooks.event(sessionIDEvent("session.idle", "ordered-root"))
 await flushNotifications()
 assert.equal(orderedNotifications.length, 2)
 
+const interleavedNotifications = []
+const interleavedHooks = await pluginModule.DotfilesHarnessPlugin(
+  { client, directory: process.cwd() },
+  {
+    hooksDir: process.env.HARNESS_HOOKS,
+    slackNotify: async (message) => interleavedNotifications.push(message),
+    slackPermissionDelayMs: 10,
+  },
+)
+await interleavedHooks.event(sessionEvent("session.created", { id: "interleaved-root" }))
+await interleavedHooks["chat.message"]({ sessionID: "interleaved-root" })
+await interleavedHooks.event(
+  sessionIDEvent("permission.asked", "interleaved-root", {
+    id: "interleaved-permission",
+    permission: "bash",
+    patterns: ["printenv SECRET_VALUE"],
+  }),
+)
+await new Promise((resolve) => setTimeout(resolve, 20))
+assert.equal(interleavedNotifications.length, 1)
+await interleavedHooks.event(
+  sessionIDEvent("question.asked", "interleaved-root", {
+    id: "interleaved-question",
+    questions: [{ header: "Continue?", question: "Secret prompt", options: [] }],
+  }),
+)
+await flushNotifications()
+assert.equal(interleavedNotifications.length, 2)
+await interleavedHooks.event(
+  sessionIDEvent("question.replied", "interleaved-root", {
+    requestID: "interleaved-question",
+    answers: [["Yes"]],
+  }),
+)
+await new Promise((resolve) => setTimeout(resolve, 20))
+assert.equal(interleavedNotifications.length, 2)
+assert.doesNotMatch(interleavedNotifications.join("\n"), /SECRET_VALUE|Secret prompt/)
+
+await interleavedHooks.event(sessionEvent("session.created", { id: "inverse-root" }))
+await interleavedHooks["chat.message"]({ sessionID: "inverse-root" })
+await interleavedHooks.event(
+  sessionIDEvent("question.asked", "inverse-root", {
+    id: "inverse-question-one",
+    questions: [{ header: "First", question: "First prompt", options: [] }],
+  }),
+)
+await interleavedHooks.event(
+  sessionIDEvent("permission.asked", "inverse-root", {
+    id: "inverse-permission",
+    permission: "bash",
+    patterns: ["printenv OTHER_SECRET"],
+  }),
+)
+await interleavedHooks.event(
+  sessionIDEvent("question.asked", "inverse-root", {
+    id: "inverse-question-two",
+    questions: [{ header: "Second", question: "Second prompt", options: [] }],
+  }),
+)
+await flushNotifications()
+assert.equal(interleavedNotifications.length, 3)
+
 const childSystem = []
 await hooks["experimental.chat.system.transform"](
   { sessionID: "approved-child" },
@@ -695,6 +887,8 @@ await hooks.event(
     },
   }),
 )
+await flushNotifications()
+assert.equal(sessionGetIDs.includes("checkpoint-message"), false)
 const checkpointSystem = []
 await hooks["experimental.chat.system.transform"](
   { sessionID: "approved-root", model: checkpointModel },
@@ -702,6 +896,8 @@ await hooks["experimental.chat.system.transform"](
 )
 assert.match(checkpointSystem.join("\n"), /call context_checkpoint exactly once/)
 
+await hooks["chat.message"]({ sessionID: "approved-root" })
+const checkpointNotificationCount = slackNotifications.length
 const checkpointResult = await hooks.tool.context_checkpoint.execute(
   {},
   { sessionID: "approved-root", agent: "build" },
@@ -710,6 +906,8 @@ assert.equal(checkpointResult.title, "Context checkpoint queued")
 await hooks.event(event("session.idle", { sessionID: "approved-root" }))
 await hooks.event(event("session.idle", { sessionID: "approved-root" }))
 await new Promise((resolve) => setTimeout(resolve, 10))
+await flushNotifications()
+assert.equal(slackNotifications.length, checkpointNotificationCount)
 assert.equal(summarizeCalls.length, 1)
 assert.deepEqual(summarizeCalls[0], {
   path: { id: "approved-root" },
@@ -730,11 +928,22 @@ const compactedEvent = hooks.event(event("session.compacted", { sessionID: "appr
 assert.equal(promptCalls.length, 0)
 await hooks.event(event("session.idle", { sessionID: "approved-root" }))
 await compactedEvent
+await hooks.event(event("session.idle", { sessionID: "approved-root" }))
 await new Promise((resolve) => setTimeout(resolve, 10))
+await flushNotifications()
+assert.equal(slackNotifications.length, checkpointNotificationCount)
 assert.equal(promptCalls.length, 1)
 assert.equal(promptCalls[0].path.id, "approved-root")
 assert.equal(promptCalls[0].body.parts[0].synthetic, true)
 assert.match(promptCalls[0].body.parts[0].text, /Continue from the context checkpoint/)
+await hooks.event(
+  sessionIDEvent("session.status", "approved-root", { status: { type: "busy" } }),
+)
+await hooks.event(event("session.idle", { sessionID: "approved-root" }))
+await flushNotifications()
+assert.equal(slackNotifications.length, checkpointNotificationCount + 1)
+releaseApprovedRootPrompt()
+await new Promise((resolve) => setTimeout(resolve, 10))
 
 await hooks.event(
   event("message.updated", {
@@ -894,9 +1103,13 @@ await hooks["command.execute.before"](
 )
 assert.equal(manualCommandOutput.parts[0].synthetic, true)
 assert.equal(duplicateManualCommandOutput.parts[0].synthetic, true)
+await hooks["chat.message"]({ sessionID: "manual-checkpoint" })
+const manualCheckpointNotificationCount = slackNotifications.length
 await hooks.event(event("session.idle", { sessionID: "manual-checkpoint" }))
 await hooks.event(event("session.idle", { sessionID: "manual-checkpoint" }))
 await new Promise((resolve) => setTimeout(resolve, 10))
+await flushNotifications()
+assert.equal(slackNotifications.length, manualCheckpointNotificationCount)
 assert.equal(
   summarizeCalls.filter((call) => call.path.id === "manual-checkpoint").length,
   1,
@@ -907,7 +1120,15 @@ const manualCompactedEvent = hooks.event(
 await hooks.event(event("session.idle", { sessionID: "manual-checkpoint" }))
 await manualCompactedEvent
 await new Promise((resolve) => setTimeout(resolve, 10))
+await flushNotifications()
+assert.equal(slackNotifications.length, manualCheckpointNotificationCount)
 assert.equal(promptCalls.filter((call) => call.path.id === "manual-checkpoint").length, 1)
+await hooks.event(
+  sessionIDEvent("session.status", "manual-checkpoint", { status: { type: "busy" } }),
+)
+await hooks.event(event("session.idle", { sessionID: "manual-checkpoint" }))
+await flushNotifications()
+assert.equal(slackNotifications.length, manualCheckpointNotificationCount + 1)
 await hooks.event(event("session.compacted", { sessionID: "manual-checkpoint" }))
 
 const checkpointAudit = await readFile(

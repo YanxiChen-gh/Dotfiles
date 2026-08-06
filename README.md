@@ -78,7 +78,7 @@ After changing OpenCode config or plugins, quit and restart OpenCode. To use Cla
 
 #### Slack attention notifications
 
-OpenCode can notify a private Slack channel when a root session waits for permission or an answer, stops with an error, or returns idle after doing work. Child sessions and duplicate idle events are suppressed. Notifications contain only a fixed status message; they never include prompts, paths, session titles, errors, tool output, or repository content. Delivery is best-effort with a five-second timeout and never blocks the agent.
+OpenCode can notify a private Slack channel when a root session waits for permission or an answer, stops with an error, or returns idle after doing work. Permission alerts wait three seconds and are cancelled when auto mode resolves the exact request, so transient internal approvals do not page you. Child sessions, concurrent permission bursts, and duplicate idle events are suppressed. Messages include the escaped session title, workspace, agent, reason, and change summary when available; they never include prompts, error messages, or tool output. Delivery is best-effort with a five-second timeout and never blocks the agent.
 
 The notifier uses a personal Slack app because Slack suppresses notifications for messages posted as yourself. Set it up once:
 

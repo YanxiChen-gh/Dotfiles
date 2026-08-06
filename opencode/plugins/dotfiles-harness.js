@@ -29,8 +29,14 @@ const defaultSessionTitle = /^New session - \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\
 
 const sessionIDFromEvent = ({ event }) => {
   const properties = event.properties ?? {}
-  if (typeof properties.info?.id === "string") return properties.info.id
   if (typeof properties.sessionID === "string") return properties.sessionID
+  if (typeof properties.info?.sessionID === "string") return properties.info.sessionID
+  if (
+    ["session.created", "session.updated", "session.deleted"].includes(event.type) &&
+    typeof properties.info?.id === "string"
+  ) {
+    return properties.info.id
+  }
   return undefined
 }
 
@@ -390,21 +396,73 @@ const createSlackSender = (home) => {
   }
 }
 
-const slackMessages = {
-  blockedPermission:
-    "*OpenCode needs your input*\nA root session is waiting for a permission decision.",
-  blockedQuestion: "*OpenCode needs your input*\nA root session is waiting for your answer.",
-  error: "*OpenCode needs attention*\nA root session encountered an error that needs attention.",
-  finished: "*OpenCode finished*\nA root session completed its current work.",
+const slackText = (value, maxLength = 160) => {
+  if (typeof value !== "string") return ""
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/([\\*_~`])/g, "\\$1")
 }
 
-const createSlackNotificationSync = ({ sessionLineage, notify }) => {
+const workspaceName = (directory) => {
+  if (typeof directory !== "string" || !directory) return "unknown"
+  const parts = directory.split("/").filter(Boolean)
+  const repository = parts.at(-1) ?? directory
+  const parent = parts.at(-2)
+  return /^\d+$/.test(parent ?? "") ? `${repository} / worktree ${parent}` : repository
+}
+
+const createSlackMessage = ({ kind, session, details = [] }) => {
+  const title =
+    typeof session?.title === "string" &&
+    session.title.trim() &&
+    !defaultSessionTitle.test(session.title.trim())
+      ? session.title
+      : "Untitled OpenCode session"
+  const headings = {
+    blockedPermission: "*OpenCode needs your input*",
+    blockedQuestion: "*OpenCode needs your input*",
+    error: "*OpenCode needs attention*",
+    finished: "*OpenCode finished*",
+  }
+  const lines = [
+    headings[kind],
+    `*Task:* ${slackText(title, 120)}`,
+    `*Workspace:* ${slackText(workspaceName(session?.directory), 100)}`,
+  ]
+  if (typeof session?.agent === "string" && session.agent.trim()) {
+    lines.push(`*Agent:* ${slackText(session.agent, 40)}`)
+  }
+  lines.push(...details.filter(Boolean))
+  return lines.join("\n")
+}
+
+const createSlackNotificationSync = ({
+  sessionLineage,
+  sessionInfo,
+  notify,
+  suppressIdle,
+  permissionDelayMs = 3_000,
+}) => {
   const states = new Map()
 
   const stateFor = (sessionID) => {
     let state = states.get(sessionID)
     if (!state) {
-      state = { active: false, waiting: undefined, notification: undefined }
+      state = {
+        active: false,
+        waiting: undefined,
+        notification: undefined,
+        permissions: new Map(),
+        questions: new Map(),
+        permissionNotified: false,
+        questionNotified: false,
+        permissionTimer: undefined,
+      }
       states.set(sessionID, state)
     }
     return state
@@ -422,6 +480,46 @@ const createSlackNotificationSync = ({ sessionLineage, notify }) => {
     })
   }
 
+  const message = (kind, sessionID, details) =>
+    createSlackMessage({ kind, session: sessionInfo(sessionID), details })
+
+  const clearPermissionTimer = (state) => {
+    if (state.permissionTimer) clearTimeout(state.permissionTimer)
+    state.permissionTimer = undefined
+  }
+
+  const clearPermissions = (state) => {
+    clearPermissionTimer(state)
+    state.permissions.clear()
+    state.permissionNotified = false
+  }
+
+  const schedulePermissionNotification = (sessionID, state) => {
+    if (
+      state.permissionTimer ||
+      state.permissions.size === 0 ||
+      state.permissionNotified
+    ) {
+      return
+    }
+    state.permissionTimer = setTimeout(() => {
+      state.permissionTimer = undefined
+      if (state.permissions.size === 0 || state.questions.size > 0) return
+
+      const requests = [...state.permissions.values()]
+      const permissions = [...new Set(requests.map((request) => request.permission).filter(Boolean))]
+      const details = [
+        `*Reason:* ${slackText(`Permission: ${permissions.join(", ") || "approval required"}`)}`,
+        requests.length > 1 ? `*Requests:* ${requests.length}` : undefined,
+      ]
+      state.waiting = "input"
+      state.permissionNotified = true
+      state.notification = "blocked-permission"
+      dispatch(message("blockedPermission", sessionID, details))
+    }, permissionDelayMs)
+    state.permissionTimer.unref?.()
+  }
+
   const markWorking = async (sessionID) => {
     if (!sessionID) return
     const lineage = await sessionLineage(sessionID)
@@ -429,8 +527,10 @@ const createSlackNotificationSync = ({ sessionLineage, notify }) => {
 
     const state = stateFor(lineage.rootSessionID)
     state.active = true
-    state.waiting = undefined
-    state.notification = undefined
+    if (state.questions.size === 0 && state.permissions.size === 0) {
+      state.waiting = undefined
+      state.notification = undefined
+    }
   }
 
   const handleEvent = async (input) => {
@@ -442,6 +542,8 @@ const createSlackNotificationSync = ({ sessionLineage, notify }) => {
     const rootSessionID = lineage.rootSessionID
 
     if (input.event.type === "session.deleted") {
+      const state = states.get(rootSessionID)
+      if (state) clearPermissionTimer(state)
       states.delete(rootSessionID)
       return
     }
@@ -449,25 +551,29 @@ const createSlackNotificationSync = ({ sessionLineage, notify }) => {
     const state = stateFor(rootSessionID)
     const markActive = () => {
       state.active = true
-      state.waiting = undefined
-      state.notification = undefined
-    }
-    const markBlocked = (notification, message) => {
-      if (state.waiting) return
-      state.waiting = "input"
-      state.notification = notification
-      dispatch(message)
+      if (state.questions.size === 0 && state.permissions.size === 0) {
+        state.waiting = undefined
+        state.notification = undefined
+      }
     }
     const markIdle = () => {
+      if (state.questions.size > 0 || state.permissions.size > 0 || suppressIdle(rootSessionID)) return
       if (state.waiting === "overflow") {
         state.active = false
         state.waiting = "error"
         state.notification = "error"
-        dispatch(slackMessages.error)
+        dispatch(
+          message("error", rootSessionID, ["*Reason:* Context limit recovery did not resume"]),
+        )
       } else if (state.active && !state.waiting && state.notification !== "finished") {
         state.active = false
         state.notification = "finished"
-        dispatch(slackMessages.finished)
+        const summary = sessionInfo(rootSessionID)?.summary
+        const changes =
+          Number.isFinite(summary?.files) && summary.files > 0
+            ? `*Changes:* ${summary.files} files / +${summary.additions ?? 0} / -${summary.deletions ?? 0}`
+            : undefined
+        dispatch(message("finished", rootSessionID, [changes]))
       }
     }
 
@@ -487,18 +593,66 @@ const createSlackNotificationSync = ({ sessionLineage, notify }) => {
         break
       case "tool.execute.before":
       case "tool.execute.after":
-      case "permission.replied":
-      case "question.replied":
-      case "question.rejected":
         markActive()
         break
-      case "permission.asked":
-        markBlocked("blocked-permission", slackMessages.blockedPermission)
+      case "permission.asked": {
+        const requestID = input.event.properties?.id
+        if (typeof requestID !== "string") break
+        const firstPendingPermission = state.permissions.size === 0
+        state.active = true
+        state.waiting = "permission"
+        if (firstPendingPermission) state.notification = undefined
+        state.permissions.set(requestID, {
+          permission: input.event.properties?.permission,
+        })
+        schedulePermissionNotification(rootSessionID, state)
         break
-      case "question.asked":
-        markBlocked("blocked-question", slackMessages.blockedQuestion)
+      }
+      case "permission.replied": {
+        const requestID = input.event.properties?.requestID
+        if (typeof requestID === "string") state.permissions.delete(requestID)
+        if (state.permissions.size === 0) {
+          clearPermissionTimer(state)
+          state.permissionNotified = false
+          markActive()
+        }
         break
+      }
+      case "question.asked": {
+        const requestID = input.event.properties?.id
+        if (typeof requestID !== "string") break
+        const firstPendingQuestion = state.questions.size === 0
+        state.waiting = "input"
+        const headers = (input.event.properties?.questions ?? [])
+          .map((question) => question?.header)
+          .filter((header) => typeof header === "string" && header.trim())
+        if (firstPendingQuestion) state.questionNotified = false
+        state.questions.set(requestID, headers)
+        if (state.questionNotified) break
+        state.questionNotified = true
+        state.notification = "blocked-question"
+        dispatch(
+          message("blockedQuestion", rootSessionID, [
+            `*Question:* ${slackText(headers.join(", ") || "Response requested")}`,
+          ]),
+        )
+        break
+      }
+      case "question.replied":
+      case "question.rejected": {
+        const requestID = input.event.properties?.requestID
+        if (typeof requestID === "string") state.questions.delete(requestID)
+        if (state.questions.size === 0) {
+          state.questionNotified = false
+          markActive()
+          schedulePermissionNotification(rootSessionID, state)
+        }
+        break
+      }
       case "session.error":
+        clearPermissions(state)
+        state.questions.clear()
+        state.questionNotified = false
         if (input.event.properties?.error?.name === "MessageAbortedError") {
           state.active = false
           state.waiting = undefined
@@ -513,7 +667,12 @@ const createSlackNotificationSync = ({ sessionLineage, notify }) => {
         state.waiting = "error"
         if (state.notification !== "error") {
           state.notification = "error"
-          dispatch(slackMessages.error)
+          const errorName = input.event.properties?.error?.name
+          dispatch(
+            message("error", rootSessionID, [
+              `*Reason:* ${slackText(errorName || "Session error")}`,
+            ]),
+          )
         }
         break
       default:
@@ -685,6 +844,7 @@ const createCheckpointAutomation = ({ client, directory, home, stateHome, sessio
     if (state.timeout) clearTimeout(state.timeout)
     state.timeout = undefined
     state.continuationStarted = true
+    state.continuationActive = false
     state.status = "continuing"
     queueMicrotask(async () => {
       await audit("continuation_started", sessionID, { origin: state.origin })
@@ -768,6 +928,14 @@ const createCheckpointAutomation = ({ client, directory, home, stateHome, sessio
   }
 
   return {
+    suppressesIdle(sessionID) {
+      const state = sessions.get(sessionID)
+      if (!state) return false
+      if (state.status === "continuing") return !state.continuationActive
+      return ["scheduled", "starting", "compacting", "awaiting", "compacted"].includes(
+        state.status,
+      )
+    },
     configure(config) {
       compactionReserved = config.compaction?.reserved
     },
@@ -854,6 +1022,9 @@ At a safe boundary, call ${checkpointToolName} exactly once. Do not mention cont
         const lineage = await sessionLineage(info.sessionID)
         if (lineage.kind !== "root") return
         const state = stateFor(info.sessionID)
+        if (state.status === "continuing" && info.role === "assistant" && !info.summary) {
+          state.continuationActive = true
+        }
 
         if (info.role === "user") {
           if (state.status === "failed") {
@@ -889,6 +1060,19 @@ At a safe boundary, call ${checkpointToolName} exactly once. Do not mention cont
         if (state.status === "compacted") {
           state.postCompactionIdle = true
           continueSession(sessionID, state)
+        }
+        return
+      }
+
+      if (event.type === "session.status") {
+        const sessionID = event.properties?.sessionID
+        const state = sessions.get(sessionID)
+        const status =
+          typeof event.properties?.status === "string"
+            ? event.properties.status
+            : event.properties?.status?.type
+        if (state?.status === "continuing" && ["busy", "retry"].includes(status)) {
+          state.continuationActive = true
         }
         return
       }
@@ -948,9 +1132,11 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   const rootSession = {}
   const parentBySession = new Map()
   const rootSessions = new Set()
+  const sessionsByID = new Map()
 
   const rememberSession = (session) => {
     if (typeof session?.id !== "string") return
+    sessionsByID.set(session.id, { ...sessionsByID.get(session.id), ...session })
     if (typeof session.parentID === "string") {
       parentBySession.set(session.id, session.parentID)
       rootSessions.delete(session.id)
@@ -1004,8 +1190,14 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   })
   const slackNotifications = createSlackNotificationSync({
     sessionLineage,
+    sessionInfo: (sessionID) => sessionsByID.get(sessionID) ?? { directory },
+    suppressIdle: checkpoints.suppressesIdle,
     notify:
       typeof options.slackNotify === "function" ? options.slackNotify : createSlackSender(home),
+    permissionDelayMs:
+      typeof options.slackPermissionDelayMs === "number"
+        ? options.slackPermissionDelayMs
+        : undefined,
   })
   const handleEvent = async (input) => {
     if (input.event.type === "session.deleted") {
@@ -1016,6 +1208,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
       if (sessionID) {
         parentBySession.delete(sessionID)
         rootSessions.delete(sessionID)
+        sessionsByID.delete(sessionID)
       }
       return
     }
@@ -1047,11 +1240,19 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
       if (input.event.type === "session.created" || input.event.type === "session.updated") {
         rememberSession(input.event.properties?.info)
       }
-      const notification = enqueueNotification(() => slackNotifications.handleEvent(input))
-      return enqueueEvent(async () => {
-        if (input.event.type === "session.deleted") await notification
-        await handleEvent(input)
+      if (input.event.type === "session.deleted") {
+        const notification = enqueueNotification(() => slackNotifications.handleEvent(input))
+        return enqueueEvent(async () => {
+          await notification
+          await handleEvent(input)
+        })
+      }
+      const eventSync = enqueueEvent(() => handleEvent(input))
+      void enqueueNotification(async () => {
+        await eventSync
+        await slackNotifications.handleEvent(input)
       })
+      return eventSync
     },
     config: async (config) => {
       checkpoints.configure(config)
