@@ -368,6 +368,107 @@ const createHerdrSubagentSync = ({ rootSession, sessionLineage }) => {
   }
 }
 
+const createActiveDescendantSync = ({ sessionLineage }) => {
+  const descendants = new Map()
+
+  const stateFor = (sessionID, rootSessionID) => {
+    let state = descendants.get(sessionID)
+    if (!state) {
+      state = {
+        rootSessionID,
+        status: "idle",
+        permissions: new Set(),
+        questions: new Set(),
+      }
+      descendants.set(sessionID, state)
+    }
+    return state
+  }
+
+  const requestID = (event) => event.properties?.requestID ?? event.properties?.id
+
+  return {
+    hasActive(rootSessionID) {
+      return [...descendants.values()].some(
+        (state) =>
+          state.rootSessionID === rootSessionID &&
+          (state.status !== "idle" || state.permissions.size > 0 || state.questions.size > 0),
+      )
+    },
+    async handleEvent(input) {
+      const sessionID = sessionIDFromEvent(input)
+      if (!sessionID) return
+
+      const lineage = await sessionLineage(sessionID)
+      if (lineage.kind === "root") {
+        if (input.event.type === "session.deleted") {
+          for (const [childSessionID, state] of descendants) {
+            if (state.rootSessionID === lineage.rootSessionID) descendants.delete(childSessionID)
+          }
+        }
+        return
+      }
+      if (lineage.kind !== "child") return
+
+      if (input.event.type === "session.deleted") {
+        descendants.delete(sessionID)
+        return
+      }
+
+      const state = stateFor(sessionID, lineage.rootSessionID)
+      switch (input.event.type) {
+        case "session.created":
+        case "tool.execute.before":
+        case "tool.execute.after":
+          state.status = "working"
+          break
+        case "session.status": {
+          const status =
+            typeof input.event.properties?.status === "string"
+              ? input.event.properties.status
+              : input.event.properties?.status?.type
+          if (status === "idle") state.status = "idle"
+          else if (status === "busy" || status === "retry") state.status = "working"
+          break
+        }
+        case "session.idle":
+          state.status = "idle"
+          break
+        case "permission.asked": {
+          const id = requestID(input.event)
+          if (typeof id === "string") state.permissions.add(id)
+          state.status = "blocked"
+          break
+        }
+        case "permission.replied": {
+          const id = requestID(input.event)
+          if (typeof id === "string") state.permissions.delete(id)
+          state.status = "working"
+          break
+        }
+        case "question.asked": {
+          const id = requestID(input.event)
+          if (typeof id === "string") state.questions.add(id)
+          state.status = "blocked"
+          break
+        }
+        case "question.replied":
+        case "question.rejected": {
+          const id = requestID(input.event)
+          if (typeof id === "string") state.questions.delete(id)
+          state.status = "working"
+          break
+        }
+        case "session.error":
+          state.status = "error"
+          break
+        default:
+          break
+      }
+    },
+  }
+}
+
 const createSlackSender = (home) => {
   const executable = Bun.env.SLACK_NOTIFY_BIN ?? join(home, ".local/bin/slack-webhook-post.sh")
 
@@ -1181,6 +1282,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   }
   const syncHerdrTitle = createHerdrTitleSync(directory, rootSession)
   const syncHerdrSubagents = createHerdrSubagentSync({ rootSession, sessionLineage })
+  const activeDescendants = createActiveDescendantSync({ sessionLineage })
   const checkpoints = createCheckpointAutomation({
     client,
     directory,
@@ -1191,7 +1293,8 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   const slackNotifications = createSlackNotificationSync({
     sessionLineage,
     sessionInfo: (sessionID) => sessionsByID.get(sessionID) ?? { directory },
-    suppressIdle: checkpoints.suppressesIdle,
+    suppressIdle: (sessionID) =>
+      checkpoints.suppressesIdle(sessionID) || activeDescendants.hasActive(sessionID),
     notify:
       typeof options.slackNotify === "function" ? options.slackNotify : createSlackSender(home),
     permissionDelayMs:
@@ -1202,6 +1305,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   const handleEvent = async (input) => {
     if (input.event.type === "session.deleted") {
       await syncHerdrSubagents(input)
+      await activeDescendants.handleEvent(input)
       await syncHerdrTitle(input)
       await checkpoints.event(input.event)
       const sessionID = sessionIDFromEvent(input)
@@ -1214,6 +1318,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
     }
     await syncHerdrTitle(input)
     await syncHerdrSubagents(input)
+    await activeDescendants.handleEvent(input)
     await checkpoints.event(input.event)
   }
   let eventQueue = Promise.resolve()

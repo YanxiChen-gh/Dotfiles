@@ -623,7 +623,11 @@ await hooks.event(
   }),
 )
 await hooks.event(sessionIDEvent("session.idle", "test-session"))
-await hooks.event(sessionIDEvent("question.asked", "approved-child"))
+await hooks.event(
+  sessionIDEvent("question.asked", "approved-child", {
+    id: "child-question",
+  }),
+)
 await new Promise((resolve) => setTimeout(resolve, 20))
 assert.equal(slackNotifications.length, 1)
 assert.match(slackNotifications[0], /Ship &lt;alerts&gt; &amp; \\[*]details\\[*]/)
@@ -632,6 +636,20 @@ assert.match(slackNotifications[0], /Agent:\* build/)
 assert.match(slackNotifications[0], /Permission: external\\_directory, bash/)
 assert.match(slackNotifications[0], /Requests:\* 2/)
 assert.doesNotMatch(slackNotifications[0], /private|git status|test-session|\/workspaces/)
+await hooks.event(
+  sessionIDEvent("permission.replied", "approved-child", {
+    requestID: "child-permission",
+    reply: "once",
+  }),
+)
+await hooks.event(
+  sessionIDEvent("question.replied", "approved-child", {
+    requestID: "child-question",
+    answers: [["Done"]],
+  }),
+)
+await hooks.event(sessionIDEvent("session.idle", "approved-child"))
+await hooks.event(sessionIDEvent("session.idle", "approved-grandchild"))
 
 await hooks.event(
   sessionIDEvent("permission.asked", "test-session", {
@@ -791,6 +809,65 @@ await Promise.all([previousIdle, nextPrompt])
 await orderedHooks.event(sessionIDEvent("session.idle", "ordered-root"))
 await flushNotifications()
 assert.equal(orderedNotifications.length, 2)
+
+const descendantNotifications = []
+const descendantHooks = await pluginModule.DotfilesHarnessPlugin(
+  { client, directory: process.cwd() },
+  {
+    hooksDir: process.env.HARNESS_HOOKS,
+    slackNotify: async (message) => descendantNotifications.push(message),
+  },
+)
+await descendantHooks.event(sessionEvent("session.created", { id: "descendant-root" }))
+await descendantHooks.event(
+  sessionEvent("session.created", {
+    id: "descendant-child",
+    parentID: "descendant-root",
+  }),
+)
+await descendantHooks.event(
+  sessionEvent("session.created", {
+    id: "descendant-grandchild",
+    parentID: "descendant-child",
+  }),
+)
+await descendantHooks["chat.message"]({ sessionID: "descendant-root" })
+await descendantHooks.event(
+  sessionIDEvent("permission.asked", "descendant-child", {
+    id: "descendant-permission",
+    permission: "bash",
+  }),
+)
+await descendantHooks.event(sessionIDEvent("session.idle", "descendant-child"))
+await descendantHooks.event(
+  sessionIDEvent("session.status", "descendant-grandchild", { status: { type: "busy" } }),
+)
+await descendantHooks.event(sessionIDEvent("session.idle", "descendant-root"))
+await flushNotifications()
+assert.deepEqual(descendantNotifications, [])
+
+await descendantHooks.event(
+  sessionIDEvent("permission.replied", "descendant-child", {
+    requestID: "descendant-permission",
+    reply: "once",
+  }),
+)
+await descendantHooks.event(sessionIDEvent("session.idle", "descendant-grandchild"))
+await descendantHooks.event(
+  sessionIDEvent("session.status", "descendant-root", { status: { type: "busy" } }),
+)
+await descendantHooks.event(sessionIDEvent("session.idle", "descendant-root"))
+await flushNotifications()
+assert.deepEqual(descendantNotifications, [])
+
+await descendantHooks.event(sessionIDEvent("session.idle", "descendant-child"))
+await descendantHooks.event(
+  sessionIDEvent("session.status", "descendant-root", { status: { type: "busy" } }),
+)
+await descendantHooks.event(sessionIDEvent("session.idle", "descendant-root"))
+await flushNotifications()
+assert.equal(descendantNotifications.length, 1)
+assert.match(descendantNotifications[0], /OpenCode finished/)
 
 const interleavedNotifications = []
 const interleavedHooks = await pluginModule.DotfilesHarnessPlugin(
