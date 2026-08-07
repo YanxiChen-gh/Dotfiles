@@ -29,6 +29,7 @@ fi
 # agents before this script takes the separate Serve-mapping lock.
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PREPARE_SCRIPT="${PREPARE_ONA_TAILNET_SCRIPT:-$SCRIPT_DIR/prepare-ona-tailnet.sh}"
+BROWSER_ASSET_CHECKER="${BROWSER_ASSET_CHECKER:-$SCRIPT_DIR/find-loopback-browser-asset.py}"
 if [[ ! -x "$PREPARE_SCRIPT" ]]; then
     echo "[expose-port] Ona tailnet helper is not executable: $PREPARE_SCRIPT" >&2
     exit 1
@@ -163,51 +164,7 @@ fi
 
 case "${CONTENT_TYPE,,}" in
     text/html*|application/xhtml+xml*)
-        if ! OFFENDING_URL=$(python3 - "$RESPONSE_BODY" <<'PY'
-from html.parser import HTMLParser
-from ipaddress import ip_address
-from pathlib import Path
-import sys
-from urllib.parse import urlparse
-
-
-class BrowserAssetParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.urls = []
-
-    def handle_starttag(self, tag, attrs):
-        attribute = "src" if tag == "script" else "href" if tag == "link" else None
-        if attribute is None:
-            return
-        for name, value in attrs:
-            if name == attribute and value is not None:
-                self.urls.append(value)
-                break
-
-
-parser = BrowserAssetParser()
-parser.feed(Path(sys.argv[1]).read_text(errors="replace"))
-for url in parser.urls:
-    try:
-        hostname = urlparse(url).hostname
-    except ValueError:
-        continue
-    if hostname is None:
-        continue
-    normalized = hostname.rstrip(".").lower()
-    if normalized == "localhost":
-        print(url)
-        break
-    try:
-        is_loopback = ip_address(normalized).is_loopback
-    except ValueError:
-        is_loopback = False
-    if is_loopback:
-        print(url)
-        break
-PY
-        ); then
+        if ! OFFENDING_URL=$(python3 "$BROWSER_ASSET_CHECKER" "$RESPONSE_BODY"); then
             echo "[expose-port] could not inspect the verified HTML response." >&2
             cleanup_changed_mapping
             exit 1

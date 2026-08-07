@@ -23,6 +23,12 @@ cat >"$TMP/bin/uname" <<'EOF'
 printf '%s\n' "${FAKE_UNAME:-Darwin}"
 EOF
 
+cat >"$TMP/bin/just" <<'EOF'
+#!/bin/sh
+: >"$FAKE_JUST_CALLED"
+exit 99
+EOF
+
 cat >"$TMP/bin/curl" <<'EOF'
 #!/bin/sh
 output_file=
@@ -61,7 +67,7 @@ printf '%s\n' "$*" >"$TAILSCALE_ARGS_FILE"
 printf '%s\n' "http://test-node.example:8080${2}"
 EOF
 
-chmod +x "$TMP/bin/uname" "$TMP/bin/curl" "$TMP/fake-tailscale"
+chmod +x "$TMP/bin/uname" "$TMP/bin/just" "$TMP/bin/curl" "$TMP/fake-tailscale"
 
 fail() {
     echo "FAIL: $*" >&2
@@ -69,6 +75,8 @@ fail() {
 }
 
 PATH="$TMP/bin:$PATH"
+FAKE_JUST_CALLED="$TMP/just.called"
+export FAKE_JUST_CALLED
 export PATH
 
 output=$(IS_ON_ONA='' FAKE_UNAME=Darwin "$SCRIPT" 4387 /session/local 2>"$TMP/local.err")
@@ -93,9 +101,10 @@ grep -q 'local verification failed (500)' "$TMP/broken.err" || fail "failed veri
 TAILSCALE_ARGS_FILE="$TMP/tailscale.args"
 export TAILSCALE_ARGS_FILE
 output=$(IS_ON_ONA=true EXPOSE_PORT_TAILSCALE_SCRIPT="$TMP/fake-tailscale" \
-    "$SCRIPT" 4387 /session/cde 2>"$TMP/cde.err")
-[ "$output" = "http://test-node.example:8080/session/cde" ] || fail "Ona URL mismatch: $output"
-[ "$(cat "$TAILSCALE_ARGS_FILE")" = "4387 /session/cde" ] || fail "Ona delegation arguments mismatch"
+    "$SCRIPT" 8080 /health 2>"$TMP/cde.err")
+[ "$output" = "http://test-node.example:8080/health" ] || fail "Ona URL mismatch: $output"
+[ "$(cat "$TAILSCALE_ARGS_FILE")" = "8080 /health" ] || fail "Ona delegation arguments mismatch"
+[ ! -e "$FAKE_JUST_CALLED" ] || fail "generic exposure invoked a Vanta just recipe"
 
 if "$SCRIPT" invalid / >"$TMP/invalid.out" 2>"$TMP/invalid.err"; then
     fail "invalid port should fail"
