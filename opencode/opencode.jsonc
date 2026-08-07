@@ -8,6 +8,10 @@
     "checkpoint": {
       "description": "Checkpoint context and continue in the same session",
       "template": "A manual context checkpoint has been scheduled. Do not start or continue task work in this turn. Respond briefly that checkpointing is starting."
+    },
+    "canary-takeover": {
+      "description": "Let a fresh successor perform one bounded unit of real local work",
+      "template": "Load the canary-takeover skill and run one OpenCode live canary takeover. Follow its safety contract, evidence recording, and terminal audit exactly."
     }
   },
   "lsp": true,

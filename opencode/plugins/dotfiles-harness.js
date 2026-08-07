@@ -809,7 +809,299 @@ const subagentContext = `[subagent]
 This is a child session. Do not launch Lavish, call question or approval tools, or wait for human input. Return findings, questions, and blockers directly to the parent. The parent owns scope approval.`
 
 const checkpointToolName = "context_checkpoint"
+const canaryPreflightToolName = "canary_takeover_preflight"
+const canaryCompleteToolName = "canary_takeover_complete"
 const compactionTimeoutMs = 60_000
+
+const createCanaryPreflight = async ({
+  client,
+  directory,
+  home,
+  maturity,
+  stateHome,
+  sessionLineage,
+}) => {
+  const automatic = Bun.env.OPENCODE_CANARY_TAKEOVER !== "0"
+  const maturityData = Bun.env.AGENT_MATURITY_DATA_DIR ?? join(home, ".agent-maturity-data")
+  const takeoverDirectory = join(maturityData, "takeovers")
+  const auditDirectory = join(stateHome ?? join(home, ".local/state"), "opencode")
+  const auditPath = join(auditDirectory, "canary-takeovers.jsonl")
+  const states = new Map()
+
+  try {
+    const contents = await readFile(auditPath, "utf8")
+    for (const line of contents.split("\n")) {
+      if (!line.trim()) continue
+      try {
+        const record = JSON.parse(line)
+        if (typeof record.sessionID !== "string") continue
+        if (record.event === "reset") states.delete(record.sessionID)
+        if (record.event === "started") {
+          if (typeof record.attemptID === "string") {
+            states.set(record.sessionID, {
+              phase: "awaiting_record",
+              preflightStatus: record.preflightStatus,
+              attemptID: record.attemptID,
+            })
+          }
+        }
+        if (record.event === "completed") states.set(record.sessionID, { phase: "completed" })
+      } catch {
+        // Ignore partial audit lines; the terminal evidence record remains authoritative.
+      }
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") console.warn(`[dotfiles-harness] ignored invalid canary audit: ${error}`)
+  }
+
+  const audit = async (event, sessionID, details = {}) => {
+    await mkdir(auditDirectory, { recursive: true })
+    await appendFile(
+      auditPath,
+      `${JSON.stringify({ at: new Date().toISOString(), event, sessionID, ...details })}\n`,
+    )
+  }
+  const run = async (command) => {
+    const process = Bun.spawn(command, {
+      env: Bun.env,
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(process.stdout).text(),
+      new Response(process.stderr).text(),
+      process.exited,
+    ])
+    return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode }
+  }
+  const start = async (sessionID, preflightStatus, error) => {
+    const nonce = globalThis.crypto?.randomUUID?.().slice(0, 8) ?? Math.random().toString(16).slice(2, 10)
+    const attemptID = `canary-${Date.now()}-${sessionID}-${nonce}`
+    states.set(sessionID, { phase: "awaiting_record", preflightStatus, attemptID, error })
+    await audit("started", sessionID, { preflightStatus, attemptID, error })
+    return attemptID
+  }
+  const unavailable = async (sessionID, output, error) => {
+    const attemptID = await start(sessionID, "unavailable", error)
+    return {
+      title: "Canary preflight unavailable",
+      output,
+      metadata: { status: "unavailable", attemptID, error },
+    }
+  }
+  const terminalRecord = async (sessionID, attemptID) => {
+    const name = `${attemptID}.json`
+    const path = join(takeoverDirectory, name)
+    let record
+    try {
+      record = JSON.parse(await readFile(path, "utf8"))
+    } catch (error) {
+      if (error?.code === "ENOENT") return undefined
+      return undefined
+    }
+    if (record.source_session_id !== sessionID) return undefined
+    if (!["passed", "failed", "aborted"].includes(record.status)) return undefined
+
+    const validation = await run([
+      "jq",
+      "-e",
+      "--arg",
+      "kind",
+      "record",
+      "--arg",
+      "takeover_id",
+      attemptID,
+      "-f",
+      join(maturity, "scripts/canary-takeover-schema.jq"),
+      path,
+    ])
+    if (validation.exitCode !== 0) return undefined
+
+    const relativePath = `takeovers/${name}`
+    const commit = await run([
+      "git",
+      "-C",
+      maturityData,
+      "log",
+      "-1",
+      "--format=%H",
+      "--",
+      relativePath,
+    ])
+    if (commit.exitCode !== 0 || !commit.stdout) return undefined
+    const [committedBlob, workingBlob] = await Promise.all([
+      run(["git", "-C", maturityData, "rev-parse", `${commit.stdout}:${relativePath}`]),
+      run(["git", "-C", maturityData, "hash-object", path]),
+    ])
+    if (
+      committedBlob.exitCode !== 0 ||
+      workingBlob.exitCode !== 0 ||
+      committedBlob.stdout !== workingBlob.stdout
+    ) return undefined
+    const synced = await run([
+      "git",
+      "-C",
+      maturityData,
+      "merge-base",
+      "--is-ancestor",
+      commit.stdout,
+      "@{upstream}",
+    ])
+    return synced.exitCode === 0 ? record : undefined
+  }
+
+  return {
+    requirement(sessionID) {
+      if (!automatic) return undefined
+      const phase = states.get(sessionID)?.phase
+      if (phase === "completed") return undefined
+      return phase === "awaiting_record" ? "complete" : "start"
+    },
+    async event(event) {
+      if (event.type !== "session.deleted") return
+      const sessionID = event.properties?.info?.id
+      if (typeof sessionID !== "string") return
+      states.delete(sessionID)
+      await audit("reset", sessionID)
+    },
+    preflightTool: {
+      description:
+        "Check that an OpenCode root session has no active descendants before launching a canary takeover. Read-only; call immediately before the fresh successor task.",
+      args: {},
+      async execute(_args, context) {
+        const lineage = await sessionLineage(context.sessionID)
+        if (lineage.kind !== "root") {
+          return {
+            title: "Canary preflight unavailable",
+            output: "Canary takeover preflight is available only to root sessions.",
+            metadata: { status: "unavailable" },
+          }
+        }
+        if (states.get(context.sessionID)?.phase === "awaiting_record") {
+          return {
+            title: "Canary evidence pending",
+            output: "Finish the current canary and record its terminal evidence before checkpointing.",
+            metadata: { status: "awaiting_record" },
+          }
+        }
+        if (!client?.session?.status) {
+          return await unavailable(
+            context.sessionID,
+            "This OpenCode client cannot inspect descendant session status. Record an aborted canary before checkpointing.",
+            "session status APIs unavailable",
+          )
+        }
+
+        try {
+          const result = await client.session.status({ query: { directory } })
+          if (!result.data || typeof result.data !== "object") {
+            throw new Error("status lookup returned no data")
+          }
+          const active = []
+          for (const [sessionID, value] of Object.entries(result.data)) {
+            if (sessionID === context.sessionID) continue
+            const status = typeof value === "string" ? value : value?.type
+            if (status === "idle") continue
+            const candidate = await sessionLineage(sessionID)
+            if (candidate.kind === "unresolved") {
+              throw new Error(`lineage unavailable for active session ${sessionID}`)
+            }
+            if (candidate.kind === "child" && candidate.rootSessionID === context.sessionID) {
+              active.push({ sessionID, status: status ?? "unknown" })
+            }
+          }
+          if (active.length > 0) {
+            return {
+              title: "Canary preflight blocked",
+              output: `${active.length} descendant session(s) are still active. Wait for them to become terminal before launching the canary.`,
+              metadata: { status: "blocked", active },
+            }
+          }
+
+          const attemptID = await start(context.sessionID, "ready")
+          return {
+            title: "Canary preflight ready",
+            output: "No active descendants found.",
+            metadata: { status: "ready", attemptID, active: [] },
+          }
+        } catch (error) {
+          return await unavailable(
+            context.sessionID,
+            "Descendant status could not be verified. Record an aborted canary before checkpointing.",
+            String(error),
+          )
+        }
+      },
+    },
+    completeTool: {
+      description:
+        "Complete the current canary after terminal evidence has been recorded and synced. Read-only; required before the first context checkpoint can proceed.",
+      args: {},
+      async execute(_args, context) {
+        const lineage = await sessionLineage(context.sessionID)
+        if (lineage.kind !== "root") {
+          return {
+            title: "Canary completion unavailable",
+            output: "Canary completion is available only to root sessions.",
+            metadata: { status: "unavailable" },
+          }
+        }
+        const state = states.get(context.sessionID)
+        if (state?.phase === "completed") {
+          return {
+            title: "Canary already complete",
+            output: "The automatic canary requirement is already satisfied for this root session.",
+            metadata: { status: "completed" },
+          }
+        }
+        if (state?.phase !== "awaiting_record") {
+          return {
+            title: "Canary completion blocked",
+            output: "Run canary_takeover_preflight before completing the canary.",
+            metadata: { status: "blocked" },
+          }
+        }
+
+        let record
+        try {
+          record = await terminalRecord(context.sessionID, state.attemptID)
+        } catch (error) {
+          return {
+            title: "Canary completion blocked",
+            output: "Terminal canary evidence could not be validated against its upstream repository.",
+            metadata: { status: "blocked", error: String(error) },
+          }
+        }
+        if (!record) {
+          return {
+            title: "Canary completion blocked",
+            output: "No terminal canary evidence record was found for this attempt.",
+            metadata: { status: "blocked" },
+          }
+        }
+        if (
+          state.preflightStatus === "unavailable" &&
+          (record.status !== "aborted" || record.reconciliation?.mismatches?.length === 0)
+        ) {
+          return {
+            title: "Canary completion blocked",
+            output: "Unavailable preflight evidence must be aborted and preserve its reason in reconciliation.mismatches.",
+            metadata: { status: "blocked" },
+          }
+        }
+
+        states.set(context.sessionID, { phase: "completed" })
+        await audit("completed", context.sessionID, { takeoverID: record.takeover_id })
+        return {
+          title: "Canary complete",
+          output: "The first-pressure canary requirement is satisfied. Context checkpointing may proceed.",
+          metadata: { status: "completed", takeoverID: record.takeover_id },
+        }
+      },
+    },
+  }
+}
 
 const ratioFromEnvironment = (name, fallback) => {
   const value = Number(Bun.env[name])
@@ -846,7 +1138,14 @@ Produce a task-continuation checkpoint, not a conversation recap. Preserve only 
 - the single next action and any remaining ordered work
 Treat the repository, artifacts, and test results as sources of truth. Omit superseded exploration, repetitive tool output, and completed implementation detail that can be reconstructed from the code.`
 
-const createCheckpointAutomation = ({ client, directory, home, stateHome, sessionLineage }) => {
+const createCheckpointAutomation = ({
+  client,
+  directory,
+  home,
+  stateHome,
+  sessionLineage,
+  canaryRequirement,
+}) => {
   const softRatio = ratioFromEnvironment("OPENCODE_CHECKPOINT_SOFT_RATIO", 0.5)
   const hardRatio = Math.max(
     softRatio,
@@ -1051,6 +1350,16 @@ const createCheckpointAutomation = ({ client, directory, home, stateHome, sessio
         const state = stateFor(context.sessionID)
         if (state.status !== "eligible") return "Context checkpoint is not currently eligible."
         if (!state.providerID || !state.modelID) return "Context checkpoint has no completed model usage yet."
+        const requirement = canaryRequirement(context.sessionID)
+        if (requirement) {
+          return {
+            title: "Canary takeover required",
+            output: requirement === "start"
+              ? "Run the canary-takeover skill before scheduling this root session's first context checkpoint."
+              : "Finish the active canary, sync its terminal evidence, and call canary_takeover_complete before checkpointing.",
+            metadata: { canaryRequired: true, requirement },
+          }
+        }
 
         state.status = "scheduled"
         state.origin = "automatic"
@@ -1079,6 +1388,17 @@ const createCheckpointAutomation = ({ client, directory, home, stateHome, sessio
       if (state.status !== "eligible") return
 
       const percentage = Math.round(state.ratio * 100)
+      const requirement = canaryRequirement(input.sessionID)
+      if (requirement === "start") {
+        output.system.push(`[canary-takeover]
+This root session is using ${percentage}% of its usable model context. Before the first same-session checkpoint, load the canary-takeover skill and execute one bounded live canary without asking the user. If descendants are active, wait and retry preflight at the next safe point.`)
+        return
+      }
+      if (requirement === "complete") {
+        output.system.push(`[canary-takeover]
+The first-pressure canary is in progress. Finish the successor or aborted audit, record and sync terminal evidence, then call ${canaryCompleteToolName}. Do not call ${checkpointToolName} before canary completion succeeds.`)
+        return
+      }
       const urgency = state.level === "hard"
         ? "Do not begin another non-trivial milestone before checkpointing."
         : "Finish the current atomic work; checkpoint at the next durable verified milestone."
@@ -1283,12 +1603,21 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   const syncHerdrTitle = createHerdrTitleSync(directory, rootSession)
   const syncHerdrSubagents = createHerdrSubagentSync({ rootSession, sessionLineage })
   const activeDescendants = createActiveDescendantSync({ sessionLineage })
+  const canaryPreflight = await createCanaryPreflight({
+    client,
+    directory,
+    home,
+    maturity,
+    stateHome,
+    sessionLineage,
+  })
   const checkpoints = createCheckpointAutomation({
     client,
     directory,
     home,
     stateHome,
     sessionLineage,
+    canaryRequirement: (sessionID) => canaryPreflight.requirement(sessionID),
   })
   const slackNotifications = createSlackNotificationSync({
     sessionLineage,
@@ -1308,6 +1637,7 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
       await activeDescendants.handleEvent(input)
       await syncHerdrTitle(input)
       await checkpoints.event(input.event)
+      await canaryPreflight.event(input.event)
       const sessionID = sessionIDFromEvent(input)
       if (sessionID) {
         parentBySession.delete(sessionID)
@@ -1393,7 +1723,11 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
       if (result.stdout.trim()) output.context.push(result.stdout.trim())
     },
     "command.execute.before": checkpoints.command,
-    tool: { [checkpointToolName]: checkpoints.tool },
+    tool: {
+      [checkpointToolName]: checkpoints.tool,
+      [canaryPreflightToolName]: canaryPreflight.preflightTool,
+      [canaryCompleteToolName]: canaryPreflight.completeTool,
+    },
     "tool.execute.before": async (input, output) => {
       const tool = input.tool.toLowerCase()
       const args = output.args

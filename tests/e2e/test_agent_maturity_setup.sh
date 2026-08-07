@@ -20,17 +20,23 @@ set -eu
 printf '%s\n' "$*" >"$HOME/bootstrap-args"
 mkdir -p \
   "$HOME/.claude/skills/scope-gate" \
+  "$HOME/.claude/skills/canary-takeover" \
   "$HOME/.agents/skills/scope-gate" \
+  "$HOME/.agents/skills/canary-takeover" \
   "$HOME/.claude" \
   "$HOME/.codex"
 : >"$HOME/.claude/skills/scope-gate/SKILL.md"
+: >"$HOME/.claude/skills/canary-takeover/SKILL.md"
 : >"$HOME/.agents/skills/scope-gate/SKILL.md"
+: >"$HOME/.agents/skills/canary-takeover/SKILL.md"
 printf '%s\n' '{"hooks":{"PreToolUse":[{"hooks":[{"command":"scope-gate-pretooluse.sh"}]}]}}' >"$HOME/.claude/settings.json"
 printf '%s\n' '{"hooks":{"PreToolUse":[{"hooks":[{"command":"scope-gate-pretooluse.sh"}]}]}}' >"$HOME/.codex/hooks.json"
 EOF
 
 cat >"$HOME/.config/opencode/plugins/dotfiles-harness.js" <<'EOF'
 const scopeGate = "scope-gate-pretooluse.sh"
+const canaryPreflight = "canary_takeover_preflight"
+const canaryComplete = "canary_takeover_complete"
 EOF
 
 resolve_script_dir() {
@@ -52,6 +58,20 @@ output=$(setup_agent_maturity)
 printf '%s\n' "$output" | grep -q 'installed for Claude Code, Codex, and OpenCode'
 printf '%s\n' "$output" | grep -q 'open /hooks once'
 grep -q -- '--data-repo example/agent-maturity-data' "$HOME/bootstrap-args"
+
+cat >"$HOME/.config/opencode/plugins/dotfiles-harness.js" <<'EOF'
+const scopeGate = "scope-gate-pretooluse.sh"
+const canaryPreflight = "canary_takeover_preflight"
+EOF
+if setup_agent_maturity >/dev/null 2>&1; then
+  printf 'FAIL: setup accepted an OpenCode plugin without canary completion\n' >&2
+  exit 1
+fi
+cat >"$HOME/.config/opencode/plugins/dotfiles-harness.js" <<'EOF'
+const scopeGate = "scope-gate-pretooluse.sh"
+const canaryPreflight = "canary_takeover_preflight"
+const canaryComplete = "canary_takeover_complete"
+EOF
 
 mkdir -p "$HOME/.agents/skills/connect-mongo"
 : >"$HOME/.agents/skills/connect-mongo/keep"

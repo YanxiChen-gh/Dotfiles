@@ -76,6 +76,10 @@ OpenCode gets the same generated global rules, auto-discovers skills under `~/.c
 
 After changing OpenCode config or plugins, quit and restart OpenCode. To use Claude SSO, authenticate Claude Code first, then select an Anthropic model in OpenCode.
 
+#### Canary takeover
+
+OpenCode runs one canary takeover automatically when a root session first reaches context pressure, before its first same-session checkpoint. Run `/canary-takeover` to start one earlier. The workflow lets a fresh child perform a bounded unit of real local work while the root remains a frozen fallback. V1 is cooperative: it instructs the agents not to push or merge the work repository, then audits writer overlap and prohibited actions rather than claiming to prevent them. After the audit, the maturity-data sync persists the handoff and terminal evidence in the private data repo. Set `OPENCODE_CANARY_TAKEOVER=0` before launching OpenCode to disable automatic takeovers without removing the manual command.
+
 #### Slack attention notifications
 
 OpenCode can notify a private Slack channel when a root session waits for permission or an answer, stops with an error, or returns idle after doing work. Permission alerts wait three seconds and are cancelled when auto mode resolves the exact request, so transient internal approvals do not page you. Child sessions, concurrent permission bursts, and duplicate idle events are suppressed. Messages include the escaped session title, workspace, agent, reason, and change summary when available; they never include prompts, error messages, or tool output. Delivery is best-effort with a five-second timeout and never blocks the agent.

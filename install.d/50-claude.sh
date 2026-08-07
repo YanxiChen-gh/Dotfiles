@@ -234,7 +234,9 @@ setup_agent_maturity() {
     missing=""
     for path in \
         "$HOME/.claude/skills/scope-gate/SKILL.md" \
+        "$HOME/.claude/skills/canary-takeover/SKILL.md" \
         "$HOME/.agents/skills/scope-gate/SKILL.md" \
+        "$HOME/.agents/skills/canary-takeover/SKILL.md" \
         "$HOME/.claude/settings.json" \
         "$config_home/opencode/plugins/dotfiles-harness.js"
     do
@@ -245,6 +247,10 @@ setup_agent_maturity() {
         || missing="$missing Claude-scope-hook"
     grep -qF 'scope-gate-pretooluse.sh' "$config_home/opencode/plugins/dotfiles-harness.js" 2>/dev/null \
         || missing="$missing OpenCode-scope-adapter"
+    grep -qF 'canary_takeover_preflight' "$config_home/opencode/plugins/dotfiles-harness.js" 2>/dev/null \
+        || missing="$missing OpenCode-canary-preflight"
+    grep -qF 'canary_takeover_complete' "$config_home/opencode/plugins/dotfiles-harness.js" 2>/dev/null \
+        || missing="$missing OpenCode-canary-completion"
     grep -qF 'scope-gate-pretooluse.sh' "$HOME/.codex/hooks.json" 2>/dev/null \
         || missing="$missing Codex-scope-hook"
     if [ -n "$missing" ]; then
