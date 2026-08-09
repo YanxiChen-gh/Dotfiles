@@ -1838,6 +1838,32 @@ assert.deepEqual(await titleLogLines(), [])
 subagentCommands = await subagentMetadataCommands()
 assert.match(subagentCommands.at(-1), /--token subagent_1=\[run\] Child work/)
 
+await titleHooks.event(
+  sessionEvent("session.updated", {
+    id: "child",
+    parentID: "root",
+    title: "Renamed child",
+  }),
+)
+subagentCommands = await subagentMetadataCommands()
+assert.match(subagentCommands.at(-1), /--token subagent_1=\[run\] Renamed child/)
+const renamedChildCommandCount = subagentCommands.length
+await titleHooks.event(
+  sessionIDEvent("message.updated", "child", {
+    info: { id: "child-message", agent: "general" },
+  }),
+)
+subagentCommands = await subagentMetadataCommands()
+assert.equal(subagentCommands.length, renamedChildCommandCount)
+assert.match(subagentCommands.at(-1), /--token subagent_1=\[run\] Renamed child/)
+await titleHooks.event(
+  sessionEvent("session.updated", {
+    id: "child",
+    parentID: "root",
+    title: "Child work",
+  }),
+)
+
 await titleHooks.event({
   event: {
     type: "session.status",

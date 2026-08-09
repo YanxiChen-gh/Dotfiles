@@ -308,7 +308,10 @@ const createHerdrSubagentSync = ({ rootSession, sessionLineage }) => {
     const lineage = await sessionLineage(eventSessionID)
     if (lineage.kind !== "child" || lineage.rootSessionID !== trackedRootSessionID) return
 
-    const session = event.properties?.info
+    const session =
+      event.type === "session.created" || event.type === "session.updated"
+        ? event.properties?.info
+        : undefined
     let child = children.get(eventSessionID)
     if (!child) {
       child = { title: childTitle(session), state: "idle", order: 0, completed: false }
