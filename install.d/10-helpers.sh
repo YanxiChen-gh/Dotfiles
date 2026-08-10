@@ -75,15 +75,36 @@ install_from_url() {
     fi
 }
 
-# Ensure Node.js 20+ and npm are available.
+# Ensure Node.js 24+ and npm are available.
 install_node_if_missing() {
     node_major=0
     if command -v node >/dev/null 2>&1; then
         node_major=$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)
     fi
-    if command -v npm >/dev/null 2>&1 && [ "$node_major" -ge 20 ]; then
+    if command -v npm >/dev/null 2>&1 && [ "$node_major" -ge 24 ]; then
         echo "✅ Node.js $(node --version) and npm $(npm --version) already installed"
         return 0
+    fi
+
+    if [ -n "${NVM_DIR:-}" ]; then
+        nvm_dir=$NVM_DIR
+    elif [ -s "/usr/local/share/nvm/nvm.sh" ]; then
+        nvm_dir=/usr/local/share/nvm
+    else
+        nvm_dir=$HOME/.nvm
+    fi
+    if [ -s "$nvm_dir/nvm.sh" ]; then
+        echo "Installing Node.js 24 via NVM..."
+        # shellcheck disable=SC1090
+        . "$nvm_dir/nvm.sh"
+        if command -v nvm >/dev/null 2>&1 && \
+                nvm install 24 && nvm alias default 24 && nvm use 24; then
+            node_major=$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)
+            if command -v npm >/dev/null 2>&1 && [ "$node_major" -ge 24 ]; then
+                echo "✅ Node.js $(node --version) and npm $(npm --version) installed via NVM"
+                return 0
+            fi
+        fi
     fi
 
     if [ "$OS" = "macos" ] && command -v brew >/dev/null 2>&1; then
@@ -91,18 +112,18 @@ install_node_if_missing() {
         brew install node
     elif [ "$OS" = "linux" ]; then
         echo "Installing Node.js via NodeSource..."
-        curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && \
+        curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash - && \
             sudo apt-get install -y nodejs
     else
-        echo "⚠️  Node.js 20+ is required; install it from https://nodejs.org/en/download"
+        echo "⚠️  Node.js 24+ is required; install it from https://nodejs.org/en/download"
     fi
 
     node_major=0
     if command -v node >/dev/null 2>&1; then
         node_major=$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)
     fi
-    if ! command -v npm >/dev/null 2>&1 || [ "$node_major" -lt 20 ]; then
-        echo "⚠️  Warning: Node.js 20+ installation failed"
+    if ! command -v npm >/dev/null 2>&1 || [ "$node_major" -lt 24 ]; then
+        echo "⚠️  Warning: Node.js 24+ installation failed"
         return 1
     fi
     echo "✅ Node.js installed: $(node --version), npm $(npm --version)"

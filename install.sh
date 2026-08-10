@@ -52,7 +52,7 @@ if [ "$OS" = "linux" ]; then
     install_from_apt "gh"
 fi
 install_python_if_missing
-install_node_if_missing
+install_node_if_missing || exit 1
 install_typescript_language_service
 
 create_symlinks
@@ -74,6 +74,7 @@ fi
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_opencode
+install_agent_browser || exit 1
 install_from_url "herdr" "herdr" "https://herdr.dev/install.sh"
 install_from_url "treehouse" "treehouse" "https://kunchenguid.github.io/treehouse/install.sh"
 install_langsmith_cli
@@ -108,10 +109,11 @@ if command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -
         || echo "⚠️  LangSmith skills installation failed for Cursor (can retry manually)"
 fi
 
-# Install agent skills: Lavish (HTML artifact review), Chrome DevTools automation,
+# Install agent skills: Lavish (HTML artifact review), browser automation,
 # herdr (terminal agent multiplexer).
 install_agent_skill "kunchenguid/lavish-axi" "lavish"
-install_agent_skill "kunchenguid/chrome-devtools-axi" "chrome-devtools-axi"
+install_agent_skill "vercel-labs/agent-browser" "agent-browser" || exit 1
+remove_chrome_devtools_axi || exit 1
 install_agent_skill "ogulcancelik/herdr" "herdr"
 
 # Setup Claude Code config and commands

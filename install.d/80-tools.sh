@@ -284,22 +284,125 @@ install_google_workspace_cli() {
     echo "   Run gws-work-auth to authenticate Docs, Sheets, Slides, and Drive."
 }
 
-# Install an AXI agent skill (github.com/kunchenguid/*) for Claude Code and Cursor.
+# Install agent-browser and its managed Chrome runtime.
+install_agent_browser() {
+    local version="0.33.2"
+    local installed_version=""
+    local install_prefix="$HOME/.local/share/agent-browser"
+    local managed_binary="$install_prefix/bin/agent-browser"
+    local exposed_binary="$HOME/.local/bin/agent-browser"
+    local script_dir=""
+
+    install_node_if_missing || return 1
+
+    if [ -x "$managed_binary" ]; then
+        installed_version=$($managed_binary --version 2>/dev/null || true)
+    fi
+    case "$installed_version" in
+        "$version"|"agent-browser $version") ;;
+        *)
+            echo "Installing agent-browser $version..."
+            npm install -g --prefix "$install_prefix" "agent-browser@$version" || {
+                echo "⚠️  Warning: Failed to install agent-browser $version"
+                return 1
+            }
+            ;;
+    esac
+
+    mkdir -p "$HOME/.local/bin"
+    if [ -e "$exposed_binary" ] && [ ! -L "$exposed_binary" ]; then
+        echo "⚠️  Refusing to replace unmanaged file at $exposed_binary"
+        return 1
+    fi
+    rm -f "$exposed_binary"
+    ln -s "$managed_binary" "$exposed_binary"
+
+    script_dir=$(resolve_script_dir) || return 1
+    mkdir -p "$HOME/.agent-browser"
+    if [ -e "$HOME/.agent-browser/config.json" ] && [ ! -L "$HOME/.agent-browser/config.json" ]; then
+        echo "⚠️  Refusing to replace unmanaged file at $HOME/.agent-browser/config.json"
+        return 1
+    fi
+    rm -f "$HOME/.agent-browser/config.json"
+    ln -s "$script_dir/agent-browser/config.json" "$HOME/.agent-browser/config.json"
+
+    if "$managed_binary" doctor --offline >/dev/null 2>&1; then
+        echo "✅ agent-browser $version and Chrome are ready"
+        return 0
+    fi
+
+    echo "Installing Chrome for agent-browser..."
+    if [ "$OS" = "linux" ]; then
+        "$managed_binary" install --with-deps || return 1
+    else
+        "$managed_binary" install || return 1
+    fi
+    "$managed_binary" doctor --offline || return 1
+    echo "✅ agent-browser $version and Chrome are ready"
+}
+
 # Install an agent skill for Claude Code and/or Cursor from a GitHub repo.
 # Usage: install_agent_skill <github_repo> <skill_name>
 install_agent_skill() {
     local repo="$1"
     local skill="$2"
-    if command -v claude >/dev/null 2>&1; then
-        echo "Installing ${skill} skill for Claude Code..."
-        npx skills add "$repo" --agent claude-code --skill "$skill" --yes --global 2>/dev/null \
-            && echo "✅ ${skill} skill installed (Claude Code)" \
-            || echo "⚠️  ${skill} skill installation failed for Claude Code (can retry manually)"
+    echo "Installing ${skill} skill for coding agents..."
+    if npx skills add "$repo" \
+            --agent claude-code cursor codex opencode \
+            --skill "$skill" --yes --global 2>/dev/null; then
+        echo "✅ ${skill} skill installed"
+    else
+        echo "⚠️  ${skill} skill installation failed (can retry manually)"
+        return 1
     fi
-    if command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -d "$HOME/.cursor" ]; then
-        echo "Installing ${skill} skill for Cursor..."
-        npx skills add "$repo" --agent cursor --skill "$skill" --yes --global 2>/dev/null \
-            && echo "✅ ${skill} skill installed (Cursor)" \
-            || echo "⚠️  ${skill} skill installation failed for Cursor (can retry manually)"
+}
+
+remove_agent_skill() {
+    local skill="$1"
+    if [ ! -d "$HOME/.agents/skills/$skill" ] && \
+            [ ! -d "$HOME/.claude/skills/$skill" ] && \
+            [ ! -d "$HOME/.cursor/skills/$skill" ]; then
+        return 0
     fi
+
+    echo "Removing ${skill} skill..."
+    if npx skills remove "$skill" --yes --global 2>/dev/null; then
+        echo "✅ ${skill} skill removed"
+    else
+        echo "⚠️  ${skill} skill removal failed"
+        return 1
+    fi
+}
+
+remove_chrome_devtools_axi() {
+    local session=""
+    local session_dir=""
+    local sessions_dir="$HOME/.chrome-devtools-axi/sessions"
+
+    if [ ! -d "$HOME/.agents/skills/chrome-devtools-axi" ] && \
+            [ ! -d "$HOME/.claude/skills/chrome-devtools-axi" ] && \
+            [ ! -d "$HOME/.cursor/skills/chrome-devtools-axi" ] && \
+            [ ! -d "$HOME/.chrome-devtools-axi" ]; then
+        return 0
+    fi
+
+    echo "Stopping chrome-devtools-axi..."
+    if ! CHROME_DEVTOOLS_AXI_SESSION=default \
+            npx -y chrome-devtools-axi stop >/dev/null 2>&1; then
+        echo "⚠️  chrome-devtools-axi could not be stopped; preserving its skill and state"
+        return 1
+    fi
+    if [ -d "$sessions_dir" ]; then
+        for session_dir in "$sessions_dir"/* "$sessions_dir"/.[!.]* "$sessions_dir"/..?*; do
+            [ -d "$session_dir" ] || continue
+            session=$(basename "$session_dir")
+            if ! CHROME_DEVTOOLS_AXI_SESSION="$session" \
+                    npx -y chrome-devtools-axi stop >/dev/null 2>&1; then
+                echo "⚠️  chrome-devtools-axi session $session could not be stopped; preserving its skill and state"
+                return 1
+            fi
+        done
+    fi
+    remove_agent_skill "chrome-devtools-axi" || return 1
+    rm -rf "$HOME/.chrome-devtools-axi"
 }
