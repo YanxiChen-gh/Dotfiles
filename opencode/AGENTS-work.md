@@ -71,7 +71,7 @@ When writing a design doc, RFC, spec, runbook, or playbook, use a doc-authoring 
 
 ### Planning artifacts
 
-For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser, not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs). Open it with `open-lavish <file>` and give the user the single verified URL that command returns; it owns Lavish startup and browser exposure for the current environment. Use `lavish-axi-safe poll <file>` and `lavish-axi-safe end <file>` for follow-up commands so a server start or version upgrade retains the same host-safe configuration. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
+For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser, not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs). Open it with `open-lavish <file>` and give the user the single localhost URL that command returns; it owns Lavish startup and local service verification, while the configured port forwarder provides browser access from a remote environment. Use `lavish-axi-safe poll <file>` and `lavish-axi-safe end <file>` for follow-up commands so a server start or version upgrade retains the same loopback-safe configuration. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
 
 ## Local Dev Environment (Worktrees & Port Forwarding)
 
@@ -83,27 +83,17 @@ In Zed remote sessions, agent-created worktrees don't appear in the sidebar's "O
 
 ### Resolving browser URLs
 
-Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before giving the user a local-server URL. The script owns environment detection, setup, and verification: Ona uses the Tailscale path, macOS returns localhost, and unknown remotes fail closed. Return the single URL it prints on stdout. Do not ask the user whether the agent is in a CDE or choose the exposure method yourself.
+Assume the user's automatic SSH port forwarder mirrors new remote listeners onto the same loopback port on their machine. Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before giving the user a local-server URL, and return the single `http://127.0.0.1:<port>` URL it prints on stdout. Do not use an editor port-forward, Tailscale, or a public tunnel by default.
 
-For Lavish artifacts, use `open-lavish <file>` instead of opening with `npx -y lavish-axi` directly, and use `lavish-axi-safe` for later `poll` or `end` commands. These helpers keep Lavish on loopback, allow the current Ona tailnet hostname whenever a CLI command starts or upgrades the server, safely reuse or repair shared state, and delegate final URL verification to `expose-port.sh`. Do not manually stop the shared Lavish server to repair a 403; the opener distinguishes a state-preserving server restart from ending another agent's session.
+The script verifies the service from the host where the agent runs. In a remote CDE it cannot verify the laptop-side forward, so describe the URL as locally verified only when the browser actually reaches it. If it does not, keep the service running and ask the user to check the automatic forwarder rather than silently changing exposure methods.
 
-The dispatcher delegates Ona to `expose-port-tailscale.sh`, which currently manages one root exposure on tailnet port 8080 and verifies it through the tailnet path, not a localhost curl. Other ACL-permitted ports are reserved for Vanta development services, so don't borrow them for agent tools.
+For Lavish artifacts, use `open-lavish <file>` instead of opening with `npx -y lavish-axi` directly, and use `lavish-axi-safe` for later `poll` or `end` commands. These helpers keep Lavish on loopback, prevent remote browser opening, safely reuse shared state, and delegate URL resolution to `expose-port.sh`. Do not manually stop another agent's shared Lavish server.
 
-In an Ona CDE, start the Vanta web stack with `~/dotfiles/scripts/vanta-dev-start-web-ona.sh` instead of `just dev-start-web --tailscale`. The personal wrapper gives Parcel a browser-safe public URL, waits for local nginx, and lets Dotfiles own the validated tailnet join and exposure check end to end.
+In an Ona CDE, start the Vanta web stack with `~/dotfiles/scripts/vanta-dev-start-web-ona.sh`. The wrapper waits for local nginx, keeps browser assets safe, and returns its forwarded localhost URL.
 
-One CDE cannot expose both Vanta and Lavish through this helper at the same time. If it reports that port 8080 already exposes a live target, do not infer that an HTTP 502 makes the mapping stale and do not replace it silently. Explain the conflict and ask the user which exposure to keep:
+Use `~/dotfiles/scripts/expose-port.sh --tailscale <local-port> [verify-path]` only when the user explicitly asks for a tailnet URL or automatic forwarding is unavailable. The fallback owns the single ACL-permitted tailnet port `8080`; it must not replace another live mapping. For public sharing, use an approved sharing mechanism rather than widening the local SSH forward.
 
-- **Keep Vanta:** leave its Tailscale exposure and local services untouched. End the current Lavish review or use the fallback below only after the user chooses this option.
-- **Keep Lavish:** after the user chooses this option, replace only the Tailscale Serve exposure and retry `expose-port.sh`. Leave Vanta running locally; do not run `just dev-stop-all` or stop its containers.
-
-This choice affects every agent in the CDE because Lavish shares one local server and Tailscale Serve state is host-wide. Never stop another Lavish session, remove an existing Serve mapping, or make either URL unavailable without the explicit choice above.
-
-If the dispatcher rejects an unsupported remote environment, fall back in order:
-
-1. **Editor port-forward** - VS Code/Cursor Ports panel (needs a human click).
-2. **ngrok** - last resort (public URL; tear it down when done).
-
-Don't use a static share/publish/export when you need a *live* server - it drops the interactive connection back to the agent.
+Don't use a static share, publish, or export when you need a live server; it drops the interactive connection back to the agent.
 
 ## MCP Server Preferences
 

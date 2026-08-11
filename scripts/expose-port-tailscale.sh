@@ -21,7 +21,7 @@ SOCKS_PORT="${ONA_TAILNET_SOCKS_PORT:-1055}"
 LOCK_FILE="/tmp/expose-port-tailscale-${TAILNET_PORT}.lock"
 
 if [[ "${IS_ON_ONA:-}" != "true" ]]; then
-    echo "Not an Ona CDE (IS_ON_ONA != true) - use 'tailscale serve' directly or the editor port-forward." >&2
+    echo "Not an Ona CDE (IS_ON_ONA != true) - use automatic SSH forwarding or 'tailscale serve' directly." >&2
     exit 1
 fi
 
@@ -113,7 +113,7 @@ if [[ -n "$CURRENT_TARGET" && "$CURRENT_TARGET" != "$TARGET" ]]; then
         CURRENT_PORT="${BASH_REMATCH[1]}"
         if (exec 3<>"/dev/tcp/localhost/${CURRENT_PORT}") 2>/dev/null; then
             echo "[expose-port] :${TAILNET_PORT} already exposes live target ${CURRENT_TARGET}; refusing to break its URL." >&2
-            echo "[expose-port] use an editor port-forward for localhost:${LOCAL_PORT}, or stop the existing exposure first." >&2
+            echo "[expose-port] use automatic SSH forwarding for localhost:${LOCAL_PORT}, or stop the existing exposure first." >&2
             exit 1
         fi
     else
@@ -154,7 +154,7 @@ if [[ "$STATUS" != 2* && "$STATUS" != 3* ]]; then
     echo "[expose-port] verification FAILED (${STATUS}) for ${URL}${VERIFY_PATH}" >&2
     if [[ "$STATUS" == 403 ]] \
             && jq -e '.error == "forbidden host"' "$RESPONSE_BODY" >/dev/null 2>&1; then
-        echo "[expose-port] Lavish rejected the tailnet hostname; open the artifact with 'open-lavish' so its startup allowlist is configured." >&2
+        echo "[expose-port] Lavish rejected the tailnet hostname; restart Lavish with ${HOST} in LAVISH_AXI_ALLOWED_HOSTS before using Tailscale exposure." >&2
     else
         echo "[expose-port] check the app is listening on localhost:${LOCAL_PORT} and 'tailscale serve status'" >&2
     fi

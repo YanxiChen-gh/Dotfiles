@@ -102,7 +102,7 @@
       "targets": {
         "cursor": {
           "file": "local-dev-environment.mdc",
-          "description": "Local dev environment ops: provisioning worktrees and resolving a verified browser-accessible URL for local servers across macOS and remote CDEs.",
+          "description": "Local dev environment ops: provisioning worktrees and resolving local-server URLs through automatic SSH port forwarding, with explicit sharing fallbacks.",
           "alwaysApply": false
         }
       }

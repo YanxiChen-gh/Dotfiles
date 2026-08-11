@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Open a Lavish artifact and print one verified browser-accessible URL.
+# Open a Lavish artifact and print its loopback URL after service verification.
 
 set -euo pipefail
 
@@ -24,7 +24,6 @@ shift
 
 LAVISH_PORT="${LAVISH_AXI_PORT:-4387}"
 LOCK_FILE="${OPEN_LAVISH_LOCK_FILE:-/tmp/open-lavish-${LAVISH_PORT}.lock}"
-PREPARE_SCRIPT="${OPEN_LAVISH_PREPARE_SCRIPT:-$SCRIPT_DIR/prepare-ona-tailnet.sh}"
 EXPOSE_SCRIPT="${OPEN_LAVISH_EXPOSE_SCRIPT:-$SCRIPT_DIR/expose-port.sh}"
 
 die() {
@@ -37,11 +36,10 @@ run_lavish() {
 }
 
 probe_health() {
-    local host_header="$1"
-    local body_file="$2"
+    local body_file="$1"
     local status
     if ! status=$(curl -sS --max-time 5 \
-        -H "Host: ${host_header}" \
+        -H "Host: 127.0.0.1:${LAVISH_PORT}" \
         -o "$body_file" -w '%{http_code}' \
         "http://127.0.0.1:${LAVISH_PORT}/health"); then
         status=unreachable
@@ -54,21 +52,21 @@ is_lavish_health() {
 }
 
 open_artifact() {
-    local allowed_host="$1"
     local output
-    shift
-    if [[ -n "$allowed_host" ]]; then
-        if ! output=$(LAVISH_AXI_HOST=127.0.0.1 \
-            LAVISH_AXI_LINK_HOST=127.0.0.1 \
-            LAVISH_AXI_ALLOWED_HOSTS="$allowed_host" \
-            LAVISH_AXI_NO_OPEN=1 \
-            run_lavish "$HTML_FILE" "$@"); then
+    if [[ "${IS_ON_ONA:-}" == true ]]; then
+        if ! output=$(
+            unset LAVISH_AXI_ALLOWED_HOSTS
+            LAVISH_AXI_HOST=127.0.0.1 \
+                LAVISH_AXI_LINK_HOST=127.0.0.1 \
+                LAVISH_AXI_NO_OPEN=1 \
+                run_lavish "$HTML_FILE" "$@"
+        ); then
             die "Lavish failed to open $HTML_FILE."
         fi
     elif ! output=$(run_lavish "$HTML_FILE" "$@"); then
         die "Lavish failed to open $HTML_FILE."
     fi
-    if [[ -n "$allowed_host" ]]; then
+    if [[ "${IS_ON_ONA:-}" == true ]]; then
         printf '%s\n' "$output" | sed 's/lavish-axi/lavish-axi-safe/g' >&2
     else
         printf '%s\n' "$output" >&2
@@ -76,47 +74,32 @@ open_artifact() {
     printf '%s\n' "$output" | sed -n 's/^[[:space:]]*url: "\([^"]*\)"[[:space:]]*$/\1/p' | tail -n 1
 }
 
-ALLOWED_HOST=""
 HEALTH_DIR=""
 if [[ "${IS_ON_ONA:-}" == true ]]; then
-    [[ -x "$PREPARE_SCRIPT" ]] || die "tailnet preparation helper is not executable: $PREPARE_SCRIPT"
-    ALLOWED_HOST=$($PREPARE_SCRIPT)
-
     exec 8>"$LOCK_FILE"
     flock 8
 
     HEALTH_DIR=$(mktemp -d)
     trap 'rm -rf "$HEALTH_DIR"' EXIT
     LOCAL_BODY="$HEALTH_DIR/local"
-    PUBLIC_BODY="$HEALTH_DIR/public"
-    LOCAL_STATUS=$(probe_health "127.0.0.1:${LAVISH_PORT}" "$LOCAL_BODY")
+    LOCAL_STATUS=$(probe_health "$LOCAL_BODY")
 
     if [[ "$LOCAL_STATUS" != unreachable ]]; then
+        # Preserve another agent's live review; the next server start uses the loopback-only environment above.
         if [[ "$LOCAL_STATUS" != 2* ]] || ! is_lavish_health "$LOCAL_BODY"; then
             die "port ${LAVISH_PORT} is occupied by a service that is not a healthy Lavish server."
-        fi
-
-        PUBLIC_STATUS=$(probe_health "${ALLOWED_HOST}:8080" "$PUBLIC_BODY")
-        if [[ "$PUBLIC_STATUS" == 2* ]] && is_lavish_health "$PUBLIC_BODY"; then
-            :
-        elif [[ "$PUBLIC_STATUS" == 403 ]] \
-                && jq -e '.error == "forbidden host"' "$PUBLIC_BODY" >/dev/null 2>&1; then
-            echo "open-lavish: restarting the shared Lavish server with ${ALLOWED_HOST} allowed." >&2
-            run_lavish stop >&2 || die "could not stop the misconfigured Lavish server."
-        else
-            die "Lavish Host validation probe failed (${PUBLIC_STATUS}) for ${ALLOWED_HOST}."
         fi
     fi
 fi
 
-LOCAL_URL=$(open_artifact "$ALLOWED_HOST" "$@")
+LOCAL_URL=$(open_artifact "$@")
 [[ -n "$LOCAL_URL" ]] || die "Lavish did not return a session URL."
 
 if [[ "${IS_ON_ONA:-}" == true ]]; then
     FINAL_BODY="$HEALTH_DIR/final"
-    FINAL_STATUS=$(probe_health "${ALLOWED_HOST}:8080" "$FINAL_BODY")
+    FINAL_STATUS=$(probe_health "$FINAL_BODY")
     if [[ "$FINAL_STATUS" != 2* ]] || ! is_lavish_health "$FINAL_BODY"; then
-        die "Lavish did not retain the required Host allowlist after opening (${FINAL_STATUS})."
+        die "Lavish did not become healthy on loopback after opening (${FINAL_STATUS})."
     fi
 fi
 

@@ -18,11 +18,6 @@ trap cleanup EXIT INT TERM
 
 mkdir -p "$TMP/bin"
 
-cat >"$TMP/bin/uname" <<'EOF'
-#!/bin/sh
-printf '%s\n' "${FAKE_UNAME:-Darwin}"
-EOF
-
 cat >"$TMP/bin/just" <<'EOF'
 #!/bin/sh
 : >"$FAKE_JUST_CALLED"
@@ -67,7 +62,7 @@ printf '%s\n' "$*" >"$TAILSCALE_ARGS_FILE"
 printf '%s\n' "http://test-node.example:8080${2}"
 EOF
 
-chmod +x "$TMP/bin/uname" "$TMP/bin/just" "$TMP/bin/curl" "$TMP/fake-tailscale"
+chmod +x "$TMP/bin/just" "$TMP/bin/curl" "$TMP/fake-tailscale"
 
 fail() {
     echo "FAIL: $*" >&2
@@ -79,32 +74,35 @@ FAKE_JUST_CALLED="$TMP/just.called"
 export FAKE_JUST_CALLED
 export PATH
 
-output=$(IS_ON_ONA='' FAKE_UNAME=Darwin "$SCRIPT" 4387 /session/local 2>"$TMP/local.err")
+output=$(IS_ON_ONA='' "$SCRIPT" 4387 /session/local 2>"$TMP/local.err")
 [ "$output" = "http://127.0.0.1:4387/session/local" ] || fail "local auto URL mismatch: $output"
-grep -q 'verified local URL (204)' "$TMP/local.err" || fail "local verification was not reported"
+grep -q 'verified loopback service (204)' "$TMP/local.err" || fail "loopback verification was not reported"
+grep -q 'automatic port forwarding is assumed' "$TMP/local.err" || fail "forwarding assumption was not reported"
 
-output=$(IS_ON_ONA='' FAKE_UNAME=Linux "$SCRIPT" --local 4387 /session/override 2>"$TMP/override.err")
+output=$(IS_ON_ONA='' "$SCRIPT" --local 4387 /session/override 2>"$TMP/override.err")
 [ "$output" = "http://127.0.0.1:4387/session/override" ] || fail "local override URL mismatch: $output"
 
-if IS_ON_ONA='' FAKE_UNAME=Linux "$SCRIPT" 4387 /session/remote >"$TMP/remote.out" 2>"$TMP/remote.err"; then
-    fail "unknown Linux remote should fail closed"
-fi
-[ ! -s "$TMP/remote.out" ] || fail "unknown remote wrote stdout"
-grep -q 'cannot infer browser reachability' "$TMP/remote.err" || fail "unknown remote error missing"
+output=$(IS_ON_ONA='' "$SCRIPT" 4387 /session/remote 2>"$TMP/remote.err")
+[ "$output" = "http://127.0.0.1:4387/session/remote" ] || fail "remote default URL mismatch: $output"
 
-if IS_ON_ONA='' FAKE_UNAME=Darwin FAKE_CURL_STATUS=500 "$SCRIPT" 4387 /broken >"$TMP/broken.out" 2>"$TMP/broken.err"; then
-    fail "failed local verification should fail"
+if IS_ON_ONA='' FAKE_CURL_STATUS=500 "$SCRIPT" 4387 /broken >"$TMP/broken.out" 2>"$TMP/broken.err"; then
+    fail "failed loopback verification should fail"
 fi
 [ ! -s "$TMP/broken.out" ] || fail "failed verification wrote stdout"
-grep -q 'local verification failed (500)' "$TMP/broken.err" || fail "failed verification error missing"
+grep -q 'loopback service verification failed (500)' "$TMP/broken.err" || fail "failed verification error missing"
 
 TAILSCALE_ARGS_FILE="$TMP/tailscale.args"
 export TAILSCALE_ARGS_FILE
 output=$(IS_ON_ONA=true EXPOSE_PORT_TAILSCALE_SCRIPT="$TMP/fake-tailscale" \
     "$SCRIPT" 8080 /health 2>"$TMP/cde.err")
-[ "$output" = "http://test-node.example:8080/health" ] || fail "Ona URL mismatch: $output"
-[ "$(cat "$TAILSCALE_ARGS_FILE")" = "8080 /health" ] || fail "Ona delegation arguments mismatch"
+[ "$output" = "http://127.0.0.1:8080/health" ] || fail "Ona default URL mismatch: $output"
+[ ! -e "$TAILSCALE_ARGS_FILE" ] || fail "Ona default unexpectedly delegated to Tailscale"
 [ ! -e "$FAKE_JUST_CALLED" ] || fail "generic exposure invoked a Vanta just recipe"
+
+output=$(IS_ON_ONA=true EXPOSE_PORT_TAILSCALE_SCRIPT="$TMP/fake-tailscale" \
+    "$SCRIPT" --tailscale 8080 /health 2>"$TMP/tailscale.err")
+[ "$output" = "http://test-node.example:8080/health" ] || fail "explicit Tailscale URL mismatch: $output"
+[ "$(cat "$TAILSCALE_ARGS_FILE")" = "8080 /health" ] || fail "explicit Tailscale delegation arguments mismatch"
 
 if "$SCRIPT" invalid / >"$TMP/invalid.out" 2>"$TMP/invalid.err"; then
     fail "invalid port should fail"
@@ -375,7 +373,7 @@ if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /forbidden-host >"$TMP/forbidden-host
     fail "Lavish forbidden-host response should fail verification"
 fi
 unset FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY
-grep -q "open the artifact with 'open-lavish'" "$TMP/forbidden-host.err" || fail "forbidden-host remedy missing"
+grep -q 'LAVISH_AXI_ALLOWED_HOSTS' "$TMP/forbidden-host.err" || fail "forbidden-host remedy missing"
 [ ! -s "$FAKE_SERVE_STATE" ] || fail "forbidden-host verification left a newly created Serve mapping"
 
 reset_serve

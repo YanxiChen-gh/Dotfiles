@@ -61,7 +61,7 @@ EOF
 cat >"$TMP/fake-expose" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >>"$FAKE_EXPOSE_ACTIONS"
-printf '%s\n' 'http://test-node.example:8080/'
+printf '%s\n' 'http://127.0.0.1:8080/'
 EOF
 
 chmod +x "$TMP/bin/just" "$TMP/bin/curl" "$TMP/bin/sleep" "$TMP/fake-expose"
@@ -85,7 +85,7 @@ reset_case() {
 reset_case
 printf '%s\n' '<html><script src="/app.js"></script></html>' >"$FAKE_CURL_BODY_FILE"
 output=$(IS_ON_ONA=true EXPOSE_PORT_SCRIPT="$TMP/fake-expose" "$SCRIPT" 2>"$TMP/default.err")
-[ "$output" = 'http://test-node.example:8080/' ] || fail "wrapper URL mismatch: $output"
+[ "$output" = 'http://127.0.0.1:8080/' ] || fail "wrapper URL mismatch: $output"
 [ "$(cat "$FAKE_JUST_ACTIONS")" = '/|dev-start-web' ] || fail "browser-safe page should not replace web-client"
 [ "$(cat "$FAKE_EXPOSE_ACTIONS")" = '8080 /' ] || fail "wrapper exposed the wrong endpoint"
 
@@ -101,7 +101,7 @@ reset_case
 printf '%s\n' '<html><script src="http://127.0.0.1:9000/app.js"></script></html>' >"$FAKE_CURL_BODY_FILE"
 printf '%s\n' '<html><script src="/app.js"></script></html>' >"$FAKE_REPAIRED_BODY_FILE"
 output=$(IS_ON_ONA=true EXPOSE_PORT_SCRIPT="$TMP/fake-expose" "$SCRIPT" 2>"$TMP/repair.err")
-[ "$output" = 'http://test-node.example:8080/' ] || fail "repaired wrapper URL mismatch: $output"
+[ "$output" = 'http://127.0.0.1:8080/' ] || fail "repaired wrapper URL mismatch: $output"
 [ "$(cat "$FAKE_JUST_ACTIONS")" = '/|dev-start-web
 /|dev-replace web-client' ] || fail "wrapper did not perform exactly one targeted repair"
 grep -q 'http://127.0.0.1:9000/app.js' "$TMP/repair.err" || fail "repair diagnostic omitted the offending URL"
