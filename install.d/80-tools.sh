@@ -146,41 +146,7 @@ install_netlify_cli() {
 # Install LangSmith CLI
 # Usage: install_langsmith_cli
 install_langsmith_cli() {
-    echo "Checking for LangSmith CLI..."
-
-    if command -v langsmith >/dev/null 2>&1; then
-        echo "✅ LangSmith CLI already installed"
-        return 0
-    fi
-
-    # Prefer uv (already installed above), then pipx, then pip as fallback
-    if command -v uv >/dev/null 2>&1; then
-        echo "Installing LangSmith CLI with uv..."
-        if uv tool install --upgrade "langsmith[cli]"; then
-            echo "✅ LangSmith CLI installed successfully"
-            return 0
-        fi
-    fi
-
-    if command -v pipx >/dev/null 2>&1; then
-        echo "Installing LangSmith CLI with pipx..."
-        if pipx install --force "langsmith[cli]"; then
-            echo "✅ LangSmith CLI installed successfully"
-            return 0
-        fi
-    fi
-
-    if command -v python3 >/dev/null 2>&1; then
-        echo "Installing LangSmith CLI with pip..."
-        if python3 -m pip install --user -U "langsmith[cli]"; then
-            echo "✅ LangSmith CLI installed successfully"
-            return 0
-        fi
-    fi
-
-    echo "⚠️  Warning: Failed to install LangSmith CLI"
-    echo "   Try manually: uv tool install 'langsmith[cli]'"
-    return 1
+    install_from_url "LangSmith CLI" "langsmith" "https://cli.langsmith.com/install.sh"
 }
 
 # Install the Statsig CLI (siggy) and lock in the console API key.
