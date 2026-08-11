@@ -38,4 +38,6 @@ export PATH="$HOME/.local/bin:$PATH"
 
 if [ -n "${DOTFILES_DIR:-}" ]; then
     alias gws-work-auth="$DOTFILES_DIR/scripts/setup_work_google_workspace_auth.sh"
+    alias setup-vanta-data-apps="$DOTFILES_DIR/scripts/setup-vanta-data-apps.sh"
+    alias auth-vanta-data-apps-snowflake="$DOTFILES_DIR/scripts/auth-vanta-data-apps-snowflake.sh"
 fi

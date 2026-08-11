@@ -109,6 +109,20 @@ On work machines, `install.sh` pins and installs [`gws`](https://github.com/goog
 
 The OAuth client is shared configuration, not a per-machine Cloud project. Supply `GOOGLE_WORKSPACE_CLI_CLIENT_ID` and `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET` through work secrets; Dotfiles syncs only those two Google Workspace values from Ona to Cursor Cloud. Alternatively, place the existing desktop client at `~/.config/gws/client_secret.json`. Never commit that file, `credentials.enc`, `.encryption_key`, or an exported refresh token. The helper rejects access-token and external-credentials-file overrides. Cursor's hybrid port forwarding normally handles the random localhost OAuth callback in a remote environment; if it does not, forward the printed port in the Ports panel before opening the URL.
 
+### Vanta data apps
+
+On a work machine, provision [`VantaInc/data-apps`](https://github.com/VantaInc/data-apps) and its no-secret Snowflake profile with:
+
+```sh
+setup-vanta-data-apps --user <your-name>@vanta.com
+```
+
+The helper clones to `/workspaces/data-apps` by default, follows the repository's `venv` and `requirements.txt` setup, and configures `JYFRXUC-VANTA` as the connector default. Python 3.11 or newer is required for safe TOML parsing. It enables temporary credential caching and enforces the file modes Snowflake requires. Existing unrelated profiles are preserved; conflicting managed values must be resolved explicitly.
+
+Refresh Snowflake SSO yourself in a private terminal with `auth-vanta-data-apps-snowflake`; the helper rejects non-interactive agent execution so authorization URLs cannot enter a transcript. In an Ona CDE, it opens a creator-only callback bridge and prints the exact foreground command to run on the Mac. Keep both terminals open until authentication and the read-only traces-table probe complete. The helper never captures the authorization URL, redirect, code, or token.
+
+Run Streamlit on port `8501`, then use `scripts/expose-port.sh 8501 /_stcore/health` to verify it and return `http://127.0.0.1:8501/_stcore/health`. The automatic SSH forwarder makes the same port available on the Mac. If Streamlit already cached an expired or failed Snowflake connection, restart Streamlit after refreshing SSO.
+
 ### Agent maturity
 
 The agent-maturity bootstrap installs one model-agnostic engine and private data store. Claude Code uses native lifecycle hooks, Codex uses the same hook scripts through `~/.codex/hooks.json`, and OpenCode uses `dotfiles-harness.js` to adapt its plugin events. All three discover the same skills without copying them. Codex requires a one-time `/hooks` review after installation or whenever the hook definition changes.
