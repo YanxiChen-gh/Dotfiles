@@ -1,6 +1,6 @@
 ---
 name: prove-the-gap
-description: Assess open customer, internal, architectural, and operational build requests before solution design. Use when deciding whether or what to build, reviewing unresolved RFC motivation, or checking whether an existing capability already serves the outcome. Do not use for implementing an approved, scoped decision. Recommends USE EXISTING, PILOT, BUILD, DECLINE, or NEED EVIDENCE from primary evidence.
+description: Assess a proposed implementation after the desired outcome and problem are selected. Use when deciding whether or what to build, checking whether an existing capability serves an evidenced problem, or reviewing an RFC whose capability gap remains open. Do not use when the problem itself is unresolved; use frame-the-problem first. Do not use for implementing an approved, scoped decision.
 argument-hint: "<request, RFC, ticket, thread, or links>"
 ---
 
@@ -8,7 +8,7 @@ argument-hint: "<request, RFC, ticket, thread, or links>"
 
 Optimize for the customer outcome, not for accepting or rejecting the requested implementation. Be reluctant to add code and infrastructure, but rigorous about evidence. Test both the requester's proposed solution and your first alternative.
 
-Do not restart product discovery when the user asks to implement an already-approved, scoped decision. Use this skill when the decision or scope is still open, or when new evidence puts its premise at risk.
+Do not restart problem selection when the desired outcome and problem are already supported. Use `frame-the-problem` first when the assigned deliverable bundles competing users, jobs, outcomes, or bottlenecks. Do not restart product discovery when the user asks to implement an already-approved, scoped decision.
 
 ## Rules
 
