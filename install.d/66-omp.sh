@@ -123,9 +123,6 @@ setup_omp_config() {
     link_dotfiles_file \
         "$source_dir/agent/extensions/dotfiles-harness.ts" \
         "$ext_dir/dotfiles-harness.ts" || return 1
-    if [ -f "$source_dir/agent/mcp.json" ]; then
-        link_dotfiles_file "$source_dir/agent/mcp.json" "$agent_dir/mcp.json" || return 1
-    fi
 
     # Global rules: reuse the same generated aggregate opencode uses. omp appends
     # APPEND_SYSTEM.md to the system prompt.
@@ -156,15 +153,17 @@ setup_omp_rtk() {
     fi
 }
 
-sync_omp_mcp() {
-    omp_experiment_enabled || return 0
+setup_omp_mcp() {
     command -v python3 >/dev/null 2>&1 || return 0
 
     script_dir=$(resolve_script_dir) || return 1
-    if python3 "$script_dir/scripts/sync_omp_mcp_from_claude.py"; then
-        return 0
+    if [ "${WORK_MACHINE:-}" = "1" ]; then
+        omp_experiment_enabled || return 0
+        python3 "$script_dir/scripts/ensure_omp_mcp.py" && return 0
+    else
+        python3 "$script_dir/scripts/ensure_omp_mcp.py" --remove-all-profiles && return 0
     fi
-    echo "⚠️  omp MCP sync from Claude Code failed"
+    echo "Warning: OMP MCP setup failed"
     return 1
 }
 

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "glean_default": {
+      "type": "http",
+      "url": "https://vanta-be.glean.com/mcp/default"
+    }
+  }
+}

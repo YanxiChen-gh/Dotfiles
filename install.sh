@@ -138,4 +138,4 @@ setup_work_tools
 sync_cursor_mcp_from_claude || true
 sync_opencode_mcp_from_claude || true
 setup_omp_rtk || true
-sync_omp_mcp || true
+setup_omp_mcp || true

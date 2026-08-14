@@ -49,6 +49,7 @@ for f in \
     opencode/opencode \
     shell/work.sh \
     tests/e2e/test_agent_rule_scopes.sh \
+    tests/e2e/test_auth_vanta_agents.sh \
     tests/e2e/test_opencode_setup.sh \
     tests/e2e/test_herdr_remote_opener.sh \
     tests/e2e/test_vanta_dev_start_web_ona.sh \
@@ -97,7 +98,7 @@ else
 fi
 
 printf '\n== python3 -m py_compile ==\n'
-for f in scripts/configure_vanta_snowflake.py scripts/find-loopback-browser-asset.py scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py scripts/sync_omp_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py herdr/remote-opener/open_url.py; do
+for f in scripts/auth-vanta-agents.py scripts/configure_vanta_snowflake.py scripts/ensure_omp_mcp.py scripts/find-loopback-browser-asset.py scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py herdr/remote-opener/open_url.py; do
     if [ -f "$f" ]; then
         if ! python3 -m py_compile "$f"; then
             fail "py_compile $f"
@@ -119,7 +120,7 @@ fi
 
 if command -v shellcheck >/dev/null 2>&1; then
     printf '\n== shellcheck (-S error) ==\n'
-    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh claude/style-eval-engine.sh claude/*-style/eval/*.sh herdr/herdr-remote.sh herdr/new-agent-tab.sh herdr/treehouse-task-shell.sh opencode/opencode opencode/scripts/slack-webhook-post.sh scripts/auth-vanta-data-apps-snowflake.sh scripts/expose-port.sh scripts/expose-port-tailscale.sh scripts/lavish-axi-safe.sh scripts/open-lavish.sh scripts/prepare-ona-tailnet.sh scripts/setup-vanta-data-apps.sh scripts/vanta-dev-start-web-ona.sh scripts/setup_work_github_auth.sh scripts/setup_work_google_workspace_auth.sh shared-skills/ona-oauth-callback/bridge.sh shell/work.sh scripts/verify-dotfiles.sh tests/e2e/test_agent_rule_scopes.sh tests/e2e/test_expose_port.sh tests/e2e/test_google_workspace_cli.sh tests/e2e/test_herdr_remote_opener.sh tests/e2e/test_herdr_treehouse.sh tests/e2e/test_ona_oauth_callback.sh tests/e2e/test_open_lavish.sh tests/e2e/test_opencode_setup.sh tests/e2e/test_vanta_data_apps.sh tests/e2e/test_vanta_dev_start_web_ona.sh; do
+    for f in install.sh install.d/*.sh sync-claude-skills-to-repo.sh sync-cursor-app-to-dotfiles.sh sync-ona-env-to-cursor-cloud.sh claude/style-eval-engine.sh claude/*-style/eval/*.sh herdr/herdr-remote.sh herdr/new-agent-tab.sh herdr/treehouse-task-shell.sh opencode/opencode opencode/scripts/slack-webhook-post.sh scripts/auth-vanta-data-apps-snowflake.sh scripts/expose-port.sh scripts/expose-port-tailscale.sh scripts/lavish-axi-safe.sh scripts/open-lavish.sh scripts/prepare-ona-tailnet.sh scripts/setup-vanta-data-apps.sh scripts/vanta-dev-start-web-ona.sh scripts/setup_work_github_auth.sh scripts/setup_work_google_workspace_auth.sh shared-skills/ona-oauth-callback/bridge.sh shell/work.sh scripts/verify-dotfiles.sh tests/e2e/test_agent_rule_scopes.sh tests/e2e/test_auth_vanta_agents.sh tests/e2e/test_expose_port.sh tests/e2e/test_google_workspace_cli.sh tests/e2e/test_herdr_remote_opener.sh tests/e2e/test_herdr_treehouse.sh tests/e2e/test_ona_oauth_callback.sh tests/e2e/test_open_lavish.sh tests/e2e/test_opencode_setup.sh tests/e2e/test_vanta_data_apps.sh tests/e2e/test_vanta_dev_start_web_ona.sh; do
         if out=$(shellcheck -S error -x "$f" 2>&1); then
             pass "shellcheck $f"
         else

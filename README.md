@@ -110,6 +110,15 @@ The installer links the transport at `~/.local/bin/slack-webhook-post.sh` but ne
 
 Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. The Obsidian AI Platform plugin uses the same shared path for OpenCode, omp, and Codex while Claude Code loads the plugin natively and Cursor receives its generated workspace copies. Managed AI Platform links follow the active Obsidian checkout; unrelated existing skills are preserved. Claude Code, Codex, OpenCode, omp, and Cursor discover their applicable paths natively. Cursor-only meta-skills stay under `cursor/skills/`.
 
+### Work agent authentication
+
+On work machines, run `auth-vanta-agents --status` to check the OMP Glean MCP
+and `slack-vanta` read-only credentials. To repair missing auth, run
+`auth-vanta-agents` yourself in a private interactive terminal. The helper
+opens only the missing OAuth flow, supports `--profile <name>` for named OMP
+profiles, and never prints or copies credential payloads. Agents may run only
+the status command.
+
 ### Google Workspace CLI
 
 On work machines, `install.sh` pins and installs [`gws`](https://github.com/googleworkspace/cli). Run `gws-work-auth` once per fresh machine to authorize Docs, Sheets, Slides, and the Drive operations used for comments, permissions, and file metadata. The helper is idempotent, accepts only a valid `@vanta.com` account, and deliberately uses explicit scopes so `gws` does not add `cloud-platform` access.

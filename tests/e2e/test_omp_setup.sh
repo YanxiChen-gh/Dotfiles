@@ -394,6 +394,7 @@ rm -rf "$TMP/disabled-bin" "$TMP/disabled-agent"
   export HOME="$TMP/home"
   export PATH="$TMP/bin:/usr/bin:/bin"
   export OMP_EXPERIMENT=0
+  export WORK_MACHINE=1
   export OMP_GATE_LOG="$TMP/disabled-gate.log"
   export FAKE_INSTALL_ARGS="$TMP/disabled-install-args"
   export PI_INSTALL_DIR="$TMP/disabled-bin"
@@ -404,7 +405,7 @@ rm -rf "$TMP/disabled-bin" "$TMP/disabled-agent"
   install_omp
   setup_omp_config
   setup_omp_rtk
-  sync_omp_mcp
+  setup_omp_mcp
   install_herdr_omp_integration
 )
 [ ! -s "$TMP/disabled-gate.log" ] || {
@@ -416,21 +417,39 @@ rm -rf "$TMP/disabled-bin" "$TMP/disabled-agent"
   exit 1
 }
 
-# With no flag, ancillary RTK, MCP, and Herdr integration entry points run.
+# Personal setup removes only the exact Dotfiles-managed Glean definition.
+: > "$TMP/personal-gate.log"
+(
+  export HOME="$TMP/home"
+  export PATH="$TMP/bin:/usr/bin:/bin"
+  export OMP_EXPERIMENT=0
+  export WORK_MACHINE=0
+  export OMP_GATE_LOG="$TMP/personal-gate.log"
+  . "$ROOT/install.d/66-omp.sh"
+  resolve_script_dir() { printf '%s\n' "$ROOT"; }
+  setup_omp_mcp
+)
+[ "$(cat "$TMP/personal-gate.log")" = "python3 $ROOT/scripts/ensure_omp_mcp.py --remove-all-profiles" ] || {
+  echo "FAIL: personal setup did not remove the managed OMP Glean definition" >&2
+  exit 1
+}
+
 : > "$TMP/default-gate.log"
 (
   export HOME="$TMP/home"
   export PATH="$TMP/bin:/usr/bin:/bin"
+  export WORK_MACHINE=1
   unset OMP_EXPERIMENT
   export OMP_GATE_LOG="$TMP/default-gate.log"
   . "$ROOT/install.d/66-omp.sh"
   resolve_script_dir() { printf '%s\n' "$ROOT"; }
   setup_omp_rtk
-  sync_omp_mcp
+  setup_omp_mcp
   install_herdr_omp_integration
 )
 grep -F 'rtk init -g --agent omp --auto-patch' "$TMP/default-gate.log" >/dev/null
-grep -F "python3 $ROOT/scripts/sync_omp_mcp_from_claude.py" "$TMP/default-gate.log" >/dev/null
+grep -F "python3 $ROOT/scripts/ensure_omp_mcp.py" "$TMP/default-gate.log" >/dev/null
+! grep -F -- '--remove' "$TMP/default-gate.log" >/dev/null
 grep -F 'herdr integration install omp' "$TMP/default-gate.log" >/dev/null
 
 MATURITY="$TMP/maturity-ready"
