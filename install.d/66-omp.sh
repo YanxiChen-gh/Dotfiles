@@ -184,7 +184,10 @@ install_herdr_omp_integration() {
 }
 
 setup_omp_integration() {
-    omp_experiment_enabled || return 0
+    if ! omp_experiment_enabled; then
+        echo "ℹ️  omp integration disabled by OMP_EXPERIMENT=0"
+        return 0
+    fi
 
     ready_marker=$(omp_ready_marker)
     if ! rm -f "$ready_marker"; then

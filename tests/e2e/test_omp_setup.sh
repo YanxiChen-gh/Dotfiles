@@ -329,6 +329,21 @@ chmod +x "$TMP/bin/herdr"
   exit 1
 }
 
+grep -qFx 'setup_omp_integration || exit 1' "$ROOT/install.sh" || {
+  echo "FAIL: top-level install does not require enabled omp setup" >&2
+  exit 1
+}
+
+disabled_setup_output=$(
+  export OMP_EXPERIMENT=0
+  . "$ROOT/install.d/66-omp.sh"
+  setup_omp_integration
+)
+[ "$disabled_setup_output" = "ℹ️  omp integration disabled by OMP_EXPERIMENT=0" ] || {
+  echo "FAIL: omp opt-out was not reported clearly" >&2
+  exit 1
+}
+
 cat > "$TMP/bin/omp" <<'EOF'
 #!/bin/sh
 printf '%s\n' "omp $*" >> "$OMP_GATE_LOG"
