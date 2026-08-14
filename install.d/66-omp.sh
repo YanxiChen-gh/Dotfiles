@@ -73,6 +73,32 @@ remove_legacy_omp_link() {
     fi
 }
 
+configure_omp_openai_default() {
+    [ -n "${OPENAI_API_KEY:-}" ] || return 0
+
+    omp_binary="${PI_INSTALL_DIR:-$HOME/.local/bin}/omp"
+    if [ ! -x "$omp_binary" ]; then
+        echo "⚠️  Warning: cannot configure omp defaults; $omp_binary is unavailable"
+        return 1
+    fi
+
+    model_roles=$(cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config get modelRoles 2>/dev/null) || {
+        echo "⚠️  Warning: could not read omp model roles"
+        return 1
+    }
+    updated_roles=$(printf '%s' "$model_roles" \
+        | jq -c '.default = "openai/gpt-5.6-sol"') || {
+        echo "⚠️  Warning: could not update omp model roles"
+        return 1
+    }
+    (cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config set modelRoles "$updated_roles" >/dev/null) || return 1
+    (cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config set setupVersion 1 >/dev/null) || return 1
+    echo "✅ omp default model set to openai/gpt-5.6-sol"
+}
+
 setup_omp_config() {
     omp_experiment_enabled || return 0
 
@@ -104,6 +130,7 @@ setup_omp_config() {
         "$agent_dir/APPEND_SYSTEM.md" \
         "$source_dir/../opencode/AGENTS.md" \
         "$source_dir/../opencode/AGENTS-work.md" || return 1
+    configure_omp_openai_default || return 1
 
     echo "✅ omp harness extension and global rules linked ($agent_dir)"
 }

@@ -13,18 +13,18 @@ opencode setup.
 
 | | opencode | omp |
 | --- | ---: | ---: |
-| Harness plugin/extension | 1,813 | 209 |
+| Harness plugin/extension | 1,813 | 287 |
 | Model + agent config | 37 | 0 |
 | Auto-mode wrapper | 70 | 0 |
-| Install module | 126 | 154 |
-| **Total** | **2,046** | **363** |
+| Install module | 126 | 181 |
+| **Total** | **2,046** | **468** |
 
-The plugin drops ~88%. The reason is not cleverness - it is that omp provides
+The plugin drops ~85%. The reason is not cleverness - it is that omp provides
 first-party what opencode made us rebuild:
 
 | Capability | opencode had to build it | omp |
 | --- | --- | --- |
-| Herdr title/subagent/state sync | ~500 lines of `report-metadata` plumbing | `herdr integration install omp` (native lifecycle + session restore) |
+| Herdr title/subagent/state sync | ~500 lines of `report-metadata` plumbing | native lifecycle + Agent Hub; small workspace-title bridge kept |
 | Root vs subagent lineage | hydrate + walk `parentID` | tracked natively (see gaps) |
 | Event ordering / dedupe queues | ~120 lines | typed, ordered lifecycle events |
 | Same-session checkpoint/compaction | ~400 lines | native auto-compaction |
@@ -40,10 +40,11 @@ around them.
 
 ## Layout
 
-- `agent/extensions/dotfiles-harness.ts` - the ported gates + Slack notifier.
+- `agent/extensions/dotfiles-harness.ts` - the ported gates, Herdr title bridge, and Slack notifier.
 - `install.d/66-omp.sh` links these into `~/.omp/agent/`, runs the Herdr
   integration, registers RTK (best-effort), and syncs the Glean MCP overlay.
-  omp's native setup owns credentials, model selection, and mutable settings.
+  With `OPENAI_API_KEY`, setup selects `openai/gpt-5.6-sol` without overriding
+  its model-default reasoning level. Otherwise omp's native onboarding owns setup.
 
 ## Parity with the opencode setup
 
@@ -51,11 +52,11 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 
 | opencode | omp |
 | --- | --- |
-| Model + agents | Native first-run sign-in and model picker |
+| Model + agents | `openai/gpt-5.6-sol` via `OPENAI_API_KEY`; native onboarding when absent |
 | Auto mode (`--auto` wrapper) | Native `yolo` default |
 | Scope / verify / PR / comment gates | ported in `dotfiles-harness.ts` (same scripts) |
 | Slack attention notifications | ported in `dotfiles-harness.ts` |
-| Herdr session/subagent/state sync | native `herdr integration install omp` |
+| Herdr session/subagent/state sync | native `herdr integration install omp`; workspace title mirrored by the harness |
 | Same-session checkpoint/compaction | native auto-compaction |
 | Global rules (`AGENTS.md`) | `APPEND_SYSTEM.md` (linked) |
 | Skills: `~/.claude/skills` + `~/.agents/skills` (shared, advisor, agent-maturity) | **native** - omp's Claude + Agents providers read the same dirs |
@@ -70,6 +71,12 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 The skills row is the important one: omp discovers `~/.claude/skills` and
 `~/.agents/skills` natively, so the shared, advisor, agent-maturity, and Claude
 Code skills you already symlink there show up in omp with zero extra config.
+The native Agent Hub owns subagent detail. Herdr remains the cross-workspace
+lifecycle view and does not duplicate omp's task list.
+
+Lavish review is allowed only in a human-interactive omp TUI. Run its safe poll
+as one managed async Bash job per feedback round; omp delivers completion back
+to the session, so no periodic polling or detached shell process is needed.
 
 ## Documented gaps to verify in a real run
 
@@ -97,8 +104,8 @@ and maturity-data sync. Add it once the trial proves the rest is worth keeping.
 export OMP_EXPERIMENT=1
 ./install.sh                      # runs install_omp + setup_omp_config + install_herdr_omp_integration
 
-# 2. Complete omp's native sign-in and default-model setup
-omp                               # choose a provider, sign in, and select a model
+# 2. Start omp. OPENAI_API_KEY is discovered automatically when available.
+omp                               # otherwise complete native onboarding
 herdr integration status          # should show omp: current (v3)
 
 # 3. Run it in a Herdr pane and confirm it shows as an `omp` agent, not a plain shell
@@ -113,6 +120,7 @@ reverts to opencode. Override per launch with `HERDR_AGENT_CMD=omp` (or `opencod
 When seeding an initial prompt via `prefix+a --select`, the launcher passes omp a
 mode-600 temporary `@file` argument. omp consumes it after first-run setup, so the
 workflow does not depend on a guessed ready string or delay.
+The popup uses Enter for a newline, Ctrl+Enter to submit, and Esc to skip.
 
 opencode stays installed and coexists (omp uses its own `~/.omp` dir). Disable the
 experiment by unsetting `OMP_EXPERIMENT` and re-running `install.sh`; the opencode

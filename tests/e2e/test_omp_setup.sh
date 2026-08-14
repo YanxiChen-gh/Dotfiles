@@ -1,5 +1,5 @@
 #!/bin/sh
-# E2E: omp installs as a standalone binary and leaves runtime auth/model state to omp.
+# E2E: omp installs standalone and selects the standard OpenAI default when available.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -19,7 +19,33 @@ printf '%s\n' "$*" > "$FAKE_INSTALL_ARGS"
 mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/omp" <<'OMP'
 #!/bin/sh
-printf '%s\n' 'omp 17.3.3-test'
+case "${1:-}" in
+  --version)
+    printf '%s\n' 'omp 17.3.3-test'
+    ;;
+  config)
+    [ -z "${PI_CONFIG_FILES:-}" ] || exit 95
+    state_dir=${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}
+    mkdir -p "$state_dir"
+    case "${2:-}:${3:-}" in
+      get:modelRoles)
+        if [ -f "$state_dir/fake-model-roles.json" ]; then
+          cat "$state_dir/fake-model-roles.json"
+        else
+          printf '%s\n' '{}'
+        fi
+        ;;
+      set:modelRoles)
+        printf '%s\n' "$4" > "$state_dir/fake-model-roles.json"
+        ;;
+      set:setupVersion)
+        printf '%s\n' "$4" > "$state_dir/fake-setup-version"
+        ;;
+      *) exit 93 ;;
+    esac
+    ;;
+  *) exit 94 ;;
+esac
 OMP
 chmod +x "$HOME/.local/bin/omp"
 INSTALLER
@@ -105,12 +131,15 @@ mkdir -p "$OLD_AGENT/extensions" "$UNMANAGED_AGENT/extensions"
 ln -s "$ROOT/omp/agent/config.yml" "$OLD_AGENT/config.yml"
 ln -s "$ROOT/omp/agent/models.yml" "$OLD_AGENT/models.yml"
 printf 'restored: true\n' > "$OLD_AGENT/config.yml.pre-dotfiles"
+printf '%s\n' '{"smol":"openai/gpt-5.4-mini"}' > "$OLD_AGENT/fake-model-roles.json"
 printf 'keep: true\n' > "$UNMANAGED_AGENT/config.yml"
 printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
 
 (
   export HOME="$TMP/home"
   export OMP_EXPERIMENT=1
+  export OPENAI_API_KEY=test-openai-key
+  export PI_CONFIG_FILES="$TMP/project-overlay.yml"
   export PI_CODING_AGENT_DIR="$OLD_AGENT"
   . "$ROOT/install.d/10-helpers.sh"
   . "$ROOT/install.d/66-omp.sh"
@@ -129,10 +158,20 @@ printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
   echo "FAIL: harness extension was not linked" >&2
   exit 1
 }
+jq -e '.default == "openai/gpt-5.6-sol" and .smol == "openai/gpt-5.4-mini"' \
+  "$OLD_AGENT/fake-model-roles.json" >/dev/null || {
+  echo "FAIL: OpenAI default did not preserve existing model roles" >&2
+  exit 1
+}
+[ "$(cat "$OLD_AGENT/fake-setup-version")" = "1" ] || {
+  echo "FAIL: OpenAI environment did not complete native setup" >&2
+  exit 1
+}
 
 (
   export HOME="$TMP/home"
   export OMP_EXPERIMENT=1
+  unset OPENAI_API_KEY
   export PI_CODING_AGENT_DIR="$UNMANAGED_AGENT"
   . "$ROOT/install.d/10-helpers.sh"
   . "$ROOT/install.d/66-omp.sh"
@@ -141,6 +180,10 @@ printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
 )
 grep -F 'keep: true' "$UNMANAGED_AGENT/config.yml" >/dev/null
 grep -F 'keep: true' "$UNMANAGED_AGENT/models.yml" >/dev/null
+[ ! -e "$UNMANAGED_AGENT/fake-model-roles.json" ] || {
+  echo "FAIL: model defaults changed without OPENAI_API_KEY" >&2
+  exit 1
+}
 
 # Exercise the extension hook when Bun is available; otherwise retain static
 # assertions so CI still catches the recursive turn-start implementation.
@@ -155,6 +198,11 @@ if [ -n "$BUN_BIN" ]; then
 printf '%s\n' 'scope brief'
 EOF
   chmod +x "$TMP/maturity/scripts/scope-gate-userpromptsubmit.sh"
+  cat > "$TMP/bin/herdr" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$HERDR_LOG"
+EOF
+  chmod +x "$TMP/bin/herdr"
   cat > "$TMP/test-extension.ts" <<'EOF'
 import { pathToFileURL } from "node:url"
 
@@ -179,12 +227,92 @@ const result = await handler(
 if (JSON.stringify(result.systemPrompt) !== JSON.stringify(["base", "scope brief"])) {
   throw new Error(`unexpected system prompt: ${JSON.stringify(result)}`)
 }
+
+const toolCall = handlers.get("tool_call")
+if (!toolCall) throw new Error("tool_call hook is missing")
+const blocked = await toolCall(
+  { toolName: "bash", input: { command: "open-lavish /tmp/review.html" } },
+  { mode: "print", sessionManager: { getSessionId: () => "task-session" } },
+) as { block?: boolean }
+if (blocked.block !== true) throw new Error("non-UI task session may launch Lavish")
+const foregroundPoll = await toolCall(
+  { toolName: "bash", input: { command: "lavish-axi-safe poll /tmp/review.html" } },
+  { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
+) as { block?: boolean }
+if (foregroundPoll.block !== true) throw new Error("foreground Lavish poll was allowed")
+const delegatedPoll = await toolCall(
+  { toolName: "hub", input: { op: "start", application: "lavish-axi-safe", args: ["poll", "/tmp/review.html"] } },
+  { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
+) as { block?: boolean }
+if (delegatedPoll.block !== true) throw new Error("non-Bash Lavish poll was allowed")
+const allowed = await toolCall(
+  { toolName: "bash", input: { command: "lavish-axi-safe poll /tmp/review.html", async: true } },
+  { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
+) as { block?: boolean } | undefined
+if (allowed?.block === true) throw new Error("interactive root session cannot launch Lavish")
+
+const sessionStart = handlers.get("session_start")
+const turnEnd = handlers.get("turn_end")
+if (!sessionStart || !turnEnd) throw new Error("Herdr title hooks are missing")
+let title: string | undefined
+const intervals: Array<() => Promise<void> | void> = []
+const titleContext = {
+  mode: "tui",
+  sessionManager: {
+    getSessionId: () => "root-session",
+    getSessionName: () => title,
+  },
+  setInterval(callback: () => Promise<void> | void) {
+    intervals.push(callback)
+    return 1
+  },
+}
+await sessionStart({ type: "session_start" }, titleContext)
+if (intervals.length !== 1) throw new Error("missing title sync interval")
+title = "Generated omp title"
+await intervals[0]?.()
+await Bun.sleep(50)
+await turnEnd({ type: "turn_end" }, titleContext)
+await Bun.sleep(50)
+title = "Renamed omp title"
+await intervals[0]?.()
+await Bun.sleep(50)
 EOF
+  : > "$TMP/herdr.log"
   HOME="$TMP/home" AGENT_MATURITY_HOME="$TMP/maturity" \
+    HERDR_ENV=1 HERDR_WORKSPACE_ID=test-workspace HERDR_TAB_ID=test-tab \
+    DOTFILES_HERDR_TASK_WORKSPACE=1 HERDR_BIN_PATH="$TMP/bin/herdr" HERDR_LOG="$TMP/herdr.log" \
     "$BUN_BIN" "$TMP/test-extension.ts" "$ROOT/omp/agent/extensions/dotfiles-harness.ts"
+  expected_titles="workspace rename test-workspace Generated omp title
+workspace rename test-workspace Renamed omp title"
+  [ "$(cat "$TMP/herdr.log")" = "$expected_titles" ] || {
+    echo "FAIL: omp title changes were not applied once to the task workspace" >&2
+    exit 1
+  }
 else
   grep -F 'pi.on("before_agent_start"' "$ROOT/omp/agent/extensions/dotfiles-harness.ts" >/dev/null
   ! grep -F 'pi.on("turn_start"' "$ROOT/omp/agent/extensions/dotfiles-harness.ts" >/dev/null
+  grep -F 'pi.on("session_start"' "$ROOT/omp/agent/extensions/dotfiles-harness.ts" >/dev/null
+  grep -F 'pi.on("turn_end"' "$ROOT/omp/agent/extensions/dotfiles-harness.ts" >/dev/null
 fi
+
+: > "$TMP/herdr-integration.log"
+cat > "$TMP/bin/herdr" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$HERDR_INTEGRATION_LOG"
+EOF
+chmod +x "$TMP/bin/herdr"
+(
+  export HOME="$TMP/home"
+  export PATH="$TMP/bin:/usr/bin:/bin"
+  export OMP_EXPERIMENT=1
+  export HERDR_INTEGRATION_LOG="$TMP/herdr-integration.log"
+  . "$ROOT/install.d/66-omp.sh"
+  install_herdr_omp_integration
+)
+[ "$(cat "$TMP/herdr-integration.log")" = "integration install omp" ] || {
+  echo "FAIL: native Herdr omp integration was not installed" >&2
+  exit 1
+}
 
 echo "omp setup tests passed."

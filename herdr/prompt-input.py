@@ -11,7 +11,7 @@ from typing import Optional
 ESCAPE = b"\x1b"
 PASTE_END = b"\x1b[201~"
 SEQUENCES = {
-    b"\x1b[13u": "submit",
+    b"\x1b[13u": "newline",
     b"\x1b[13;5u": "submit",
     b"\x1b[27;5;13~": "submit",
     b"\x1b[27u": "skip",
@@ -90,7 +90,7 @@ def render(screen, buffer: list[str], cursor: int) -> None:
 
     screen.write("\x1b[2J\x1b[H")
     screen.write("\x1b[1mInitial prompt\x1b[0m\n")
-    screen.write("Enter: submit | Esc: skip\n")
+    screen.write("Enter: newline | Ctrl+Enter: submit | Esc: skip\n")
     screen.write("-" * width + "\n")
     screen.write("\n".join(visible_rows))
     screen.write(
@@ -200,6 +200,9 @@ def collect_prompt(input_fd: int, screen) -> tuple[str, int]:
                 return "".join(buffer), 0
             if action == "skip":
                 return "", 0
+            if action == "newline":
+                buffer.insert(cursor, "\n")
+                cursor += 1
             if action == "paste":
                 pasted = clean_text(read_paste(input_fd))
                 buffer[cursor:cursor] = pasted
@@ -222,7 +225,9 @@ def collect_prompt(input_fd: int, screen) -> tuple[str, int]:
         if byte == b"\x03":
             return "", 130
         if byte in {b"\r", b"\n"}:
-            return "".join(buffer), 0
+            buffer.insert(cursor, "\n")
+            cursor += 1
+            continue
         if byte in {b"\x08", b"\x7f"}:
             if cursor:
                 cursor -= 1

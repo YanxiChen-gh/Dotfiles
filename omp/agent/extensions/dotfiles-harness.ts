@@ -7,7 +7,8 @@
 //   - Slack attention notifications
 //
 // Everything the opencode plugin had to reconstruct by hand is gone here:
-//   - Herdr title/subagent/state sync   -> `herdr integration install omp` (native)
+//   - Herdr subagent/state sync         -> `herdr integration install omp` (native)
+//   - Herdr task workspace titles       -> this extension mirrors the OpenCode policy
 //   - session-lineage hydration/walk     -> omp tracks sessions natively
 //   - event/notification queue plumbing  -> omp lifecycle events are ordered + typed
 //   - same-session checkpoint automation -> omp has native auto-compaction
@@ -26,6 +27,12 @@ import { fileURLToPath } from "node:url"
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"
 
 type HookResult = { stdout: string; stderr: string; exitCode: number; failed: boolean }
+type TitleSyncContext = {
+  mode: "tui" | "rpc" | "json" | "print"
+  sessionManager: { getSessionName(): string | undefined }
+  setInterval(callback: () => void | Promise<void>, ms?: number): unknown
+}
+type HerdrTitleTarget = { kind: "workspace" | "tab"; id: string }
 
 const runHook = async (script: string, payload: unknown, extraEnv: Record<string, string> = {}): Promise<HookResult> => {
   try {
@@ -89,7 +96,14 @@ const createSlackSender = (home: string) => {
   }
 }
 
-const invokesLavish = (command: string) => command.includes("lavish-axi")
+const invokesLavish = (command: string) => /\b(?:lavish-axi(?:-safe)?|open-lavish)\b/.test(command)
+
+const shellCommand = (input: Record<string, unknown>): string => {
+  const command = stringField(input, "command")
+  const application = stringField(input, "application")
+  const args = Array.isArray(input.args) ? input.args.filter((value): value is string => typeof value === "string") : []
+  return [command, application, ...args].filter(Boolean).join(" ")
+}
 
 export default async function dotfilesHarness(pi: ExtensionAPI) {
   const source = await realpath(fileURLToPath(import.meta.url))
@@ -101,17 +115,66 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
   const scopePrompt = join(maturity, "scripts/scope-gate-userpromptsubmit.sh")
   const scopeGate = join(maturity, "scripts/scope-gate-pretooluse.sh")
   const notify = createSlackSender(home)
+  const workspaceId = Bun.env.HERDR_WORKSPACE_ID
+  const tabId = Bun.env.HERDR_TAB_ID
+  const herdrTarget: HerdrTitleTarget | undefined =
+    Bun.env.HERDR_ENV !== "1"
+      ? undefined
+      : Bun.env.DOTFILES_HERDR_TASK_WORKSPACE === "1" && workspaceId
+        ? { kind: "workspace", id: workspaceId }
+        : tabId
+          ? { kind: "tab", id: tabId }
+          : undefined
+  const herdr = Bun.env.HERDR_BIN_PATH ?? "herdr"
+  let appliedHerdrTitle = ""
+  let herdrTitleSyncInFlight = false
+  let activeTitleContext: TitleSyncContext | undefined
+  let titleSyncStarted = false
 
   pi.setLabel("Dotfiles harness")
 
-  // GAP (documented): omp exposes no guaranteed root-vs-subagent discriminator and
-  // no per-request system-prompt hook. `session_stop` is documented to never fire
-  // for task/subagent sessions, so it is the most reliable "this is a root session"
-  // signal available. We treat a session as root until proven otherwise and refine
-  // via spawn metadata when present. Verify against omp source before relying on
-  // this for anything stricter than notification routing. See omp/README.md.
   const editTools = new Set(["edit", "write", "apply_patch", "str_replace_editor", "str_replace"])
   const shellTools = new Set(["bash", "shell"])
+
+  const syncHerdrTitle = async (ctx: TitleSyncContext): Promise<boolean> => {
+    if (!herdrTarget) return true
+    const title = ctx.sessionManager.getSessionName()?.trim()
+    if (!title || title === appliedHerdrTitle) return Boolean(title)
+    if (herdrTitleSyncInFlight) return false
+
+    herdrTitleSyncInFlight = true
+    try {
+      const proc = Bun.spawn([herdr, herdrTarget.kind, "rename", herdrTarget.id, title], {
+        env: Bun.env,
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "pipe",
+      })
+      const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited])
+      if (exitCode !== 0) {
+        console.warn(`[dotfiles-harness] herdr title sync exited ${exitCode}: ${stderr.trim()}`)
+        return false
+      }
+      appliedHerdrTitle = title
+      return true
+    } catch (error) {
+      console.warn(`[dotfiles-harness] herdr title sync failed: ${error}`)
+      return false
+    } finally {
+      herdrTitleSyncInFlight = false
+    }
+  }
+
+  const startHerdrTitleSync = async (ctx: TitleSyncContext) => {
+    if (ctx.mode !== "tui" || !herdrTarget) return
+    activeTitleContext = ctx
+    await syncHerdrTitle(ctx)
+    if (titleSyncStarted) return
+    titleSyncStarted = true
+    ctx.setInterval(async () => {
+      if (activeTitleContext) await syncHerdrTitle(activeTitleContext)
+    }, 500)
+  }
 
   const payloadFor = (sessionId: string, input: Record<string, unknown> | undefined) => ({
     session_id: sessionId,
@@ -131,9 +194,14 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     const sessionId = ctx?.sessionManager?.getSessionId?.() ?? ""
     const payload = payloadFor(sessionId, input)
 
-    if (shellTools.has(tool) && invokesLavish(stringField(input, "command"))) {
-      // Lavish review is interactive and root-only; keep it out of automated runs.
-      return { block: true, reason: "Lavish is human-interactive review only; use native search tools instead." }
+    const command = shellCommand(input)
+    if (invokesLavish(command)) {
+      if (!shellTools.has(tool) || ctx.mode !== "tui") {
+        return { block: true, reason: "Lavish is human-interactive TUI review only; use native search tools instead." }
+      }
+      if (/\blavish-axi(?:-safe)?\s+poll\b/.test(command) && input.async !== true) {
+        return { block: true, reason: "Run Lavish poll as one managed Bash job with async: true." }
+      }
     }
 
     if (editTools.has(tool)) {
@@ -186,6 +254,16 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     const brief = result.stdout.trim()
     if (!brief) return
     return { systemPrompt: [...event.systemPrompt, brief] }
+  })
+
+  pi.on("session_start", async (_event, ctx) => {
+    await startHerdrTitleSync(ctx)
+  })
+
+  pi.on("turn_end", async (_event, ctx) => {
+    if (ctx.mode !== "tui") return
+    activeTitleContext = ctx
+    await syncHerdrTitle(ctx)
   })
 
   // Slack attention: notify when a root session finishes or needs input. Herdr's

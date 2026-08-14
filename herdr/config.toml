@@ -41,9 +41,3 @@ opencode = [
   ["$subagent_3"],
   ["$subagent_summary"],
 ]
-# omp reports lifecycle state through its native Herdr integration; the harness
-# extension does not push the custom subagent tokens, so these rows stay native.
-omp = [
-  ["state_icon", "workspace", "tab"],
-  ["agent"],
-]

@@ -181,9 +181,8 @@ export FAKE_TREEHOUSE_STARTED="$TREEHOUSE_STARTED"
 export FAKE_AGENT_READY="$AGENT_READY"
 export FAKE_PROMPT_LOG="$PROMPT_LOG"
 
-# Enter submits in terminals that cannot distinguish Ctrl+Enter. Enhanced-key
-# Enter/Ctrl+Enter and raw/enhanced Escape remain supported, and pasted newlines
-# are preserved.
+# Match the working OpenCode popup: Enter inserts a newline and encoded
+# Ctrl+Enter submits. Raw/enhanced Escape skip, and pasted newlines are exact.
 python3 - "$ROOT/herdr/prompt-input.py" <<'PY'
 import os
 import pty
@@ -219,12 +218,12 @@ def run_case(input_bytes, expected):
     if stdout != expected:
         raise SystemExit(f"prompt editor returned {stdout!r}, expected {expected!r}")
 
-run_case(b"plain input\r", b"plain input")
-run_case(b"kitty enter\x1b[13u", b"kitty enter")
+run_case(b"plain input\rsecond line\x1b[13;5u", b"plain input\nsecond line")
+run_case(b"kitty enter\x1b[13unext line\x1b[13;5u", b"kitty enter\nnext line")
 run_case(b"ctrl enter\x1b[13;5u", b"ctrl enter")
 run_case(b"discard me\x1b", b"")
 run_case(b"discard me\x1b[27u", b"")
-run_case(b"\x1b[200~leading\ninternal\ntrailing\n\x1b[201~\r", b"leading\ninternal\ntrailing\n")
+run_case(b"\x1b[200~leading\ninternal\ntrailing\n\x1b[201~\x1b[13;5u", b"leading\ninternal\ntrailing\n")
 PY
 
 # Treehouse invokes the wrapper in the acquired checkout and remains the owner
@@ -470,6 +469,9 @@ expected_commands = [
 ]
 if commands != expected_commands:
     raise SystemExit(f"shortcut commands were {commands!r}, expected {expected_commands!r}")
+agent_rows = config["ui"]["sidebar"]["agents"]["rows_by_agent"]
+if "omp" in agent_rows:
+    raise SystemExit(f"redundant omp sidebar rows remain: {agent_rows['omp']!r}")
 PY
 
 echo "Herdr Treehouse tests passed."
