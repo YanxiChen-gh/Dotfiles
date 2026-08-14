@@ -99,8 +99,9 @@ const createSlackSender = (home: string) => {
 const invokesLavish = (command: string) => /\b(?:lavish-axi(?:-safe)?|open-lavish)\b/.test(command)
 
 const lavishPollGuidance =
-  "In an interactive omp TUI, run each `lavish-axi-safe poll <file>` as one managed Bash job with `async: true`. " +
-  "When feedback is delivered, process it and start the next async poll. Do not use a question or approval popup, Hub process, or detached shell."
+  "Lavish feedback mode is `managed-async` in an interactive omp TUI. " +
+  "Open the review with `open-lavish <file>`, then run each `lavish-axi-safe poll <file>` as one managed Bash job with `async: true`. " +
+  "When feedback is delivered, process it and start the next async poll. While the review is active, never use `ask`, an approval popup, Hub, or a detached shell."
 
 const shellCommand = (input: Record<string, unknown>): string => {
   const command = stringField(input, "command")
@@ -138,6 +139,7 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
   pi.setLabel("Dotfiles harness")
 
   const editTools = new Set(["edit", "write", "apply_patch", "str_replace_editor", "str_replace"])
+  const activeLavishSessions = new Set<string>()
   const shellTools = new Set(["bash", "shell"])
 
   const syncHerdrTitle = async (ctx: TitleSyncContext): Promise<boolean> => {
@@ -198,6 +200,14 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     const sessionId = ctx?.sessionManager?.getSessionId?.() ?? ""
     const payload = payloadFor(sessionId, input)
 
+    if (tool === "ask" && activeLavishSessions.has(sessionId)) {
+      return {
+        block: true,
+        reason:
+          "Lavish feedback mode is managed-async for this session. Use the active async Bash poll instead of `ask`.",
+      }
+    }
+
     const command = shellCommand(input)
     if (invokesLavish(command)) {
       if (!shellTools.has(tool) || ctx.mode !== "tui") {
@@ -225,11 +235,26 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     }
   })
 
-  // Comment self-check: after an edit, surface the reminder back to the model.
-  pi.on("tool_result", async (event) => {
+  // Track successful Lavish lifecycle commands and surface comment reminders after edits.
+  pi.on("tool_result", async (event, ctx) => {
     const tool = String(event.toolName ?? "").toLowerCase()
+    const input = event.input
+    const sessionId = ctx?.sessionManager?.getSessionId?.() ?? ""
+    const command = shellCommand(input)
+
+    if (!event.isError && shellTools.has(tool) && sessionId) {
+      const opened =
+        /\bopen-lavish\b/.test(command) ||
+        (/\blavish-axi(?:-safe)?\s+/.test(command) &&
+          !/\blavish-axi(?:-safe)?\s+(?:design|end|export|playbook|poll|share|stop)\b/.test(command))
+      const pollEnded =
+        /\blavish-axi(?:-safe)?\s+poll\b/.test(command) &&
+        event.content.some((item) => item.type === "text" && /\bstatus:\s*ended\b/.test(item.text))
+      if (opened) activeLavishSessions.add(sessionId)
+      if (/\blavish-axi(?:-safe)?\s+end\b/.test(command) || pollEnded) activeLavishSessions.delete(sessionId)
+    }
+
     if (!editTools.has(tool)) return
-    const input = (event.input ?? {}) as Record<string, unknown>
     const result = await runHook(join(hooks, "comment-self-check.sh"), {
       tool_input: {
         file_path: stringField(input, "filePath", "file_path", "path"),
@@ -242,10 +267,7 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
       const parsed = JSON.parse(result.stdout)
       const reminder = parsed?.hookSpecificOutput?.additionalContext
       if (typeof reminder !== "string") return
-      const prior = Array.isArray((event as { content?: unknown }).content)
-        ? ((event as { content: unknown[] }).content)
-        : []
-      return { content: [...prior, { type: "text", text: reminder }] }
+      return { content: [...event.content, { type: "text", text: reminder }] }
     } catch (error) {
       console.warn(`[dotfiles-harness] ignored invalid comment hook output: ${error}`)
     }
@@ -281,6 +303,10 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
         `*Reason:* ${slackText(`Approval: ${String(event.toolName ?? "tool")}`)}`,
       ].join("\n"),
     )
+  })
+
+  pi.on("session_shutdown", () => {
+    activeLavishSessions.clear()
   })
 
   pi.on("session_stop", async (_event, ctx) => {

@@ -230,8 +230,9 @@ if (handlers.has("turn_start")) throw new Error("scope injection still registers
 const handler = handlers.get("before_agent_start")
 if (!handler) throw new Error("before_agent_start scope hook is missing")
 const lavishPollGuidance =
-  "In an interactive omp TUI, run each `lavish-axi-safe poll <file>` as one managed Bash job with `async: true`. " +
-  "When feedback is delivered, process it and start the next async poll. Do not use a question or approval popup, Hub process, or detached shell."
+  "Lavish feedback mode is `managed-async` in an interactive omp TUI. " +
+  "Open the review with `open-lavish <file>`, then run each `lavish-axi-safe poll <file>` as one managed Bash job with `async: true`. " +
+  "When feedback is delivered, process it and start the next async poll. While the review is active, never use `ask`, an approval popup, Hub, or a detached shell."
 const result = await handler(
   { type: "before_agent_start", prompt: "hi", systemPrompt: ["base"] },
   { sessionManager: { getSessionId: () => "test-session" } },
@@ -253,26 +254,121 @@ delete Bun.env.SCOPE_BRIEF
 
 const toolCall = handlers.get("tool_call")
 if (!toolCall) throw new Error("tool_call hook is missing")
+const toolResult = handlers.get("tool_result")
+const sessionStop = handlers.get("session_stop")
+const sessionShutdown = handlers.get("session_shutdown")
+if (!toolResult || !sessionStop || !sessionShutdown) throw new Error("Lavish lifecycle hooks are missing")
+const blockedByHook = (value: unknown): boolean =>
+  typeof value === "object" && value !== null && "block" in value && value.block === true
+const rootContext = {
+  mode: "tui",
+  sessionManager: { getSessionId: () => "root-session" },
+}
+const askBeforeOpen = await toolCall(
+  { toolName: "ask", input: {} },
+  rootContext,
+)
+if (blockedByHook(askBeforeOpen)) throw new Error("ask was blocked before a Lavish review opened")
 const blocked = await toolCall(
   { toolName: "bash", input: { command: "open-lavish /tmp/review.html" } },
   { mode: "print", sessionManager: { getSessionId: () => "task-session" } },
-) as { block?: boolean }
-if (blocked.block !== true) throw new Error("non-UI task session may launch Lavish")
+)
+if (!blockedByHook(blocked)) throw new Error("non-UI task session may launch Lavish")
 const foregroundPoll = await toolCall(
   { toolName: "bash", input: { command: "lavish-axi-safe poll /tmp/review.html" } },
   { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
-) as { block?: boolean }
-if (foregroundPoll.block !== true) throw new Error("foreground Lavish poll was allowed")
+)
+if (!blockedByHook(foregroundPoll)) throw new Error("foreground Lavish poll was allowed")
 const delegatedPoll = await toolCall(
   { toolName: "hub", input: { op: "start", application: "lavish-axi-safe", args: ["poll", "/tmp/review.html"] } },
   { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
-) as { block?: boolean }
-if (delegatedPoll.block !== true) throw new Error("non-Bash Lavish poll was allowed")
+)
+if (!blockedByHook(delegatedPoll)) throw new Error("non-Bash Lavish poll was allowed")
 const allowed = await toolCall(
   { toolName: "bash", input: { command: "lavish-axi-safe poll /tmp/review.html", async: true } },
   { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
-) as { block?: boolean } | undefined
-if (allowed?.block === true) throw new Error("interactive root session cannot launch Lavish")
+)
+if (blockedByHook(allowed)) throw new Error("interactive root session cannot launch Lavish")
+const openInput = { command: "open-lavish /tmp/review.html" }
+const openCall = await toolCall(
+  { toolName: "bash", input: openInput },
+  rootContext,
+)
+if (blockedByHook(openCall)) throw new Error("interactive root session cannot open Lavish")
+await toolResult(
+  { toolName: "bash", input: openInput, isError: false, content: [] },
+  rootContext,
+)
+const blockedAsk = await toolCall(
+  { toolName: "ask", input: {} },
+  rootContext,
+)
+if (!blockedByHook(blockedAsk)) throw new Error("ask was allowed during an active Lavish review")
+const otherSessionAsk = await toolCall(
+  { toolName: "ask", input: {} },
+  { mode: "tui", sessionManager: { getSessionId: () => "other-session" } },
+)
+if (blockedByHook(otherSessionAsk)) throw new Error("Lavish ask guard leaked across sessions")
+
+const endInput = { command: "lavish-axi-safe end /tmp/review.html" }
+await toolResult(
+  { toolName: "bash", input: endInput, isError: false, content: [] },
+  rootContext,
+)
+const askAfterEnd = await toolCall(
+  { toolName: "ask", input: {} },
+  rootContext,
+)
+if (blockedByHook(askAfterEnd)) throw new Error("ask stayed blocked after Lavish ended")
+
+await toolResult(
+  { toolName: "bash", input: openInput, isError: true, content: [] },
+  rootContext,
+)
+const askAfterFailedOpen = await toolCall(
+  { toolName: "ask", input: {} },
+  rootContext,
+)
+if (blockedByHook(askAfterFailedOpen)) throw new Error("failed Lavish open activated the ask guard")
+
+await toolResult(
+  { toolName: "bash", input: openInput, isError: false, content: [] },
+  rootContext,
+)
+await toolResult(
+  {
+    toolName: "bash",
+    input: { command: "lavish-axi-safe poll /tmp/review.html", async: true },
+    isError: false,
+    content: [{ type: "text", text: "session:\n  status: ended" }],
+  },
+  rootContext,
+)
+const askAfterSendAndEnd = await toolCall(
+  { toolName: "ask", input: {} },
+  rootContext,
+)
+if (blockedByHook(askAfterSendAndEnd)) throw new Error("ask stayed blocked after Send & End")
+
+await toolResult(
+  { toolName: "bash", input: openInput, isError: false, content: [] },
+  rootContext,
+)
+await sessionStop(
+  { type: "session_stop", session_id: "root-session" },
+  { getContextUsage: () => undefined },
+)
+const askAfterStop = await toolCall(
+  { toolName: "ask", input: {} },
+  rootContext,
+)
+if (!blockedByHook(askAfterStop)) throw new Error("turn settlement cleared the active Lavish guard")
+await sessionShutdown({ type: "session_shutdown" }, rootContext)
+const askAfterShutdown = await toolCall(
+  { toolName: "ask", input: {} },
+  rootContext,
+)
+if (blockedByHook(askAfterShutdown)) throw new Error("ask stayed blocked after process shutdown")
 
 const sessionStart = handlers.get("session_start")
 const turnEnd = handlers.get("turn_end")

@@ -60,7 +60,7 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 | Same-session checkpoint/compaction | native auto-compaction |
 | Global rules (`AGENTS.md`) | `APPEND_SYSTEM.md` (linked) |
 | Skills: `~/.claude/skills` + `~/.agents/skills` (shared, advisor, agent-maturity, Obsidian AI Platform) | **native** - omp's Claude + Agents providers read the same dirs |
-| Glean MCP overlay (`sync_opencode_mcp_from_claude.py`) | `sync_omp_mcp_from_claude.py` -> `~/.omp/agent/mcp.json` |
+| Glean MCP overlay | native merge from `omp/mcp-servers-work.json` on work machines; exact managed entry removal from default and named profiles on personal machines |
 | RTK token-optimized shell output | `rtk init --agent omp` (best-effort; may be unsupported) |
 | Herdr workflow launch (`prefix+a`) | omp by default; `OMP_EXPERIMENT=0` selects OpenCode |
 | `opencode-claude-auth` (Anthropic SSO) | Native setup and `/login` |
@@ -75,9 +75,15 @@ required maturity scripts or shared scope and outcome skills are missing.
 The native Agent Hub owns subagent detail. Herdr remains the cross-workspace
 lifecycle view and does not duplicate omp's task list.
 
-Lavish review is allowed only in a human-interactive omp TUI. Run its safe poll
-as one managed async Bash job per feedback round; omp delivers completion back
-to the session, so no periodic polling or detached shell process is needed.
+Lavish feedback mode is `managed-async` in a human-interactive omp TUI. Run
+each safe poll as one managed async Bash job per feedback round. While a
+Lavish review is active, the harness blocks `ask` for that OMP session so the
+managed poll remains the only approval channel. Explicit end, Send & End, or
+process shutdown clears the guard; normal turn settlement does not.
+
+On work machines, `auth-vanta-agents` reports OMP Glean and `slack-vanta`
+status without reading credential payloads. Run it yourself in a private
+terminal to repair missing auth; agents may run only `auth-vanta-agents --status`.
 
 ## Operational notes
 
