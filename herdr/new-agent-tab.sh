@@ -15,6 +15,7 @@ set -euo pipefail
 # server's PATH, not a login shell's, so ensure our tools are searchable.
 export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/go/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
+launcher_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 herdr="${HERDR_BIN_PATH:-herdr}"
 src_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
 
@@ -28,10 +29,8 @@ elif [ "${OMP_EXPERIMENT:-}" = "1" ]; then
 else
   agent_cmd="opencode"
 fi
-# String to wait for before typing an initial prompt into the agent's TUI.
-# opencode shows "Ask anything"; omp's ready string is not pinned down, so it
-# falls back to a short delay. Set HERDR_AGENT_READY_MATCH to omp's actual input
-# placeholder once observed for reliable seeding.
+# String to wait for before typing an initial prompt into an already-running TUI.
+# omp receives its prompt as an @file launch argument and skips this path.
 if [ "${HERDR_AGENT_READY_MATCH+set}" = set ]; then
   agent_ready_match="$HERDR_AGENT_READY_MATCH"
 elif [ "$agent_cmd" = "opencode" ]; then
@@ -47,6 +46,12 @@ select_setup=false
 handoff_ready=""
 treehouse_ready=false
 initial_prompt_file=""
+launched_prompt_file=""
+
+cleanup_prompt_files() {
+  if [ -n "$initial_prompt_file" ]; then rm -f "$initial_prompt_file"; fi
+  if [ -n "$launched_prompt_file" ]; then rm -f "$launched_prompt_file"; fi
+}
 
 # Detached shells have no visible stderr, so surface failures as a herdr toast,
 # and - once the panes exist - in the panes too, so a failure never leaves them
@@ -99,7 +104,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$select_setup" = false ] && [ -n "$initial_prompt_file" ]; then
-  trap 'rm -f "$initial_prompt_file"' EXIT
+  trap cleanup_prompt_files EXIT
 fi
 
 if [ -n "$handoff_ready" ]; then
@@ -130,7 +135,7 @@ if [ "$select_setup" = true ]; then
 
   command -v python3 >/dev/null 2>&1 || die "python3 not installed"
   if [ "$with_agent" = true ]; then
-    prompt_input="${HERDR_PROMPT_INPUT_PATH:-$HOME/dotfiles/herdr/prompt-input.py}"
+    prompt_input="${HERDR_PROMPT_INPUT_PATH:-$launcher_dir/prompt-input.py}"
     [ -f "$prompt_input" ] || die "prompt input helper does not exist: $prompt_input"
     initial_prompt_file=$(mktemp "${TMPDIR:-/tmp}/herdr-initial-prompt.XXXXXX") \
       || die "could not create initial prompt file"
@@ -251,11 +256,18 @@ else
 fi
 
 initial_prompt=""
+omp_prompt_file=""
 if [ -n "$initial_prompt_file" ]; then
   [ -f "$initial_prompt_file" ] || die "initial prompt file does not exist"
-  initial_prompt=$(<"$initial_prompt_file")
-  rm -f "$initial_prompt_file"
-  initial_prompt_file=""
+  if [ "$with_agent" = true ] && [ "$agent_cmd" = "omp" ] && [ -s "$initial_prompt_file" ]; then
+    omp_prompt_file="$initial_prompt_file"
+    launched_prompt_file="$initial_prompt_file"
+    initial_prompt_file=""
+  else
+    IFS= read -r -d '' initial_prompt < "$initial_prompt_file" || true
+    rm -f "$initial_prompt_file"
+    initial_prompt_file=""
+  fi
 fi
 
 requested_label="shell"
@@ -286,6 +298,7 @@ if [ -z "$left" ] || [ "$left" = "null" ]; then die "could not read new pane id"
   || die "failed to label task tab"
 
 if [ "$with_editor" = true ]; then
+  printf -v quoted_workspace_cwd '%q' "$workspace_cwd"
   split_args=(pane split "$left" --direction right --ratio 0.5 \
     --cwd "$workspace_cwd" --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1)
   if [ "$treehouse_ready" = true ]; then
@@ -294,13 +307,23 @@ if [ "$with_editor" = true ]; then
   split_json=$("$herdr" "${split_args[@]}") || die "herdr pane split failed"
   right=$(printf '%s' "$split_json" | jq -r '.result.pane.pane_id')
   if [ -z "$right" ] || [ "$right" = "null" ]; then die "could not read split pane id"; fi
-  "$herdr" pane run "$right" "cd '$workspace_cwd' && clear; $editor_cmd" \
+  "$herdr" pane run "$right" "cd $quoted_workspace_cwd && clear; $editor_cmd" \
     || die "failed to launch editor in right pane"
 fi
 
 if [ "$with_agent" = true ]; then
-  "$herdr" pane run "$left" "cd '$workspace_cwd' && clear; $agent_cmd" \
-    || die "failed to launch agent in left pane"
+  printf -v quoted_workspace_cwd '%q' "$workspace_cwd"
+  if [ -n "$omp_prompt_file" ]; then
+    printf -v quoted_prompt_arg '%q' "@$omp_prompt_file"
+    printf -v quoted_prompt_file '%q' "$omp_prompt_file"
+    "$herdr" pane run "$left" \
+      "cd $quoted_workspace_cwd && clear; $agent_cmd $quoted_prompt_arg; agent_status=\$?; rm -f -- $quoted_prompt_file; (exit \$agent_status)" \
+      || die "failed to launch agent in left pane"
+    launched_prompt_file=""
+  else
+    "$herdr" pane run "$left" "cd $quoted_workspace_cwd && clear; $agent_cmd" \
+      || die "failed to launch agent in left pane"
+  fi
   if [ -n "$initial_prompt" ]; then
     if [ -n "$agent_ready_match" ]; then
       "$herdr" wait output "$left" --match "$agent_ready_match" --timeout 30000 >/dev/null \

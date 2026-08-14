@@ -179,14 +179,13 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     }
   })
 
-  // Scope brief: omp has no per-request system-prompt hook, so we deliver the scope
-  // guidance as a steering message at turn start instead of injecting it into the
-  // system prompt. This is the documented behavioral difference from opencode.
-  pi.on("turn_start", async (_event, ctx) => {
+  // Add scope guidance to this request without scheduling another user turn.
+  pi.on("before_agent_start", async (event, ctx) => {
     const sessionId = ctx?.sessionManager?.getSessionId?.() ?? ""
     const result = await runHook(scopePrompt, { session_id: sessionId })
     const brief = result.stdout.trim()
-    if (brief) pi.sendUserMessage(brief, { deliverAs: "steer" })
+    if (!brief) return
+    return { systemPrompt: [...event.systemPrompt, brief] }
   })
 
   // Slack attention: notify when a root session finishes or needs input. Herdr's

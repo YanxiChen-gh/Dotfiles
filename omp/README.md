@@ -13,11 +13,11 @@ opencode setup.
 
 | | opencode | omp |
 | --- | ---: | ---: |
-| Harness plugin/extension | 1,813 | 210 |
-| Model + agent config | 37 | 53 |
+| Harness plugin/extension | 1,813 | 209 |
+| Model + agent config | 37 | 0 |
 | Auto-mode wrapper | 70 | 0 |
-| Install module | 126 | 87 |
-| **Total** | **2,046** | **350** |
+| Install module | 126 | 154 |
+| **Total** | **2,046** | **363** |
 
 The plugin drops ~88%. The reason is not cleverness - it is that omp provides
 first-party what opencode made us rebuild:
@@ -28,7 +28,7 @@ first-party what opencode made us rebuild:
 | Root vs subagent lineage | hydrate + walk `parentID` | tracked natively (see gaps) |
 | Event ordering / dedupe queues | ~120 lines | typed, ordered lifecycle events |
 | Same-session checkpoint/compaction | ~400 lines | native auto-compaction |
-| Auto mode | wrapper script | `tools.approvalMode` config |
+| Auto mode | wrapper script | native `yolo` default |
 | Scope / verify / PR / comment gates | kept | **kept, ported verbatim** |
 | Slack attention | kept | kept, slimmer |
 | Canary takeover | ~300 lines | deferred (see below) |
@@ -40,11 +40,10 @@ around them.
 
 ## Layout
 
-- `agent/models.yml` - the `sol` provider serving `gpt-5.6-sol` (key via `SOL_API_KEY` env, no secret in repo).
-- `agent/config.yml` - role routing (all roles on gpt-5.6-sol), approvals, skills dirs.
 - `agent/extensions/dotfiles-harness.ts` - the ported gates + Slack notifier.
 - `install.d/66-omp.sh` links these into `~/.omp/agent/`, runs the Herdr
   integration, registers RTK (best-effort), and syncs the Glean MCP overlay.
+  omp's native setup owns credentials, model selection, and mutable settings.
 
 ## Parity with the opencode setup
 
@@ -52,8 +51,8 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 
 | opencode | omp |
 | --- | --- |
-| Model + agents (gpt-5.6-sol) | `models.yml` + `config.yml` |
-| Auto mode (`--auto` wrapper) | `approvalMode: yolo` |
+| Model + agents | Native first-run sign-in and model picker |
+| Auto mode (`--auto` wrapper) | Native `yolo` default |
 | Scope / verify / PR / comment gates | ported in `dotfiles-harness.ts` (same scripts) |
 | Slack attention notifications | ported in `dotfiles-harness.ts` |
 | Herdr session/subagent/state sync | native `herdr integration install omp` |
@@ -63,7 +62,7 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 | Glean MCP overlay (`sync_opencode_mcp_from_claude.py`) | `sync_omp_mcp_from_claude.py` -> `~/.omp/agent/mcp.json` |
 | RTK token-optimized shell output | `rtk init --agent omp` (best-effort; may be unsupported) |
 | Herdr workflow launch (`prefix+a`) | `new-agent-tab.sh` switches on `OMP_EXPERIMENT` |
-| `opencode-claude-auth` (Anthropic SSO) | n/a for gpt-5.6-sol; Anthropic would use `/login` |
+| `opencode-claude-auth` (Anthropic SSO) | Native setup and `/login` |
 | Canary takeover | deferred (checkpoint/maturity-coupled) |
 | `vanta-doc-discovery` work Glean adapter | not ported - verify the Claude skill works over MCP first |
 | `tui.jsonc` | not ported (cosmetic TUI prefs) |
@@ -81,14 +80,11 @@ beyond the trial.
 1. **Root vs subagent discriminator.** omp exposes no guaranteed flag. The Slack
    "finished" notice keys off `session_stop`, which is documented to fire for root
    sessions only. Verify subagents do not page you.
-2. **System-prompt injection.** omp has no per-request system-prompt hook, so the
-   scope brief is delivered as a `steer` message at `turn_start` instead of being
-   injected into the system prompt. Behavioral difference from opencode, not a bug.
-3. **`tool_result` patch shape.** The comment self-check appends its reminder to
+2. **`tool_result` patch shape.** The comment self-check appends its reminder to
    the tool result's content array; confirm the reminder actually reaches the model.
-4. **Global `APPEND_SYSTEM.md`.** The rules are linked to `~/.omp/agent/APPEND_SYSTEM.md`;
+3. **Global `APPEND_SYSTEM.md`.** The rules are linked to `~/.omp/agent/APPEND_SYSTEM.md`;
    confirm omp reads a global one (it definitely reads project `.omp/APPEND_SYSTEM.md`).
-5. **Herdr min version.** `herdr integration install omp` needs contract v3; run
+4. **Herdr min version.** `herdr integration install omp` needs contract v3; run
    `herdr integration status` to confirm `omp: current (v3)`.
 
 Canary takeover is intentionally not ported - it is coupled to the checkpoint flow
@@ -99,14 +95,10 @@ and maturity-data sync. Add it once the trial proves the rest is worth keeping.
 ```sh
 # 1. Install + link (on your Mac/Ona, where Herdr lives)
 export OMP_EXPERIMENT=1
-# One-time: store the gpt-5.6-sol key in a mode-600 file (no trailing newline).
-# models.yml reads it at launch via `!cat`; adjust baseUrl there if you use a gateway.
-mkdir -p ~/.claude/secrets && chmod 700 ~/.claude/secrets
-umask 177; printf %s 'YOUR_GPT_5_6_SOL_KEY' > ~/.claude/secrets/sol-api-key.txt
 ./install.sh                      # runs install_omp + setup_omp_config + install_herdr_omp_integration
 
-# 2. Sanity-check config discovery
-omp models                        # should list sol/gpt-5.6-sol
+# 2. Complete omp's native sign-in and default-model setup
+omp                               # choose a provider, sign in, and select a model
 herdr integration status          # should show omp: current (v3)
 
 # 3. Run it in a Herdr pane and confirm it shows as an `omp` agent, not a plain shell
@@ -118,10 +110,9 @@ shell profile), the whole workflow follows: `prefix+a` / `prefix+shift+a` launch
 instead of opencode, and the `--select` picker offers omp. Flag off, everything
 reverts to opencode. Override per launch with `HERDR_AGENT_CMD=omp` (or `opencode`).
 
-When seeding an initial prompt via `prefix+a --select`, the launcher waits for the
-agent's ready string before typing. opencode's is known; omp's is not pinned down,
-so it falls back to a 3s delay. Once you see omp's input placeholder, set
-`HERDR_AGENT_READY_MATCH` to it for reliable seeding.
+When seeding an initial prompt via `prefix+a --select`, the launcher passes omp a
+mode-600 temporary `@file` argument. omp consumes it after first-run setup, so the
+workflow does not depend on a guessed ready string or delay.
 
 opencode stays installed and coexists (omp uses its own `~/.omp` dir). Disable the
 experiment by unsetting `OMP_EXPERIMENT` and re-running `install.sh`; the opencode
