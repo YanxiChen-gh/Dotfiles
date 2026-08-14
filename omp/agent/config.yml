@@ -24,9 +24,8 @@ retry:
 tools:
   approvalMode: yolo
 
-# Skills: omp already discovers ~/.claude/skills and ~/.agents/skills through its
-# built-in Claude/Agents skill providers. Add the shared-skills checkout explicitly
-# so a work or personal machine picks it up regardless of symlink layout.
-skills:
-  customDirectories:
-    - ~/dotfiles/shared-skills
+# Skills need no config: omp's built-in Claude and Agents skill providers discover
+# ~/.claude/skills and ~/.agents/skills natively - the exact dirs the installer
+# symlinks shared-skills, advisor, and agent-maturity skills into for opencode. So
+# omp sees the same skills opencode does. (Do not add customDirectories pointing at
+# the raw shared-skills checkout; it would double-load what ~/.claude/skills covers.)

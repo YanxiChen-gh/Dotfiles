@@ -43,7 +43,34 @@ around them.
 - `agent/models.yml` - the `sol` provider serving `gpt-5.6-sol` (key via `SOL_API_KEY` env, no secret in repo).
 - `agent/config.yml` - role routing (all roles on gpt-5.6-sol), approvals, skills dirs.
 - `agent/extensions/dotfiles-harness.ts` - the ported gates + Slack notifier.
-- `install.d/66-omp.sh` links these into `~/.omp/agent/` and runs the Herdr integration.
+- `install.d/66-omp.sh` links these into `~/.omp/agent/`, runs the Herdr
+  integration, registers RTK (best-effort), and syncs the Glean MCP overlay.
+
+## Parity with the opencode setup
+
+Every piece of the opencode integration, mapped to its omp equivalent:
+
+| opencode | omp |
+| --- | --- |
+| Model + agents (gpt-5.6-sol) | `models.yml` + `config.yml` |
+| Auto mode (`--auto` wrapper) | `approvalMode: yolo` |
+| Scope / verify / PR / comment gates | ported in `dotfiles-harness.ts` (same scripts) |
+| Slack attention notifications | ported in `dotfiles-harness.ts` |
+| Herdr session/subagent/state sync | native `herdr integration install omp` |
+| Same-session checkpoint/compaction | native auto-compaction |
+| Global rules (`AGENTS.md`) | `APPEND_SYSTEM.md` (linked) |
+| Skills: `~/.claude/skills` + `~/.agents/skills` (shared, advisor, agent-maturity) | **native** - omp's Claude + Agents providers read the same dirs |
+| Glean MCP overlay (`sync_opencode_mcp_from_claude.py`) | `sync_omp_mcp_from_claude.py` -> `~/.omp/agent/mcp.json` |
+| RTK token-optimized shell output | `rtk init --agent omp` (best-effort; may be unsupported) |
+| Herdr workflow launch (`prefix+a`) | `new-agent-tab.sh` switches on `OMP_EXPERIMENT` |
+| `opencode-claude-auth` (Anthropic SSO) | n/a for gpt-5.6-sol; Anthropic would use `/login` |
+| Canary takeover | deferred (checkpoint/maturity-coupled) |
+| `vanta-doc-discovery` work Glean adapter | not ported - verify the Claude skill works over MCP first |
+| `tui.jsonc` | not ported (cosmetic TUI prefs) |
+
+The skills row is the important one: omp discovers `~/.claude/skills` and
+`~/.agents/skills` natively, so the shared, advisor, agent-maturity, and Claude
+Code skills you already symlink there show up in omp with zero extra config.
 
 ## Documented gaps to verify in a real run
 

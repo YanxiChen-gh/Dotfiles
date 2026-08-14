@@ -95,7 +95,7 @@ else
 fi
 
 printf '\n== python3 -m py_compile ==\n'
-for f in scripts/configure_vanta_snowflake.py scripts/find-loopback-browser-asset.py scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py; do
+for f in scripts/configure_vanta_snowflake.py scripts/find-loopback-browser-asset.py scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py scripts/sync_omp_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py; do
     if [ -f "$f" ]; then
         if ! python3 -m py_compile "$f"; then
             fail "py_compile $f"

@@ -66,6 +66,31 @@ setup_omp_config() {
     echo "✅ omp config, harness extension, and global rules linked ($agent_dir)"
 }
 
+setup_omp_rtk() {
+    omp_experiment_enabled || return 0
+    command -v omp >/dev/null 2>&1 || return 0
+    command -v rtk >/dev/null 2>&1 || return 0
+
+    # Match the opencode RTK plugin. omp integration may not exist yet; fail soft.
+    if rtk init -g --agent omp --auto-patch 2>/dev/null; then
+        echo "✅ RTK registered for omp (token-optimized shell output)"
+    else
+        echo "ℹ️  RTK has no omp integration yet; omp shell output is not token-optimized"
+    fi
+}
+
+sync_omp_mcp() {
+    omp_experiment_enabled || return 0
+    command -v python3 >/dev/null 2>&1 || return 0
+
+    script_dir=$(resolve_script_dir) || return 1
+    if python3 "$script_dir/scripts/sync_omp_mcp_from_claude.py"; then
+        return 0
+    fi
+    echo "⚠️  omp MCP sync from Claude Code failed"
+    return 1
+}
+
 install_herdr_omp_integration() {
     omp_experiment_enabled || return 0
 
