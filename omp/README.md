@@ -83,5 +83,16 @@ herdr integration status          # should show omp: current (v3)
 omp
 ```
 
-Disable at any time by unsetting `OMP_EXPERIMENT` and re-running `install.sh`; the
-opencode setup is untouched throughout.
+With `OMP_EXPERIMENT=1` exported in the environment Herdr's server sees (e.g. your
+shell profile), the whole workflow follows: `prefix+a` / `prefix+shift+a` launch omp
+instead of opencode, and the `--select` picker offers omp. Flag off, everything
+reverts to opencode. Override per launch with `HERDR_AGENT_CMD=omp` (or `opencode`).
+
+When seeding an initial prompt via `prefix+a --select`, the launcher waits for the
+agent's ready string before typing. opencode's is known; omp's is not pinned down,
+so it falls back to a 3s delay. Once you see omp's input placeholder, set
+`HERDR_AGENT_READY_MATCH` to it for reliable seeding.
+
+opencode stays installed and coexists (omp uses its own `~/.omp` dir). Disable the
+experiment by unsetting `OMP_EXPERIMENT` and re-running `install.sh`; the opencode
+setup is untouched throughout.

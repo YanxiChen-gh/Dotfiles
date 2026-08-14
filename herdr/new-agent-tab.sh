@@ -18,8 +18,27 @@ export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/go/bin:/usr/local/bin:/u
 herdr="${HERDR_BIN_PATH:-herdr}"
 src_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
 
-# Left pane = coding agent, right pane = editor; change these two lines to taste.
-agent_cmd="opencode"
+# Left pane = coding agent, right pane = editor. The agent follows OMP_EXPERIMENT
+# so one switch drives both the install side and this workflow: flag on -> omp,
+# flag off -> opencode. Override explicitly with HERDR_AGENT_CMD.
+if [ -n "${HERDR_AGENT_CMD:-}" ]; then
+  agent_cmd="$HERDR_AGENT_CMD"
+elif [ "${OMP_EXPERIMENT:-}" = "1" ]; then
+  agent_cmd="omp"
+else
+  agent_cmd="opencode"
+fi
+# String to wait for before typing an initial prompt into the agent's TUI.
+# opencode shows "Ask anything"; omp's ready string is not pinned down, so it
+# falls back to a short delay. Set HERDR_AGENT_READY_MATCH to omp's actual input
+# placeholder once observed for reliable seeding.
+if [ "${HERDR_AGENT_READY_MATCH+set}" = set ]; then
+  agent_ready_match="$HERDR_AGENT_READY_MATCH"
+elif [ "$agent_cmd" = "opencode" ]; then
+  agent_ready_match="Ask anything"
+else
+  agent_ready_match=""
+fi
 editor_cmd="nvim"
 with_worktree=true
 with_agent=true
@@ -102,11 +121,11 @@ if [ "$select_setup" = true ]; then
   command -v fzf >/dev/null 2>&1 || die "fzf not installed"
 
   checkout=$(choose "Checkout" "Fresh Treehouse worktree" "Current checkout") || exit 0
-  primary=$(choose "Primary pane" "OpenCode" "Shell") || exit 0
+  primary=$(choose "Primary pane" "$agent_cmd" "Shell") || exit 0
   editor=$(choose "Editor" "No editor" "nvim right split") || exit 0
 
   [ "$checkout" = "Fresh Treehouse worktree" ] || with_worktree=false
-  [ "$primary" = "OpenCode" ] || with_agent=false
+  [ "$primary" = "$agent_cmd" ] || with_agent=false
   [ "$editor" = "nvim right split" ] && with_editor=true
 
   command -v python3 >/dev/null 2>&1 || die "python3 not installed"
@@ -171,7 +190,7 @@ fi
 
 command -v jq >/dev/null 2>&1 || die "jq not installed"
 if [ "$with_agent" = true ]; then
-  command -v opencode >/dev/null 2>&1 || die "opencode not installed"
+  command -v "$agent_cmd" >/dev/null 2>&1 || die "$agent_cmd not installed"
 fi
 if [ "$with_editor" = true ]; then
   command -v nvim >/dev/null 2>&1 || die "nvim not installed"
@@ -283,8 +302,13 @@ if [ "$with_agent" = true ]; then
   "$herdr" pane run "$left" "cd '$workspace_cwd' && clear; $agent_cmd" \
     || die "failed to launch agent in left pane"
   if [ -n "$initial_prompt" ]; then
-    "$herdr" wait output "$left" --match "Ask anything" --timeout 30000 >/dev/null \
-      || die "timed out waiting for agent prompt input"
+    if [ -n "$agent_ready_match" ]; then
+      "$herdr" wait output "$left" --match "$agent_ready_match" --timeout 30000 >/dev/null \
+        || die "timed out waiting for agent prompt input"
+    else
+      # No known ready string for this agent; give the TUI a moment to accept input.
+      sleep 3
+    fi
     "$herdr" pane run "$left" "$initial_prompt" \
       || die "failed to submit initial agent prompt"
   fi
