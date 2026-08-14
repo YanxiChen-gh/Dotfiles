@@ -79,8 +79,23 @@ if command -v node >/dev/null 2>&1; then
     done
 fi
 
+if command -v bun >/dev/null 2>&1; then
+    printf '\n== bun (omp extension syntax/transpile) ==\n'
+    for f in omp/agent/extensions/*.ts; do
+        [ -f "$f" ] || continue
+        if ! out=$(bun build --no-bundle --target=bun "$f" 2>&1 >/dev/null); then
+            printf '%s\n' "$out" >&2
+            fail "bun build $f"
+        else
+            pass "bun build $f"
+        fi
+    done
+else
+    printf '\n== bun (omp extension check skipped, not installed) ==\n'
+fi
+
 printf '\n== python3 -m py_compile ==\n'
-for f in scripts/configure_vanta_snowflake.py scripts/find-loopback-browser-asset.py scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py; do
+for f in scripts/configure_vanta_snowflake.py scripts/find-loopback-browser-asset.py scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py scripts/sync_omp_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py; do
     if [ -f "$f" ]; then
         if ! python3 -m py_compile "$f"; then
             fail "py_compile $f"

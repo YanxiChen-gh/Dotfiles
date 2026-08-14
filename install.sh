@@ -120,6 +120,7 @@ install_agent_skill "ogulcancelik/herdr" "herdr"
 setup_claude_config
 setup_opencode_config
 install_herdr_opencode_integration
+setup_omp_integration || true
 setup_codex_config
 setup_advisors
 setup_rtk
@@ -134,3 +135,5 @@ setup_work_tools
 # Align Cursor MCP with Claude Code user config (after all claude mcp add steps)
 sync_cursor_mcp_from_claude || true
 sync_opencode_mcp_from_claude || true
+setup_omp_rtk || true
+sync_omp_mcp || true

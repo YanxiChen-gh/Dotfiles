@@ -15,13 +15,13 @@ next_workspace = "prefix+down"
 key = "prefix+a"
 type = "popup"
 description = "Choose new task workspace setup"
-command = "$HOME/dotfiles/herdr/new-agent-tab.sh --select"
+command = "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --select"
 
 [[keys.command]]
 key = "prefix+shift+a"
 type = "shell"
 description = "New task workspace (treehouse worktree: OpenCode + nvim)"
-command = "$HOME/dotfiles/herdr/new-agent-tab.sh --with-editor"
+command = "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --with-editor"
 
 [ui.toast]
 delivery = "herdr"

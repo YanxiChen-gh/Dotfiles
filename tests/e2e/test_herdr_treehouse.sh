@@ -3,6 +3,7 @@
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+unset OMP_EXPERIMENT
 LAUNCHER="$ROOT/herdr/new-agent-tab.sh"
 TREEHOUSE_SHELL="$ROOT/herdr/treehouse-task-shell.sh"
 TMP="${TMPDIR:-/tmp}/dotfiles-e2e-herdr-treehouse-$$"
@@ -11,6 +12,7 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 HOME_DIR="$TMP/home"
 MAIN="$TMP/repo"
 LINKED="$TMP/linked"
+QUOTED_LINKED="$TMP/linked'quoted"
 ACQUIRED="$TMP/treehouse-pool/1/repo"
 HERDR_LOG="$TMP/herdr.log"
 TREEHOUSE_LOG="$TMP/treehouse.log"
@@ -22,7 +24,8 @@ AGENT_READY="$TMP/agent-ready"
 PROMPT_LOG="$TMP/prompt.log"
 PROMPT_INPUT="$TMP/prompt-input.py"
 
-mkdir -p "$HOME_DIR/.local/bin" "$MAIN" "${ACQUIRED%/*}"
+mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "${ACQUIRED%/*}"
+: > "$HOME_DIR/.omp/agent/.dotfiles-ready"
 
 git -C "$MAIN" init -q
 git -C "$MAIN" config user.name test
@@ -31,6 +34,7 @@ printf 'fixture\n' > "$MAIN/fixture.txt"
 git -C "$MAIN" add fixture.txt
 git -C "$MAIN" commit -qm fixture
 git -C "$MAIN" worktree add --detach "$LINKED" >/dev/null
+git -C "$MAIN" worktree add --detach "$QUOTED_LINKED" >/dev/null
 git -C "$MAIN" worktree add --detach "$ACQUIRED" >/dev/null
 
 cat > "$TMP/herdr" <<'EOF'
@@ -74,6 +78,9 @@ case "$1 $2" in
       [ -e "$FAKE_AGENT_READY" ] || exit 9
       printf '%s\0' "$4" >> "$FAKE_PROMPT_LOG"
     fi
+    case "$4" in
+      *"; omp @"*) sh -c "$4" >/dev/null 2>&1 & ;;
+    esac
     ;;
 esac
 EOF
@@ -127,6 +134,22 @@ EOF
   chmod +x "$HOME_DIR/.local/bin/$command"
 done
 
+cat > "$HOME_DIR/.local/bin/omp" <<'EOF'
+#!/bin/sh
+[ "${FAKE_OMP_UNAVAILABLE:-}" != "1" ] || exit 127
+case "${1:-}" in
+  @*)
+    python3 - "${1#@}" "$FAKE_PROMPT_LOG" <<'PY'
+import sys
+
+with open(sys.argv[1], "rb") as source, open(sys.argv[2], "wb") as target:
+    target.write(source.read())
+PY
+    ;;
+esac
+EOF
+chmod +x "$HOME_DIR/.local/bin/omp"
+
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_log() { grep -F -- "$1" "$2" >/dev/null || fail "missing '$1' in $2"; }
 assert_not_log() { ! grep -F -- "$1" "$2" >/dev/null || fail "unexpected '$1' in $2"; }
@@ -160,8 +183,8 @@ export FAKE_TREEHOUSE_STARTED="$TREEHOUSE_STARTED"
 export FAKE_AGENT_READY="$AGENT_READY"
 export FAKE_PROMPT_LOG="$PROMPT_LOG"
 
-# The prompt editor keeps Enter as a newline and submits the complete buffer on
-# Ctrl+Enter while making that gesture visible in the popup.
+# Enter inserts a newline and Ctrl+S reliably submits with terminal flow
+# control disabled. Encoded Ctrl+Enter remains supported where available.
 python3 - "$ROOT/herdr/prompt-input.py" <<'PY'
 import os
 import pty
@@ -171,33 +194,42 @@ import sys
 import time
 
 editor = sys.argv[1]
-master, slave = pty.openpty()
-process = subprocess.Popen(
-    [sys.executable, editor],
-    stdin=slave,
-    stdout=subprocess.PIPE,
-    stderr=slave,
-    close_fds=True,
-)
-os.close(slave)
 
-screen = b""
-deadline = time.monotonic() + 5
-while b"Ctrl+Enter: submit" not in screen and time.monotonic() < deadline:
-    readable, _, _ = select.select([master], [], [], 0.1)
-    if readable:
-        screen += os.read(master, 4096)
+def run_case(input_bytes, expected):
+    master, slave = pty.openpty()
+    process = subprocess.Popen(
+        [sys.executable, editor],
+        stdin=slave,
+        stdout=subprocess.PIPE,
+        stderr=slave,
+        close_fds=True,
+    )
+    os.close(slave)
+    screen = b""
+    deadline = time.monotonic() + 5
+    while b"Ctrl+S: submit" not in screen and time.monotonic() < deadline:
+        readable, _, _ = select.select([master], [], [], 0.1)
+        if readable:
+            screen += os.read(master, 4096)
+    if b"Ctrl+S: submit" not in screen:
+        process.kill()
+        raise SystemExit("prompt editor did not show its submit gesture")
+    os.write(master, input_bytes)
+    stdout, _ = process.communicate(timeout=5)
+    os.close(master)
+    if stdout != expected:
+        raise SystemExit(f"prompt editor returned {stdout!r}, expected {expected!r}")
 
-if b"Ctrl+Enter: submit" not in screen:
-    process.kill()
-    raise SystemExit("prompt editor did not show its submit gesture")
-
-os.write(master, b"Review 'quoted' input\rthen keep && literal\x1b[13;5u")
-stdout, _ = process.communicate(timeout=5)
-os.close(master)
-expected = b"Review 'quoted' input\nthen keep && literal"
-if stdout != expected:
-    raise SystemExit(f"prompt editor returned {stdout!r}, expected {expected!r}")
+run_case(b"plain input\rsecond line\x1b[13;5u", b"plain input\nsecond line")
+run_case(b"kitty enter\x1b[13unext line\x1b[13;5u", b"kitty enter\nnext line")
+run_case(b"ctrl enter\x1b[13;5u", b"ctrl enter")
+run_case(b"ctrl s\rsubmit\x13", b"ctrl s\nsubmit")
+run_case(b"kitty ctrl s\x1b[115;5u", b"kitty ctrl s")
+run_case(b"kitty ctrl s event\x1b[115;5:1u", b"kitty ctrl s event")
+run_case(b"xterm ctrl s\x1b[27;5;115~", b"xterm ctrl s")
+run_case(b"discard me\x1b", b"")
+run_case(b"discard me\x1b[27u", b"")
+run_case(b"\x1b[200~leading\ninternal\ntrailing\n\x1b[201~\x1b[13;5u", b"leading\ninternal\ntrailing\n")
 PY
 
 # Treehouse invokes the wrapper in the acquired checkout and remains the owner
@@ -215,8 +247,8 @@ wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkou
 assert_log "start cwd=$MAIN shell=$TREEHOUSE_SHELL args=get" "$TREEHOUSE_LOG"
 wait_for_log "tab rename test-tab agent" "$HERDR_LOG"
 wait_for_log "pane split test-pane --direction right --ratio 0.5 --cwd $ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$ACQUIRED" "$HERDR_LOG"
-wait_for_log "pane run test-pane cd '$ACQUIRED' && clear; opencode" "$HERDR_LOG"
-wait_for_log "pane run test-editor cd '$ACQUIRED' && clear; nvim" "$HERDR_LOG"
+wait_for_log "pane run test-pane cd $ACQUIRED && clear; omp" "$HERDR_LOG"
+wait_for_log "pane run test-editor cd $ACQUIRED && clear; nvim" "$HERDR_LOG"
 wait_for_log "notification show Task workspace ready --body Setup finished without changing your current focus." "$HERDR_LOG"
 assert_not_log "workspace focus test-workspace" "$HERDR_LOG"
 kill -0 "$launcher_pid" 2>/dev/null || fail "Treehouse returned before workspace close"
@@ -305,8 +337,9 @@ HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
 HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
+OMP_EXPERIMENT=0 \
 FAKE_FZF_CHECKOUT="Current checkout" \
-FAKE_FZF_PRIMARY="OpenCode" \
+FAKE_FZF_PRIMARY="opencode" \
 FAKE_INITIAL_PROMPT="$initial_prompt" \
   "$LAUNCHER" --select
 wait_for_log "wait output test-pane --match Ask anything --timeout 30000" "$HERDR_LOG"
@@ -331,12 +364,55 @@ HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
 HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
+HERDR_AGENT_CMD=opencode \
 FAKE_FZF_CHECKOUT="Current checkout" \
-FAKE_FZF_PRIMARY="OpenCode" \
+FAKE_FZF_PRIMARY="opencode" \
   "$LAUNCHER" --select
-wait_for_log "pane run test-pane cd '$LINKED' && clear; opencode" "$HERDR_LOG"
+wait_for_log "pane run test-pane cd $LINKED && clear; opencode" "$HERDR_LOG"
 assert_not_log "wait output" "$HERDR_LOG"
 [ ! -s "$PROMPT_LOG" ] || fail "empty prompt was submitted"
+
+# A default-on environment still falls back to OpenCode when omp is unavailable.
+reset_state
+HOME="$HOME_DIR" \
+PATH="/usr/bin:/bin" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_OMP_UNAVAILABLE=1 \
+PI_CODING_AGENT_DIR="$TMP/missing-omp-agent" \
+  "$LAUNCHER" --without-worktree --with-agent --without-editor
+wait_for_log "pane run test-pane cd $LINKED && clear; opencode" "$HERDR_LOG"
+
+# omp receives its initial prompt as an @file launch argument, so first-run
+# setup can finish without a guessed readiness delay. File bytes stay exact.
+reset_state
+omp_prompt="leading
+internal
+trailing
+"
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$QUOTED_LINKED" \
+HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
+FAKE_FZF_CHECKOUT="Current checkout" \
+FAKE_FZF_PRIMARY="omp" \
+FAKE_INITIAL_PROMPT="$omp_prompt" \
+  "$LAUNCHER" --select
+wait_for_log "pane run test-pane cd $TMP/linked\\'quoted && clear; omp @" "$HERDR_LOG"
+for _ in $(seq 1 500); do
+  [ -s "$PROMPT_LOG" ] && break
+  sleep 0.02
+done
+python3 - "$PROMPT_LOG" "$omp_prompt" <<'PY'
+import sys
+
+with open(sys.argv[1], "rb") as prompt_log:
+    actual = prompt_log.read()
+expected = sys.argv[2].encode()
+if actual != expected:
+    raise SystemExit(f"omp prompt was {actual!r}, expected {expected!r}")
+PY
+assert_not_log "wait output" "$HERDR_LOG"
 
 # Treehouse acquisition failures are visible even though shortcut commands run
 # detached without a usable stderr.
@@ -399,10 +475,21 @@ import sys
 import tomllib
 
 with open(sys.argv[1], "rb") as config_file:
-    rows = tomllib.load(config_file)["ui"]["sidebar"]["spaces"]["rows"]
+    config = tomllib.load(config_file)
+    rows = config["ui"]["sidebar"]["spaces"]["rows"]
 expected = [["state_icon", "workspace"], ["$repo", "$worktree"]]
 if rows != expected:
     raise SystemExit(f"space rows were {rows!r}, expected {expected!r}")
+commands = [entry["command"] for entry in config["keys"]["command"]]
+expected_commands = [
+    "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --select",
+    "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --with-editor",
+]
+if commands != expected_commands:
+    raise SystemExit(f"shortcut commands were {commands!r}, expected {expected_commands!r}")
+agent_rows = config["ui"]["sidebar"]["agents"]["rows_by_agent"]
+if "omp" in agent_rows:
+    raise SystemExit(f"redundant omp sidebar rows remain: {agent_rows['omp']!r}")
 PY
 
 echo "Herdr Treehouse tests passed."

@@ -1,10 +1,10 @@
 # Dotfiles
 
-Personal shell and agent configuration for Claude Code, OpenCode, Codex, and Cursor.
+Personal shell and agent configuration for Claude Code, omp, OpenCode, Codex, and Cursor.
 
 ## Install layout
 
-`install.sh` is a thin dispatcher: it resolves its own directory, sources every function module under `install.d/*.sh`, then runs the orchestration sequence at the bottom. Each module holds the setup functions for one concern (`10-helpers`, `20-mcp`, `30-system`, `40-cursor`, `50-claude`, `60-codex`, `65-opencode`, `70-rtk`, `80-tools`, `90-work`); definition order among modules doesn't matter since everything is sourced before the orchestration calls run. `verify-dotfiles.sh` `sh -n`s and shellchecks every module.
+`install.sh` is a thin dispatcher: it resolves its own directory, sources every function module under `install.d/*.sh`, then runs the orchestration sequence at the bottom. Each module holds the setup functions for one concern (`10-helpers`, `20-mcp`, `30-system`, `40-cursor`, `50-claude`, `60-codex`, `65-opencode`, `66-omp`, `70-rtk`, `80-tools`, `90-work`); definition order among modules doesn't matter since everything is sourced before the orchestration calls run. `verify-dotfiles.sh` `sh -n`s and shellchecks every module.
 
 ## Default shell on Ona
 
@@ -53,10 +53,11 @@ Claude Code hooks (`PostToolUse`, etc.) and Cursor hooks (`postToolUse`, etc.) a
 
 ### RTK (token-optimized shell output)
 
-[RTK](https://github.com/rtk-ai/rtk) rewrites agent shell commands (`git status`, `cargo test`, `rg`, etc.) to compact output - typically 60–90% fewer tokens on dev workflows. `install.sh` installs the binary and enables it for all four agents:
+[RTK](https://github.com/rtk-ai/rtk) rewrites agent shell commands (`git status`, `cargo test`, `rg`, etc.) to compact output - typically 60–90% fewer tokens on dev workflows. `install.sh` installs the binary and enables it for all five agents:
 
 - **Claude Code** - `PreToolUse` hook in `~/.claude/settings.json` (automatic bash rewrite)
 - **OpenCode** - `tool.execute.before` plugin in `~/.config/opencode/plugins/rtk.ts`
+- **omp** - native `rtk init --agent omp` integration when supported
 - **OpenAI Codex (GPT)** - [`codex/AGENTS.md`](codex/AGENTS.md) + [`codex/RTK.md`](codex/RTK.md) symlinked to `~/.codex/AGENTS.md` and `RTK.md`
 - **Cursor** - `preToolUse` hook in [`cursor/hooks.json`](cursor/hooks.json) (symlinked to `~/.cursor/hooks.json`)
 
