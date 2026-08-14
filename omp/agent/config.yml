@@ -1,0 +1,34 @@
+# omp settings (linked to ~/.omp/agent/config.yml).
+#
+# Model routing keeps gpt-5.6-sol as the driver for every role, mirroring the
+# opencode setup (build/plan/general all on gpt-5.6-sol). `task` is the role omp
+# gives subagents, so it stays on the same model.
+modelRoles:
+  default: sol/gpt-5.6-sol
+  plan: sol/gpt-5.6-sol:high
+  slow: sol/gpt-5.6-sol:high
+  task: sol/gpt-5.6-sol
+
+retry:
+  enabled: true
+  maxRetries: 10
+  baseDelayMs: 500
+  maxDelayMs: 300000
+  modelFallback: false
+
+# Approvals. `write` auto-approves reads and edits and prompts on shell exec - the
+# safe default. The opencode setup runs full auto (`--auto`); to match that exactly
+# set `approvalMode: yolo`, which still enforces the per-tool `deny` entries below
+# even for subagents.
+tools:
+  approvalMode: write
+  approval:
+    # Keep destructive/irreversible operations gated even in auto modes.
+    bash: prompt
+
+# Skills: omp already discovers ~/.claude/skills and ~/.agents/skills through its
+# built-in Claude/Agents skill providers. Add the shared-skills checkout explicitly
+# so a work or personal machine picks it up regardless of symlink layout.
+skills:
+  customDirectories:
+    - ~/dotfiles/shared-skills

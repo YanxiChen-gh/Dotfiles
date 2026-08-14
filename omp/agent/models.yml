@@ -1,0 +1,21 @@
+# omp provider + model catalog (linked to ~/.omp/agent/models.yml).
+#
+# gpt-5.6-sol is your existing opencode driver model. omp resolves `apiKey` as an
+# env var NAME first (falling back to the literal string), so no secret lives in
+# this repo - export SOL_API_KEY in your shell, same boundary as the Slack webhook.
+#
+# If gpt-5.6-sol is served by OpenAI directly, set baseUrl to https://api.openai.com/v1
+# and apiKey to OPENAI_API_KEY. If it is fronted by a gateway/proxy, point baseUrl there.
+providers:
+  sol:
+    baseUrl: https://api.openai.com/v1
+    api: openai-responses # gpt-5.6-sol is an OpenAI-provider model; use the Responses shape
+    apiKey: SOL_API_KEY
+    authHeader: true
+    models:
+      - id: gpt-5.6-sol
+        name: GPT-5.6 Sol
+        contextWindow: 400000
+        maxTokens: 64000
+        reasoning: true
+        input: [text, image]
