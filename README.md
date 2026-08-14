@@ -4,11 +4,17 @@ Personal shell and agent configuration for Claude Code, omp, OpenCode, Codex, an
 
 ## Install layout
 
-`install.sh` is a thin dispatcher: it resolves its own directory, sources every function module under `install.d/*.sh`, then runs the orchestration sequence at the bottom. Each module holds the setup functions for one concern (`10-helpers`, `20-mcp`, `30-system`, `40-cursor`, `50-claude`, `60-codex`, `65-opencode`, `66-omp`, `70-rtk`, `80-tools`, `90-work`); definition order among modules doesn't matter since everything is sourced before the orchestration calls run. `verify-dotfiles.sh` `sh -n`s and shellchecks every module.
+`install.sh` is a thin dispatcher: it resolves its own directory, sources every function module under `install.d/*.sh`, then runs the orchestration sequence at the bottom. Each module holds the setup functions for one concern (`10-helpers`, `20-mcp`, `30-system`, `35-agent-helpers`, `36-herdr-opener`, `40-cursor`, `50-claude`, `60-codex`, `65-opencode`, `66-omp`, `70-rtk`, `80-tools`, `90-work`); definition order among modules doesn't matter since everything is sourced before the orchestration calls run. `verify-dotfiles.sh` `sh -n`s and shellchecks every module.
 
 ## Default shell on Ona
 
 In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells default to zsh. `install.sh` adds a runtime-gated guard to `~/.bashrc` that hands interactive bash sessions over to zsh, and best-effort `chsh`'s the login shell when run inside Ona. The guard is a no-op on a personal machine (where `IS_ON_ONA` is unset) - `chsh` alone isn't enough because Ona SSHs in via `exec -l $SHELL -i` with `$SHELL=/bin/bash` and a container's `/etc/passwd` can reset on rebuild.
+
+## Herdr remote browser opening
+
+Herdr 0.8.0 resolves Ctrl-clicked pane URLs on its server, so `herdr --remote` otherwise launches the browser on the remote machine. The installer starts [opener](https://github.com/superbrothers/opener) on macOS and links a URL relay plugin inside Ona. Use `herdr-remote <ssh-target>` instead of `herdr --remote <ssh-target>` to create a fail-closed, loopback-only SSH relay for that session. Herdr still resolves the complete URL across wrapped lines; the viewing Mac opens the resulting HTTP(S) URL.
+
+The relay trusts the remote account: while attached, a process on that account can request that the Mac open an HTTP(S) URL. The remote host must provide `ss`; the wrapper refuses to start Herdr unless it confirms that the forwarded port is bound only to `127.0.0.1`. One relay can own a remote target at a time, and local Herdr sessions are unchanged.
 
 ## Editor (Vim / Neovim)
 

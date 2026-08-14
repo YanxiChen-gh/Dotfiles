@@ -63,6 +63,7 @@ setup_cloudev_tasks
 setup_herdr_config
 setup_treehouse_config
 setup_wezterm_config
+setup_herdr_opener_client
 setup_ona_default_shell
 
 if [ "$WORK_MACHINE" = "1" ]; then
@@ -76,6 +77,7 @@ install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_opencode
 install_agent_browser || exit 1
 install_from_url "herdr" "herdr" "https://herdr.dev/install.sh"
+setup_herdr_opener_plugin
 install_from_url "treehouse" "treehouse" "https://kunchenguid.github.io/treehouse/install.sh"
 install_langsmith_cli
 if [ "$WORK_MACHINE" = "1" ]; then

@@ -1,0 +1,18 @@
+id = "dotfiles.remote-opener"
+name = "Remote Browser Opener"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Open remote Herdr links in the viewing machine's browser"
+platforms = ["linux"]
+
+[[actions]]
+id = "open"
+title = "Open URL on viewing machine"
+contexts = ["pane"]
+command = ["python3", "open_url.py"]
+
+[[link_handlers]]
+id = "http-url"
+title = "Open URL on viewing machine"
+pattern = "^https?://.+$"
+action = "open"
