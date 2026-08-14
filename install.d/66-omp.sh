@@ -76,13 +76,18 @@ remove_legacy_omp_link() {
     fi
 }
 
-configure_omp_openai_default() {
-    [ -n "${OPENAI_API_KEY:-}" ] || return 0
-
+configure_omp_defaults() {
     omp_binary="${PI_INSTALL_DIR:-$HOME/.local/bin}/omp"
     if [ ! -x "$omp_binary" ]; then
         echo "⚠️  Warning: cannot configure omp defaults; $omp_binary is unavailable"
         return 1
+    fi
+
+    (cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config set hideThinkingBlock true >/dev/null) || return 1
+    if [ -z "${OPENAI_API_KEY:-}" ]; then
+        echo "✅ omp thinking blocks hidden by default"
+        return 0
     fi
 
     model_roles=$(cd "$HOME" && env -u PI_CONFIG_FILES \
@@ -99,7 +104,7 @@ configure_omp_openai_default() {
         "$omp_binary" config set modelRoles "$updated_roles" >/dev/null) || return 1
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set setupVersion 1 >/dev/null) || return 1
-    echo "✅ omp default model set to openai/gpt-5.6-sol"
+    echo "✅ omp default model set to openai/gpt-5.6-sol; thinking blocks hidden"
 }
 
 setup_omp_config() {
@@ -133,7 +138,7 @@ setup_omp_config() {
         "$agent_dir/APPEND_SYSTEM.md" \
         "$source_dir/../opencode/AGENTS.md" \
         "$source_dir/../opencode/AGENTS-work.md" || return 1
-    configure_omp_openai_default || return 1
+    configure_omp_defaults || return 1
 
     echo "✅ omp harness extension and global rules linked ($agent_dir)"
 }

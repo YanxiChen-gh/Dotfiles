@@ -41,10 +41,10 @@ around them.
 ## Layout
 
 - `agent/extensions/dotfiles-harness.ts` - the ported gates, Herdr title bridge, and Slack notifier.
-- `install.d/66-omp.sh` links these into `~/.omp/agent/`, runs the Herdr
-  integration, registers RTK (best-effort), and syncs the Glean MCP overlay.
-  With `OPENAI_API_KEY`, setup selects `openai/gpt-5.6-sol` without overriding
-  its model-default reasoning level. Otherwise omp's native onboarding owns setup.
+- `install.d/66-omp.sh` links these into `~/.omp/agent/`, hides thinking blocks
+  by default, runs the Herdr integration, registers RTK (best-effort), and syncs
+  the Glean MCP overlay. With `OPENAI_API_KEY`, setup also selects
+  `openai/gpt-5.6-sol` without overriding its model-default reasoning level.
 
 ## Parity with the opencode setup
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# E2E: omp installs standalone and selects the standard OpenAI default when available.
+# E2E: omp installs standalone, hides thinking, and selects the OpenAI default when available.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -40,6 +40,9 @@ case "${1:-}" in
         ;;
       set:setupVersion)
         printf '%s\n' "$4" > "$state_dir/fake-setup-version"
+        ;;
+      set:hideThinkingBlock)
+        printf '%s\n' "$4" > "$state_dir/fake-hide-thinking"
         ;;
       *) exit 93 ;;
     esac
@@ -165,6 +168,10 @@ jq -e '.default == "openai/gpt-5.6-sol" and .smol == "openai/gpt-5.4-mini"' \
   echo "FAIL: OpenAI environment did not complete native setup" >&2
   exit 1
 }
+[ "$(cat "$OLD_AGENT/fake-hide-thinking")" = "true" ] || {
+  echo "FAIL: omp thinking blocks were not hidden by default" >&2
+  exit 1
+}
 
 (
   export HOME="$TMP/home"
@@ -180,6 +187,10 @@ grep -F 'keep: true' "$UNMANAGED_AGENT/config.yml" >/dev/null
 grep -F 'keep: true' "$UNMANAGED_AGENT/models.yml" >/dev/null
 [ ! -e "$UNMANAGED_AGENT/fake-model-roles.json" ] || {
   echo "FAIL: model defaults changed without OPENAI_API_KEY" >&2
+  exit 1
+}
+[ "$(cat "$UNMANAGED_AGENT/fake-hide-thinking")" = "true" ] || {
+  echo "FAIL: omp thinking blocks were not hidden without OPENAI_API_KEY" >&2
   exit 1
 }
 
