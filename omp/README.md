@@ -72,7 +72,10 @@ and maturity-data sync. Add it once the trial proves the rest is worth keeping.
 ```sh
 # 1. Install + link (on your Mac/Ona, where Herdr lives)
 export OMP_EXPERIMENT=1
-export SOL_API_KEY=...            # your gpt-5.6-sol key; adjust baseUrl in models.yml if you use a gateway
+# One-time: store the gpt-5.6-sol key in a mode-600 file (no trailing newline).
+# models.yml reads it at launch via `!cat`; adjust baseUrl there if you use a gateway.
+mkdir -p ~/.claude/secrets && chmod 700 ~/.claude/secrets
+umask 177; printf %s 'YOUR_GPT_5_6_SOL_KEY' > ~/.claude/secrets/sol-api-key.txt
 ./install.sh                      # runs install_omp + setup_omp_config + install_herdr_omp_integration
 
 # 2. Sanity-check config discovery
