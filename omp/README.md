@@ -59,7 +59,7 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 | Herdr session/subagent/state sync | native `herdr integration install omp`; workspace title mirrored by the harness |
 | Same-session checkpoint/compaction | native auto-compaction |
 | Global rules (`AGENTS.md`) | `APPEND_SYSTEM.md` (linked) |
-| Skills: `~/.claude/skills` + `~/.agents/skills` (shared, advisor, agent-maturity) | **native** - omp's Claude + Agents providers read the same dirs |
+| Skills: `~/.claude/skills` + `~/.agents/skills` (shared, advisor, agent-maturity, Obsidian AI Platform) | **native** - omp's Claude + Agents providers read the same dirs |
 | Glean MCP overlay (`sync_opencode_mcp_from_claude.py`) | `sync_omp_mcp_from_claude.py` -> `~/.omp/agent/mcp.json` |
 | RTK token-optimized shell output | `rtk init --agent omp` (best-effort; may be unsupported) |
 | Herdr workflow launch (`prefix+a`) | omp by default; `OMP_EXPERIMENT=0` selects OpenCode |
@@ -69,8 +69,9 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 | `tui.jsonc` | not ported (cosmetic TUI prefs) |
 
 The skills row is the important one: omp discovers `~/.claude/skills` and
-`~/.agents/skills` natively, so the shared, advisor, agent-maturity, and Claude
-Code skills you already symlink there show up in omp with zero extra config.
+`~/.agents/skills` natively. The installer links shared, advisor, agent-maturity,
+and Obsidian AI Platform skills there and refuses to mark omp ready when its
+required maturity scripts or shared scope and outcome skills are missing.
 The native Agent Hub owns subagent detail. Herdr remains the cross-workspace
 lifecycle view and does not duplicate omp's task list.
 

@@ -237,6 +237,9 @@ setup_agent_maturity() {
         "$HOME/.claude/skills/canary-takeover/SKILL.md" \
         "$HOME/.agents/skills/scope-gate/SKILL.md" \
         "$HOME/.agents/skills/canary-takeover/SKILL.md" \
+        "$HOME/.claude/skills/record-task-outcome/SKILL.md" \
+        "$HOME/.agents/skills/record-task-outcome/SKILL.md" \
+        "$HOME/.agent-maturity.env" \
         "$HOME/.claude/settings.json" \
         "$config_home/opencode/plugins/dotfiles-harness.js"
     do
@@ -262,7 +265,50 @@ setup_agent_maturity() {
     echo "ℹ️  Codex: open /hooks once and trust the new agent-maturity hooks"
 }
 
-# Enable Vanta AI Platform Claude Code plugin and sync its skills to Cursor.
+# Enable Vanta AI Platform skills for Claude Code, shared Agent Skills clients, and Cursor.
+link_vanta_ai_platform_agent_skills() {
+    plugin_root=$1
+    agent_skills_dir="$HOME/.agents/skills"
+    skills_root="$plugin_root/skills"
+    mkdir -p "$agent_skills_dir"
+
+    for target in "$agent_skills_dir"/*; do
+        [ -L "$target" ] || continue
+        current_source=$(readlink "$target")
+        name=$(basename "$target")
+        case "$current_source" in
+            */.claude/plugins/ai-platform-team/skills/"$name"|*/.claude/plugins/ai-platform-team/skills/"$name"/)
+                [ -f "$skills_root/$name/SKILL.md" ] || rm -f "$target"
+                ;;
+        esac
+    done
+
+    for skill_dir in "$skills_root"/*/; do
+        [ -f "$skill_dir/SKILL.md" ] || continue
+        source_dir=${skill_dir%/}
+        name=$(basename "$source_dir")
+        target="$agent_skills_dir/$name"
+
+        if [ -L "$target" ]; then
+            current_source=$(readlink "$target")
+            if [ "$current_source" = "$source_dir" ]; then
+                continue
+            fi
+            case "$current_source" in
+                */.claude/plugins/ai-platform-team/skills/"$name"|*/.claude/plugins/ai-platform-team/skills/"$name"/)
+                    rm -f "$target"
+                    ;;
+            esac
+        fi
+
+        if [ -e "$target" ] || [ -L "$target" ]; then
+            echo "⚠️  Preserving unmanaged Agent Skill: $target"
+            return 1
+        fi
+        ln -s "$source_dir" "$target" || return 1
+    done
+}
+
 setup_vanta_ai_platform_plugin() {
     if [ "$WORK_MACHINE" != "1" ]; then
         return 0
@@ -274,7 +320,7 @@ setup_vanta_ai_platform_plugin() {
         return 0
     fi
 
-    echo "Setting up Vanta AI Platform plugin for Claude Code and Cursor..."
+    echo "Setting up Vanta AI Platform plugin for Claude Code, shared Agent Skills clients, and Cursor..."
 
     if command -v python3 >/dev/null 2>&1; then
         python3 - "$HOME/.claude/settings.json" <<'PY'
@@ -300,6 +346,13 @@ PY
     else
         echo "⚠️  Python3 not found; skipping Claude Code plugin enablement"
     fi
+    if link_vanta_ai_platform_agent_skills "$obsidian_root/.claude/plugins/ai-platform-team"; then
+        echo "✅ AI Platform skills linked for Codex, OpenCode, and omp"
+    else
+        echo "⚠️  AI Platform shared skill setup is incomplete"
+        return 1
+    fi
+
 
     script_dir=$(resolve_script_dir) || return 1
     sync_script="$script_dir/sync-claude-skills-to-repo.sh"

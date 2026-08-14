@@ -79,7 +79,7 @@ Rules that more than one tool shares live once under `agent-rules/`: a tool-agno
 
 `install.sh` installs OpenCode with the official installer, links [`opencode/opencode.jsonc`](opencode/opencode.jsonc) into `$XDG_CONFIG_HOME/opencode/` (default `~/.config/opencode/`), and preserves the existing GPT-5.6 agent defaults. Existing unmanaged files are moved once to a `.pre-dotfiles` backup rather than deleted. [`opencode-claude-auth`](https://github.com/griffinmartin/opencode-claude-auth) is pinned and loaded as an npm plugin so Anthropic models can reuse Claude Code's SSO credentials without storing them in this repo. It is a community workaround that may be affected by Anthropic's terms or OAuth changes. On macOS it also copies credentials from Keychain into OpenCode's mode-`0600` `auth.json`; Linux already uses Claude Code's credentials file.
 
-OpenCode gets the same generated global rules, auto-discovers skills under `~/.claude/skills` and `~/.agents/skills`, and uses a local plugin adapter for the scope, comment, verification, and PR-authoring gates. A wrapper in `~/.local/bin` enables OpenCode's official auto mode for TUI and `run` sessions while preserving explicit deny rules; Herdr resume launches are spaced by 15 seconds to avoid concurrent cold-start stalls. On work machines OpenCode also links a `vanta-doc-discovery` adapter that reads the current Obsidian worktree's repository skill and maps its Claude-specific Glean calls to OpenCode's Glean tools. Herdr installs its official OpenCode plugin for lifecycle state and session restore, and RTK installs its native OpenCode plugin. The installer converts only Claude Code's Glean MCP definition into an untracked, mode-`0600` `$XDG_CONFIG_HOME/opencode/mcp.json` overlay, keeping task-specific MCP tools out of OpenCode's default context.
+OpenCode gets the same generated global rules, auto-discovers skills under `~/.claude/skills` and `~/.agents/skills`, and uses a local plugin adapter for the scope, comment, verification, and PR-authoring gates. On work machines the installer links the Obsidian AI Platform plugin's skills into the shared Agent Skills directory, so OpenCode, omp, and Codex use the same skill sources without copied snapshots. A wrapper in `~/.local/bin` enables OpenCode's official auto mode for TUI and `run` sessions while preserving explicit deny rules; Herdr resume launches are spaced by 15 seconds to avoid concurrent cold-start stalls. OpenCode also links a `vanta-doc-discovery` adapter that reads the current Obsidian worktree's repository skill and maps its Claude-specific Glean calls to OpenCode's Glean tools. Herdr installs its official OpenCode plugin for lifecycle state and session restore, and RTK installs its native OpenCode plugin. The installer verifies the wrapper and plugin are available before reporting success.
 
 After changing OpenCode config or plugins, quit and restart OpenCode. To use Claude SSO, authenticate Claude Code first, then select an Anthropic model in OpenCode.
 
@@ -106,9 +106,9 @@ The notifier uses a personal Slack app because Slack suppresses notifications fo
 
 The installer links the transport at `~/.local/bin/slack-webhook-post.sh` but never creates or modifies the secret. Set `AGENT_SLACK_NOTIFICATIONS=0` before launching OpenCode to disable delivery temporarily. Rotate a leaked webhook in the Slack app settings, then replace the local file using the same mode-600 boundary.
 
-### Shared global skills (Claude + OpenCode + Cursor + Codex)
+### Shared global skills (Claude + OpenCode + omp + Cursor + Codex)
 
-Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. Claude Code, Codex, OpenCode, and Cursor discover them natively. Cursor-only meta-skills stay under `cursor/skills/`.
+Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. The Obsidian AI Platform plugin uses the same shared path for OpenCode, omp, and Codex while Claude Code loads the plugin natively and Cursor receives its generated workspace copies. Managed AI Platform links follow the active Obsidian checkout; unrelated existing skills are preserved. Claude Code, Codex, OpenCode, omp, and Cursor discover their applicable paths natively. Cursor-only meta-skills stay under `cursor/skills/`.
 
 ### Google Workspace CLI
 
@@ -132,7 +132,7 @@ Run Streamlit on port `8501`, then use `scripts/expose-port.sh 8501 /_stcore/hea
 
 ### Agent maturity
 
-The agent-maturity bootstrap installs one model-agnostic engine and private data store. Claude Code uses native lifecycle hooks, Codex uses the same hook scripts through `~/.codex/hooks.json`, and OpenCode uses `dotfiles-harness.js` to adapt its plugin events. All three discover the same skills without copying them. Codex requires a one-time `/hooks` review after installation or whenever the hook definition changes.
+The agent-maturity bootstrap installs one model-agnostic engine and private data store. Claude Code uses native lifecycle hooks, Codex uses the same hook scripts through `~/.codex/hooks.json`, OpenCode uses `dotfiles-harness.js`, and omp uses `dotfiles-harness.ts` to adapt lifecycle events. All four discover the same skills without copying them. Installation now treats a failed bootstrap as fatal before OMP setup, and OMP publishes its readiness marker only when the engine scripts plus its shared scope and outcome skills exist. Codex requires a one-time `/hooks` review after installation or whenever the hook definition changes.
 
 ### Work monorepo clone
 

@@ -122,13 +122,13 @@ install_agent_skill "ogulcancelik/herdr" "herdr"
 setup_claude_config
 setup_opencode_config
 install_herdr_opencode_integration
-setup_omp_integration || exit 1
 setup_codex_config
 setup_advisors
 setup_rtk
-setup_agent_maturity
+setup_agent_maturity || exit 1
+setup_omp_integration || exit 1
 setup_superpowers_plugin
-setup_vanta_ai_platform_plugin
+setup_vanta_ai_platform_plugin || exit 1
 setup_vanta_doc_discovery_plugin
 
 # Setup work-specific tools (conditional)

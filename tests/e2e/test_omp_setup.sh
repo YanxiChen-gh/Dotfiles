@@ -433,11 +433,24 @@ grep -F 'rtk init -g --agent omp --auto-patch' "$TMP/default-gate.log" >/dev/nul
 grep -F "python3 $ROOT/scripts/sync_omp_mcp_from_claude.py" "$TMP/default-gate.log" >/dev/null
 grep -F 'herdr integration install omp' "$TMP/default-gate.log" >/dev/null
 
+MATURITY="$TMP/maturity-ready"
+mkdir -p \
+  "$MATURITY/scripts" \
+  "$TMP/home/.agents/skills/scope-gate" \
+  "$TMP/home/.agents/skills/record-task-outcome"
+for script in scope-gate-userpromptsubmit.sh scope-gate-pretooluse.sh record-task-outcome.sh sync-maturity-data.sh; do
+  : >"$MATURITY/scripts/$script"
+done
+: >"$TMP/home/.agents/skills/scope-gate/SKILL.md"
+: >"$TMP/home/.agents/skills/record-task-outcome/SKILL.md"
+: >"$TMP/home/.agent-maturity.env"
+
 # Herdr readiness is published only after the full binary/config/integration
 # chain succeeds, and a failed refresh clears any stale marker.
 (
   export HOME="$TMP/home"
   export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
+  export AGENT_MATURITY_HOME="$MATURITY"
   unset OMP_EXPERIMENT
   . "$ROOT/install.d/66-omp.sh"
   install_omp() { return 0; }
@@ -449,17 +462,19 @@ grep -F 'herdr integration install omp' "$TMP/default-gate.log" >/dev/null
   echo "FAIL: successful omp setup did not publish Herdr readiness" >&2
   exit 1
 }
+rm "$MATURITY/scripts/record-task-outcome.sh"
 if (
   export HOME="$TMP/home"
+  export AGENT_MATURITY_HOME="$MATURITY"
   export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
   unset OMP_EXPERIMENT
   . "$ROOT/install.d/66-omp.sh"
   install_omp() { return 0; }
-  setup_omp_config() { return 1; }
+  setup_omp_config() { return 0; }
   install_herdr_omp_integration() { return 0; }
   setup_omp_integration
 ); then
-  echo "FAIL: incomplete omp setup returned success" >&2
+  echo "FAIL: omp setup accepted incomplete agent-maturity integration" >&2
   exit 1
 fi
 [ ! -e "$TMP/readiness-agent/.dotfiles-ready" ] || {

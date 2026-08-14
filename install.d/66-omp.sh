@@ -188,6 +188,26 @@ install_herdr_omp_integration() {
     echo "✅ Herdr omp integration installed (native lifecycle state + session restore)"
 }
 
+validate_omp_maturity() {
+    maturity="${AGENT_MATURITY_HOME:-$HOME/agent-maturity}"
+    missing=""
+    for path in \
+        "$maturity/scripts/scope-gate-userpromptsubmit.sh" \
+        "$maturity/scripts/scope-gate-pretooluse.sh" \
+        "$maturity/scripts/record-task-outcome.sh" \
+        "$maturity/scripts/sync-maturity-data.sh" \
+        "$HOME/.agents/skills/scope-gate/SKILL.md" \
+        "$HOME/.agents/skills/record-task-outcome/SKILL.md" \
+        "$HOME/.agent-maturity.env"
+    do
+        [ -e "$path" ] || missing="$missing $path"
+    done
+    if [ -n "$missing" ]; then
+        echo "⚠️  omp agent-maturity integration incomplete; missing:$missing"
+        return 1
+    fi
+}
+
 setup_omp_integration() {
     if ! omp_experiment_enabled; then
         echo "ℹ️  omp integration disabled by OMP_EXPERIMENT=0"
@@ -199,7 +219,7 @@ setup_omp_integration() {
         echo "⚠️  Cannot invalidate $ready_marker; Herdr will fall back to OpenCode"
         return 1
     fi
-    if ! install_omp || ! setup_omp_config || ! install_herdr_omp_integration; then
+    if ! validate_omp_maturity || ! install_omp || ! setup_omp_config || ! install_herdr_omp_integration; then
         echo "⚠️  omp integration is incomplete; Herdr will fall back to OpenCode"
         return 1
     fi
