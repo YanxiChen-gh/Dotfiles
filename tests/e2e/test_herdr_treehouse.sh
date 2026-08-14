@@ -24,7 +24,8 @@ AGENT_READY="$TMP/agent-ready"
 PROMPT_LOG="$TMP/prompt.log"
 PROMPT_INPUT="$TMP/prompt-input.py"
 
-mkdir -p "$HOME_DIR/.local/bin" "$MAIN" "${ACQUIRED%/*}"
+mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "${ACQUIRED%/*}"
+: > "$HOME_DIR/.omp/agent/.dotfiles-ready"
 
 git -C "$MAIN" init -q
 git -C "$MAIN" config user.name test
@@ -135,6 +136,7 @@ done
 
 cat > "$HOME_DIR/.local/bin/omp" <<'EOF'
 #!/bin/sh
+[ "${FAKE_OMP_UNAVAILABLE:-}" != "1" ] || exit 127
 case "${1:-}" in
   @*)
     python3 - "${1#@}" "$FAKE_PROMPT_LOG" <<'PY'
@@ -245,7 +247,7 @@ wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkou
 assert_log "start cwd=$MAIN shell=$TREEHOUSE_SHELL args=get" "$TREEHOUSE_LOG"
 wait_for_log "tab rename test-tab agent" "$HERDR_LOG"
 wait_for_log "pane split test-pane --direction right --ratio 0.5 --cwd $ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$ACQUIRED" "$HERDR_LOG"
-wait_for_log "pane run test-pane cd $ACQUIRED && clear; opencode" "$HERDR_LOG"
+wait_for_log "pane run test-pane cd $ACQUIRED && clear; omp" "$HERDR_LOG"
 wait_for_log "pane run test-editor cd $ACQUIRED && clear; nvim" "$HERDR_LOG"
 wait_for_log "notification show Task workspace ready --body Setup finished without changing your current focus." "$HERDR_LOG"
 assert_not_log "workspace focus test-workspace" "$HERDR_LOG"
@@ -335,6 +337,7 @@ HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
 HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
+OMP_EXPERIMENT=0 \
 FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="opencode" \
 FAKE_INITIAL_PROMPT="$initial_prompt" \
@@ -361,12 +364,24 @@ HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
 HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
+HERDR_AGENT_CMD=opencode \
 FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="opencode" \
   "$LAUNCHER" --select
 wait_for_log "pane run test-pane cd $LINKED && clear; opencode" "$HERDR_LOG"
 assert_not_log "wait output" "$HERDR_LOG"
 [ ! -s "$PROMPT_LOG" ] || fail "empty prompt was submitted"
+
+# A default-on environment still falls back to OpenCode when omp is unavailable.
+reset_state
+HOME="$HOME_DIR" \
+PATH="/usr/bin:/bin" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_OMP_UNAVAILABLE=1 \
+PI_CODING_AGENT_DIR="$TMP/missing-omp-agent" \
+  "$LAUNCHER" --without-worktree --with-agent --without-editor
+wait_for_log "pane run test-pane cd $LINKED && clear; opencode" "$HERDR_LOG"
 
 # omp receives its initial prompt as an @file launch argument, so first-run
 # setup can finish without a guessed readiness delay. File bytes stay exact.
@@ -379,7 +394,6 @@ HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$QUOTED_LINKED" \
 HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
-OMP_EXPERIMENT=1 \
 FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="omp" \
 FAKE_INITIAL_PROMPT="$omp_prompt" \

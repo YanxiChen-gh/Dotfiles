@@ -2,9 +2,9 @@
 # new-agent-tab.sh - Herdr task-workspace launcher (bound to prefix+a/shift+a).
 #
 # By default, Treehouse opens a worktree and a small shell wrapper creates the
-# Herdr workspace inside it with OpenCode.
+# Herdr workspace inside it with omp, falling back to OpenCode when unavailable.
 # --select asks for the checkout, primary pane, optional nvim split, and - for
-# OpenCode - an initial prompt first.
+# a coding agent - an initial prompt first.
 #
 # Treehouse remains the owner: `treehouse get` waits for its shell wrapper, the
 # wrapper waits for the Herdr workspace to close, then Treehouse performs its
@@ -18,13 +18,16 @@ export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/go/bin:/usr/local/bin:/u
 launcher_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 herdr="${HERDR_BIN_PATH:-herdr}"
 src_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
+omp_ready_marker="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}/.dotfiles-ready"
 
-# Left pane = coding agent, right pane = editor. The agent follows OMP_EXPERIMENT
-# so one switch drives both the install side and this workflow: flag on -> omp,
-# flag off -> opencode. Override explicitly with HERDR_AGENT_CMD.
+# Left pane = coding agent, right pane = editor. omp is the default; setting
+# OMP_EXPERIMENT=0 switches both installation and this workflow back to OpenCode.
+# Override either default explicitly with HERDR_AGENT_CMD.
 if [ -n "${HERDR_AGENT_CMD:-}" ]; then
   agent_cmd="$HERDR_AGENT_CMD"
-elif [ "${OMP_EXPERIMENT:-}" = "1" ]; then
+elif [ "${OMP_EXPERIMENT:-1}" != "0" ] && command -v omp >/dev/null 2>&1 \
+  && omp --version >/dev/null 2>&1 && [ -f "$omp_ready_marker" ] \
+  && [ -w "$omp_ready_marker" ] && [ -w "${omp_ready_marker%/*}" ]; then
   agent_cmd="omp"
 else
   agent_cmd="opencode"

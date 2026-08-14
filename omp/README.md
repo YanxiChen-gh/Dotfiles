@@ -1,13 +1,13 @@
-# omp (oh-my-pi) harness - experimental
+# omp (oh-my-pi) harness
 
 A parallel harness that runs the same model and the same gates as the opencode
 setup, on [oh-my-pi](https://github.com/can1357/oh-my-pi) instead of opencode. It
 exists to answer two questions: what does the config look like, and how much of
 `dotfiles-harness.js` survives once the harness gives you first-party batteries.
 
-Everything is gated behind `OMP_EXPERIMENT=1` and lives in omp's own `~/.omp`
-config dir, so it never runs during a normal install and never touches the live
-opencode setup.
+omp is enabled by default and lives in its own `~/.omp` config directory, so it
+coexists with OpenCode. Set `OMP_EXPERIMENT=0` to skip omp setup and make the
+Herdr workflow default to OpenCode.
 
 ## How much shrinks
 
@@ -62,7 +62,7 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 | Skills: `~/.claude/skills` + `~/.agents/skills` (shared, advisor, agent-maturity) | **native** - omp's Claude + Agents providers read the same dirs |
 | Glean MCP overlay (`sync_opencode_mcp_from_claude.py`) | `sync_omp_mcp_from_claude.py` -> `~/.omp/agent/mcp.json` |
 | RTK token-optimized shell output | `rtk init --agent omp` (best-effort; may be unsupported) |
-| Herdr workflow launch (`prefix+a`) | `new-agent-tab.sh` switches on `OMP_EXPERIMENT` |
+| Herdr workflow launch (`prefix+a`) | omp by default; `OMP_EXPERIMENT=0` selects OpenCode |
 | `opencode-claude-auth` (Anthropic SSO) | Native setup and `/login` |
 | Canary takeover | deferred (checkpoint/maturity-coupled) |
 | `vanta-doc-discovery` work Glean adapter | not ported - verify the Claude skill works over MCP first |
@@ -78,21 +78,15 @@ Lavish review is allowed only in a human-interactive omp TUI. Run its safe poll
 as one managed async Bash job per feedback round; omp delivers completion back
 to the session, so no periodic polling or detached shell process is needed.
 
-## Documented gaps to verify in a real run
+## Operational notes
 
-These are places omp's public docs did not fully pin down. The code makes a
-best-effort choice and comments it; confirm on your machine before trusting it
-beyond the trial.
+The trial exercised standard OpenAI requests, gate loading, managed Lavish jobs,
+Herdr title sync, multiline prompts, and Agent Hub behavior. Keep these lifecycle
+details in mind when troubleshooting:
 
-1. **Root vs subagent discriminator.** omp exposes no guaranteed flag. The Slack
-   "finished" notice keys off `session_stop`, which is documented to fire for root
-   sessions only. Verify subagents do not page you.
-2. **`tool_result` patch shape.** The comment self-check appends its reminder to
-   the tool result's content array; confirm the reminder actually reaches the model.
-3. **Global `APPEND_SYSTEM.md`.** The rules are linked to `~/.omp/agent/APPEND_SYSTEM.md`;
-   confirm omp reads a global one (it definitely reads project `.omp/APPEND_SYSTEM.md`).
-4. **Herdr min version.** `herdr integration install omp` needs contract v3; run
-   `herdr integration status` to confirm `omp: current (v3)`.
+1. Slack completion uses omp's root-only `session_stop`; task agents do not emit it.
+2. Global rules are linked at `~/.omp/agent/APPEND_SYSTEM.md`.
+3. Run `herdr integration status` after Herdr upgrades and confirm `omp: current`.
 
 Canary takeover is intentionally not ported - it is coupled to the checkpoint flow
 and maturity-data sync. Add it once the trial proves the rest is worth keeping.
@@ -101,7 +95,6 @@ and maturity-data sync. Add it once the trial proves the rest is worth keeping.
 
 ```sh
 # 1. Install + link (on your Mac/Ona, where Herdr lives)
-export OMP_EXPERIMENT=1
 ./install.sh                      # runs install_omp + setup_omp_config + install_herdr_omp_integration
 
 # 2. Start omp. OPENAI_API_KEY is discovered automatically when available.
@@ -112,10 +105,10 @@ herdr integration status          # should show omp: current (v3)
 omp
 ```
 
-With `OMP_EXPERIMENT=1` exported in the environment Herdr's server sees (e.g. your
-shell profile), the whole workflow follows: `prefix+a` / `prefix+shift+a` launch omp
-instead of opencode, and the `--select` picker offers omp. Flag off, everything
-reverts to opencode. Override per launch with `HERDR_AGENT_CMD=omp` (or `opencode`).
+The whole workflow follows the default: `prefix+a` / `prefix+shift+a` launch omp,
+and the `--select` picker offers omp. If omp is unavailable, the launcher falls
+back to OpenCode. Set `HERDR_AGENT_CMD=opencode` (or `omp`) in the environment
+before starting Herdr to override its server-wide default.
 
 When seeding an initial prompt via `prefix+a --select`, the launcher passes omp a
 mode-600 temporary `@file` argument. omp consumes it after first-run setup, so the
@@ -123,6 +116,18 @@ workflow does not depend on a guessed ready string or delay.
 The popup uses Enter for a newline, Ctrl+S to submit, and Esc to skip.
 Encoded Ctrl+Enter remains supported when the host terminal preserves it.
 
-opencode stays installed and coexists (omp uses its own `~/.omp` dir). Disable the
-experiment by unsetting `OMP_EXPERIMENT` and re-running `install.sh`; the opencode
-setup is untouched throughout.
+OpenCode stays installed and coexists with omp. To make it the default again,
+persist the opt-out in the environment Herdr's server inherits, rerun setup, and
+restart an already-running server from outside its attached client:
+
+```sh
+export OMP_EXPERIMENT=0
+./install.sh
+herdr server stop
+herdr
+```
+
+This skips omp integration work and makes `prefix+a` launch OpenCode. It does not
+need to uninstall the existing omp binary. Run the stop/start sequence from a
+shell outside the attached Herdr client. Remove the override or set it to `1`
+and restart the server to return to omp.

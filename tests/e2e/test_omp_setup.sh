@@ -65,7 +65,6 @@ ln -s "../lib/node_modules/@oh-my-pi/pi-coding-agent/dist/cli.js" "$TMP/home/.lo
 (
   export HOME="$TMP/home"
   export PATH="$TMP/bin:/usr/bin:/bin"
-  export OMP_EXPERIMENT=1
   export FAKE_INSTALL_ARGS="$TMP/install-args"
   . "$ROOT/install.d/10-helpers.sh"
   . "$ROOT/install.d/66-omp.sh"
@@ -137,7 +136,6 @@ printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
 
 (
   export HOME="$TMP/home"
-  export OMP_EXPERIMENT=1
   export OPENAI_API_KEY=test-openai-key
   export PI_CONFIG_FILES="$TMP/project-overlay.yml"
   export PI_CODING_AGENT_DIR="$OLD_AGENT"
@@ -305,13 +303,127 @@ chmod +x "$TMP/bin/herdr"
 (
   export HOME="$TMP/home"
   export PATH="$TMP/bin:/usr/bin:/bin"
-  export OMP_EXPERIMENT=1
   export HERDR_INTEGRATION_LOG="$TMP/herdr-integration.log"
   . "$ROOT/install.d/66-omp.sh"
   install_herdr_omp_integration
 )
 [ "$(cat "$TMP/herdr-integration.log")" = "integration install omp" ] || {
   echo "FAIL: native Herdr omp integration was not installed" >&2
+  exit 1
+}
+
+# Unset is the primary enabled state, 1 remains explicit enablement, and 0 is
+# the single opt-out used by both installation and Herdr launch behavior.
+(
+  . "$ROOT/install.d/66-omp.sh"
+  unset OMP_EXPERIMENT
+  omp_experiment_enabled || exit 1
+  OMP_EXPERIMENT=1
+  omp_experiment_enabled || exit 2
+  OMP_EXPERIMENT=0
+  ! omp_experiment_enabled || exit 3
+  OMP_EXPERIMENT=unexpected
+  omp_experiment_enabled || exit 4
+) || {
+  echo "FAIL: omp enablement flag semantics are incorrect" >&2
+  exit 1
+}
+
+cat > "$TMP/bin/omp" <<'EOF'
+#!/bin/sh
+printf '%s\n' "omp $*" >> "$OMP_GATE_LOG"
+EOF
+cat > "$TMP/bin/rtk" <<'EOF'
+#!/bin/sh
+printf '%s\n' "rtk $*" >> "$OMP_GATE_LOG"
+EOF
+cat > "$TMP/bin/python3" <<'EOF'
+#!/bin/sh
+printf '%s\n' "python3 $*" >> "$OMP_GATE_LOG"
+EOF
+cat > "$TMP/bin/herdr" <<'EOF'
+#!/bin/sh
+printf '%s\n' "herdr $*" >> "$OMP_GATE_LOG"
+EOF
+chmod +x "$TMP/bin/omp" "$TMP/bin/rtk" "$TMP/bin/python3" "$TMP/bin/herdr"
+
+# Every gated entry point must be inert under the explicit opt-out.
+: > "$TMP/disabled-gate.log"
+rm -rf "$TMP/disabled-bin" "$TMP/disabled-agent"
+(
+  export HOME="$TMP/home"
+  export PATH="$TMP/bin:/usr/bin:/bin"
+  export OMP_EXPERIMENT=0
+  export OMP_GATE_LOG="$TMP/disabled-gate.log"
+  export FAKE_INSTALL_ARGS="$TMP/disabled-install-args"
+  export PI_INSTALL_DIR="$TMP/disabled-bin"
+  export PI_CODING_AGENT_DIR="$TMP/disabled-agent"
+  . "$ROOT/install.d/10-helpers.sh"
+  . "$ROOT/install.d/66-omp.sh"
+  resolve_script_dir() { printf '%s\n' "$ROOT"; }
+  install_omp
+  setup_omp_config
+  setup_omp_rtk
+  sync_omp_mcp
+  install_herdr_omp_integration
+)
+[ ! -s "$TMP/disabled-gate.log" ] || {
+  echo "FAIL: opt-out executed an omp integration command" >&2
+  exit 1
+}
+[ ! -e "$TMP/disabled-bin" ] && [ ! -e "$TMP/disabled-agent" ] || {
+  echo "FAIL: opt-out created omp installation state" >&2
+  exit 1
+}
+
+# With no flag, ancillary RTK, MCP, and Herdr integration entry points run.
+: > "$TMP/default-gate.log"
+(
+  export HOME="$TMP/home"
+  export PATH="$TMP/bin:/usr/bin:/bin"
+  unset OMP_EXPERIMENT
+  export OMP_GATE_LOG="$TMP/default-gate.log"
+  . "$ROOT/install.d/66-omp.sh"
+  resolve_script_dir() { printf '%s\n' "$ROOT"; }
+  setup_omp_rtk
+  sync_omp_mcp
+  install_herdr_omp_integration
+)
+grep -F 'rtk init -g --agent omp --auto-patch' "$TMP/default-gate.log" >/dev/null
+grep -F "python3 $ROOT/scripts/sync_omp_mcp_from_claude.py" "$TMP/default-gate.log" >/dev/null
+grep -F 'herdr integration install omp' "$TMP/default-gate.log" >/dev/null
+
+# Herdr readiness is published only after the full binary/config/integration
+# chain succeeds, and a failed refresh clears any stale marker.
+(
+  export HOME="$TMP/home"
+  export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
+  unset OMP_EXPERIMENT
+  . "$ROOT/install.d/66-omp.sh"
+  install_omp() { return 0; }
+  setup_omp_config() { mkdir -p "$PI_CODING_AGENT_DIR"; return 0; }
+  install_herdr_omp_integration() { return 0; }
+  setup_omp_integration
+)
+[ -f "$TMP/readiness-agent/.dotfiles-ready" ] || {
+  echo "FAIL: successful omp setup did not publish Herdr readiness" >&2
+  exit 1
+}
+if (
+  export HOME="$TMP/home"
+  export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
+  unset OMP_EXPERIMENT
+  . "$ROOT/install.d/66-omp.sh"
+  install_omp() { return 0; }
+  setup_omp_config() { return 1; }
+  install_herdr_omp_integration() { return 0; }
+  setup_omp_integration
+); then
+  echo "FAIL: incomplete omp setup returned success" >&2
+  exit 1
+fi
+[ ! -e "$TMP/readiness-agent/.dotfiles-ready" ] || {
+  echo "FAIL: incomplete omp setup retained a stale Herdr readiness marker" >&2
   exit 1
 }
 

@@ -120,9 +120,7 @@ install_agent_skill "ogulcancelik/herdr" "herdr"
 setup_claude_config
 setup_opencode_config
 install_herdr_opencode_integration
-install_omp
-setup_omp_config
-install_herdr_omp_integration
+setup_omp_integration || true
 setup_codex_config
 setup_advisors
 setup_rtk

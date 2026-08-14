@@ -2,12 +2,15 @@
 # shellcheck shell=sh
 # Sourced by ../install.sh - function definitions only.
 #
-# Experimental oh-my-pi (omp) harness. Everything here is gated behind
-# OMP_EXPERIMENT=1 so it never runs during a normal install and never disturbs
-# the live opencode setup. omp uses its own ~/.omp config dir, so the two coexist.
+# oh-my-pi (omp) harness. It runs by default and uses its own ~/.omp config dir,
+# so it coexists with OpenCode. Set OMP_EXPERIMENT=0 to skip the integration.
 
 omp_experiment_enabled() {
-    [ "${OMP_EXPERIMENT:-}" = "1" ]
+    [ "${OMP_EXPERIMENT:-1}" != "0" ]
+}
+
+omp_ready_marker() {
+    printf '%s\n' "${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}/.dotfiles-ready"
 }
 
 install_omp() {
@@ -168,8 +171,8 @@ install_herdr_omp_integration() {
         herdr_bin="$HOME/.local/bin/herdr"
     fi
     if [ -z "$herdr_bin" ]; then
-        echo "⚠️  Herdr is unavailable; skipping its omp integration"
-        return 0
+        echo "⚠️  Herdr is unavailable; omp will not become the Herdr default"
+        return 1
     fi
 
     if ! "$herdr_bin" integration install omp; then
@@ -178,4 +181,21 @@ install_herdr_omp_integration() {
         return 1
     fi
     echo "✅ Herdr omp integration installed (native lifecycle state + session restore)"
+}
+
+setup_omp_integration() {
+    omp_experiment_enabled || return 0
+
+    ready_marker=$(omp_ready_marker)
+    if ! rm -f "$ready_marker"; then
+        echo "⚠️  Cannot invalidate $ready_marker; Herdr will fall back to OpenCode"
+        return 1
+    fi
+    if ! install_omp || ! setup_omp_config || ! install_herdr_omp_integration; then
+        echo "⚠️  omp integration is incomplete; Herdr will fall back to OpenCode"
+        return 1
+    fi
+    mkdir -p "${ready_marker%/*}"
+    : > "$ready_marker"
+    echo "✅ omp integration ready for Herdr"
 }
