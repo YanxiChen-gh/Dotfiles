@@ -16,15 +16,13 @@ retry:
   maxDelayMs: 300000
   modelFallback: false
 
-# Approvals. `write` auto-approves reads and edits and prompts on shell exec - the
-# safe default. The opencode setup runs full auto (`--auto`); to match that exactly
-# set `approvalMode: yolo`, which still enforces the per-tool `deny` entries below
-# even for subagents.
+# Approvals. `yolo` runs everything unattended, matching the opencode `--auto`
+# workflow. Safety comes from the harness gates (scope/verify/PR), which hard-block
+# a tool call regardless of approval mode - not from interactive prompts. Add a
+# `tools.approval.<tool>: deny` entry to hard-block a specific tool even for
+# subagents, which otherwise inherit yolo.
 tools:
-  approvalMode: write
-  approval:
-    # Keep destructive/irreversible operations gated even in auto modes.
-    bash: prompt
+  approvalMode: yolo
 
 # Skills: omp already discovers ~/.claude/skills and ~/.agents/skills through its
 # built-in Claude/Agents skill providers. Add the shared-skills checkout explicitly

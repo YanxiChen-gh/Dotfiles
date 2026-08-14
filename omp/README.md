@@ -14,10 +14,10 @@ opencode setup.
 | | opencode | omp |
 | --- | ---: | ---: |
 | Harness plugin/extension | 1,813 | 210 |
-| Model + agent config | 37 | 55 |
+| Model + agent config | 37 | 53 |
 | Auto-mode wrapper | 70 | 0 |
 | Install module | 126 | 87 |
-| **Total** | **2,046** | **352** |
+| **Total** | **2,046** | **350** |
 
 The plugin drops ~88%. The reason is not cleverness - it is that omp provides
 first-party what opencode made us rebuild:
