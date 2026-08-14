@@ -98,6 +98,9 @@ FAKE_LOGIN_STATE="$TMP/logged-in"
 FAKE_LOG="$TMP/invocations.log"
 FAKE_NPM_PREFIX="$TMP/npm-prefix"
 export PATH HOME FAKE_VERSION_FILE FAKE_LOGIN_STATE FAKE_LOG FAKE_NPM_PREFIX
+unset GOOGLE_WORKSPACE_CLI_CLIENT_ID GOOGLE_WORKSPACE_CLI_CLIENT_SECRET
+unset GOOGLE_WORKSPACE_CLI_TOKEN GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE
+unset GOOGLE_WORKSPACE_CLI_CONFIG_DIR
 
 required_scopes='https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/spreadsheets,https://www.googleapis.com/auth/presentations,https://www.googleapis.com/auth/drive'
 ready_status='{"token_valid":true,"user":"yanxi.chen@vanta.com","scopes":["https://www.googleapis.com/auth/documents","https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/presentations","https://www.googleapis.com/auth/drive","openid"]}'

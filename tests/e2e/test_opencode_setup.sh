@@ -268,6 +268,8 @@ exit 0
 EOF
     chmod +x "$HOME/.nvm/versions/node/test/bin/node" "$HOME/.nvm/versions/node/test/bin/opencode"
     ln -s "$ROOT/.zshrc" "$HOME/.zshrc"
+    NVM_DIR="$HOME/.nvm"
+    export NVM_DIR
 
     resolved_opencode=$(ZDOTDIR="$HOME" zsh -dlic 'command -v opencode')
     [ "$resolved_opencode" = "$HOME/.local/bin/opencode" ] || fail "clean zsh resolved OpenCode to $resolved_opencode"

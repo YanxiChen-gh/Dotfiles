@@ -179,8 +179,11 @@ compinit -C
 # FZF
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-# NVM (check multiple locations)
-if [ -s "/usr/local/share/nvm/nvm.sh" ]; then
+# NVM (prefer an explicitly configured installation)
+if [ -n "${NVM_DIR:-}" ] && [ -s "$NVM_DIR/nvm.sh" ]; then
+    source "$NVM_DIR/nvm.sh"
+    [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion"
+elif [ -s "/usr/local/share/nvm/nvm.sh" ]; then
     export NVM_DIR="/usr/local/share/nvm"
     source "$NVM_DIR/nvm.sh"
     [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion"
