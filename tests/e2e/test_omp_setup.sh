@@ -204,7 +204,7 @@ if [ -n "$BUN_BIN" ]; then
   mkdir -p "$TMP/maturity/scripts"
   cat > "$TMP/maturity/scripts/scope-gate-userpromptsubmit.sh" <<'EOF'
 #!/bin/sh
-printf '%s\n' 'scope brief'
+printf '%s\n' "${SCOPE_BRIEF-scope brief}"
 EOF
   chmod +x "$TMP/maturity/scripts/scope-gate-userpromptsubmit.sh"
   cat > "$TMP/bin/herdr" <<'EOF'
@@ -229,13 +229,27 @@ await extension(pi)
 if (handlers.has("turn_start")) throw new Error("scope injection still registers turn_start")
 const handler = handlers.get("before_agent_start")
 if (!handler) throw new Error("before_agent_start scope hook is missing")
+const lavishPollGuidance =
+  "In an interactive omp TUI, run each `lavish-axi-safe poll <file>` as one managed Bash job with `async: true`. " +
+  "When feedback is delivered, process it and start the next async poll. Do not use a question or approval popup, Hub process, or detached shell."
 const result = await handler(
   { type: "before_agent_start", prompt: "hi", systemPrompt: ["base"] },
   { sessionManager: { getSessionId: () => "test-session" } },
 ) as { systemPrompt?: string[] }
-if (JSON.stringify(result.systemPrompt) !== JSON.stringify(["base", "scope brief"])) {
+const expectedSystemPrompt = ["base", lavishPollGuidance, "scope brief"]
+if (JSON.stringify(result.systemPrompt) !== JSON.stringify(expectedSystemPrompt)) {
   throw new Error(`unexpected system prompt: ${JSON.stringify(result)}`)
 }
+Bun.env.SCOPE_BRIEF = ""
+const silentScopeResult = await handler(
+  { type: "before_agent_start", prompt: "hi", systemPrompt: ["base"] },
+  { sessionManager: { getSessionId: () => "test-session" } },
+)
+const expectedSilentScopeResult = { systemPrompt: ["base", lavishPollGuidance] }
+if (JSON.stringify(silentScopeResult) !== JSON.stringify(expectedSilentScopeResult)) {
+  throw new Error(`unexpected silent-scope system prompt: ${JSON.stringify(silentScopeResult)}`)
+}
+delete Bun.env.SCOPE_BRIEF
 
 const toolCall = handlers.get("tool_call")
 if (!toolCall) throw new Error("tool_call hook is missing")

@@ -98,6 +98,10 @@ const createSlackSender = (home: string) => {
 
 const invokesLavish = (command: string) => /\b(?:lavish-axi(?:-safe)?|open-lavish)\b/.test(command)
 
+const lavishPollGuidance =
+  "In an interactive omp TUI, run each `lavish-axi-safe poll <file>` as one managed Bash job with `async: true`. " +
+  "When feedback is delivered, process it and start the next async poll. Do not use a question or approval popup, Hub process, or detached shell."
+
 const shellCommand = (input: Record<string, unknown>): string => {
   const command = stringField(input, "command")
   const application = stringField(input, "application")
@@ -247,13 +251,14 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     }
   })
 
-  // Add scope guidance to this request without scheduling another user turn.
+  // Add omp-specific and scope guidance without scheduling another user turn.
   pi.on("before_agent_start", async (event, ctx) => {
+    const systemPrompt = [...event.systemPrompt, lavishPollGuidance]
     const sessionId = ctx?.sessionManager?.getSessionId?.() ?? ""
     const result = await runHook(scopePrompt, { session_id: sessionId })
     const brief = result.stdout.trim()
-    if (!brief) return
-    return { systemPrompt: [...event.systemPrompt, brief] }
+    if (brief) systemPrompt.push(brief)
+    return { systemPrompt }
   })
 
   pi.on("session_start", async (_event, ctx) => {
