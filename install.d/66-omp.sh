@@ -10,8 +10,29 @@ omp_experiment_enabled() {
     [ "${OMP_EXPERIMENT:-}" = "1" ]
 }
 
+ensure_bun() {
+    # omp is a Bun program (its launcher is `#!/usr/bin/env bun`), so Bun must be
+    # on PATH for `omp` to run at all - the npm package alone is not enough.
+    if command -v bun >/dev/null 2>&1; then
+        echo "✅ bun already installed ($(bun --version 2>/dev/null || echo unknown))"
+        return 0
+    fi
+    echo "Installing bun (omp runtime)..."
+    if curl -fsSL https://bun.sh/install | bash; then
+        export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
+        export PATH="$BUN_INSTALL/bin:$PATH"
+        echo "✅ bun installed"
+    else
+        echo "⚠️  bun installation failed; omp cannot run without it"
+        echo "   Install manually: curl -fsSL https://bun.sh/install | bash"
+        return 1
+    fi
+}
+
 install_omp() {
     omp_experiment_enabled || return 0
+
+    ensure_bun || return 1
 
     echo "Checking for omp (oh-my-pi)..."
     if command -v omp >/dev/null 2>&1; then

@@ -193,6 +193,8 @@ fi
 # NVM prepends its active version, so restore wrapper precedence afterwards.
 export PATH="$HOME/.opencode/bin:$PATH"
 export PATH="$HOME/.local/bin:$PATH"
+# Bun runtime (omp is a Bun program); harmless when absent.
+[ -d "$HOME/.bun/bin" ] && export PATH="$HOME/.bun/bin:$PATH"
 
 # opam (OCaml)
 [ -r "$HOME/.opam/opam-init/init.zsh" ] && source "$HOME/.opam/opam-init/init.zsh" > /dev/null 2> /dev/null
