@@ -106,4 +106,4 @@ if [ "$listener" != "127.0.0.1:$relay_port" ]; then
     exit 1
 fi
 
-herdr --remote "$target" "$@"
+herdr --remote "$target" --remote-keybindings server "$@"

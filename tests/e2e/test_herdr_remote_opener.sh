@@ -38,9 +38,10 @@ import sys
 ready_path, payload_path = sys.argv[1:]
 with socket.socket() as server:
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(("127.0.0.1", 43199))
+    server.bind(("127.0.0.1", 0))
     server.listen(1)
-    open(ready_path, "w", encoding="utf-8").close()
+    with open(ready_path, "w", encoding="utf-8") as ready:
+        ready.write(str(server.getsockname()[1]))
     connection, _ = server.accept()
     with connection, open(payload_path, "wb") as payload:
         while data := connection.recv(4096):
@@ -52,13 +53,15 @@ for _ in $(seq 1 100); do
     sleep 0.01
 done
 [ -e "$RELAY_READY" ] || fail "relay did not start"
+HERDR_REMOTE_OPENER_TEST_PORT=$(cat "$RELAY_READY")
+export HERDR_REMOTE_OPENER_TEST_PORT
 
 url='https://example.com/a/long/path?value=one%20two#result'
 HERDR_PLUGIN_CLICKED_URL="$url" python3 "$ROOT/herdr/remote-opener/open_url.py"
 wait "$SERVER_PID"
 SERVER_PID=""
 [ "$(cat "$RELAY_PAYLOAD")" = "$url" ] || fail "relay changed the URL"
-[ "$(python3 "$ROOT/herdr/remote-opener/open_url.py" --print-port)" = "43199" ] \
+[ "$(python3 "$ROOT/herdr/remote-opener/open_url.py" --print-port)" = "$HERDR_REMOTE_OPENER_TEST_PORT" ] \
     || fail "wrapper and plugin port contract changed"
 if HERDR_PLUGIN_CLICKED_URL='file:///tmp/private' python3 "$ROOT/herdr/remote-opener/open_url.py" 2>/dev/null; then
     fail "non-HTTP URL was accepted"
@@ -161,9 +164,9 @@ printf '%s\n' "$*" >>"$FAKE_SSH_LOG"
 case " $* " in
     *" ss -ltnH "*)
         if [ "${FAKE_SSH_WILDCARD:-0}" = "1" ]; then
-            printf '%s\n' "0.0.0.0:43199"
+            printf '%s\n' "0.0.0.0:$HERDR_REMOTE_OPENER_TEST_PORT"
         else
-            printf '%s\n' "127.0.0.1:43199"
+            printf '%s\n' "127.0.0.1:$HERDR_REMOTE_OPENER_TEST_PORT"
         fi
         ;;
     *" -M "*) [ "${FAKE_SSH_FAIL:-0}" != "1" ] || exit 9 ;;
@@ -191,14 +194,14 @@ HOME="$TMP/home"
 OPENER_SOCKET_PATH="$SOCKET_PATH"
 FAKE_SSH_LOG="$SSH_LOG"
 FAKE_HERDR_LOG="$HERDR_LOG"
-export PATH HOME OPENER_SOCKET_PATH FAKE_SSH_LOG FAKE_HERDR_LOG
+export PATH HOME OPENER_SOCKET_PATH FAKE_SSH_LOG FAKE_HERDR_LOG HERDR_REMOTE_OPENER_TEST_PORT
 
 : >"$SSH_LOG"
 : >"$HERDR_LOG"
 herdr-remote workbox --session work
 assert_log "-o ExitOnForwardFailure=yes" "$SSH_LOG"
 assert_log "-o GatewayPorts=no" "$SSH_LOG"
-assert_log "-R 127.0.0.1:43199:" "$SSH_LOG"
+assert_log "-R 127.0.0.1:$HERDR_REMOTE_OPENER_TEST_PORT:" "$SSH_LOG"
 if grep -F ":$SOCKET_PATH" "$SSH_LOG" >/dev/null; then
     fail "remote traffic bypassed the validating proxy"
 fi
@@ -206,7 +209,7 @@ if grep -F "ClearAllForwardings=yes" "$SSH_LOG" >/dev/null; then
     fail "wrapper cleared its explicit remote forward"
 fi
 assert_log "-O exit workbox" "$SSH_LOG"
-assert_log "--remote workbox --session work" "$HERDR_LOG"
+assert_log "--remote workbox --remote-keybindings server --session work" "$HERDR_LOG"
 : >"$SSH_LOG"
 : >"$HERDR_LOG"
 FAKE_LSOF_FAIL=1

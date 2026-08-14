@@ -6,7 +6,7 @@ import sys
 from urllib.parse import urlsplit
 
 RELAY_HOST = "127.0.0.1"
-RELAY_PORT = 43199
+RELAY_PORT = int(os.environ.get("HERDR_REMOTE_OPENER_TEST_PORT", "43199"))
 MAX_REQUEST_BYTES = 64 * 1024
 CONNECTION_TIMEOUT_SECONDS = 2
 
