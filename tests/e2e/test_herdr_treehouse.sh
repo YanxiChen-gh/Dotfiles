@@ -181,8 +181,8 @@ export FAKE_TREEHOUSE_STARTED="$TREEHOUSE_STARTED"
 export FAKE_AGENT_READY="$AGENT_READY"
 export FAKE_PROMPT_LOG="$PROMPT_LOG"
 
-# Match the working OpenCode popup: Enter inserts a newline and encoded
-# Ctrl+Enter submits. Raw/enhanced Escape skip, and pasted newlines are exact.
+# Enter inserts a newline and Ctrl+S reliably submits with terminal flow
+# control disabled. Encoded Ctrl+Enter remains supported where available.
 python3 - "$ROOT/herdr/prompt-input.py" <<'PY'
 import os
 import pty
@@ -205,11 +205,11 @@ def run_case(input_bytes, expected):
     os.close(slave)
     screen = b""
     deadline = time.monotonic() + 5
-    while b"Enter: submit" not in screen and time.monotonic() < deadline:
+    while b"Ctrl+S: submit" not in screen and time.monotonic() < deadline:
         readable, _, _ = select.select([master], [], [], 0.1)
         if readable:
             screen += os.read(master, 4096)
-    if b"Enter: submit" not in screen:
+    if b"Ctrl+S: submit" not in screen:
         process.kill()
         raise SystemExit("prompt editor did not show its submit gesture")
     os.write(master, input_bytes)
@@ -221,6 +221,7 @@ def run_case(input_bytes, expected):
 run_case(b"plain input\rsecond line\x1b[13;5u", b"plain input\nsecond line")
 run_case(b"kitty enter\x1b[13unext line\x1b[13;5u", b"kitty enter\nnext line")
 run_case(b"ctrl enter\x1b[13;5u", b"ctrl enter")
+run_case(b"ctrl s\rsubmit\x13", b"ctrl s\nsubmit")
 run_case(b"discard me\x1b", b"")
 run_case(b"discard me\x1b[27u", b"")
 run_case(b"\x1b[200~leading\ninternal\ntrailing\n\x1b[201~\x1b[13;5u", b"leading\ninternal\ntrailing\n")

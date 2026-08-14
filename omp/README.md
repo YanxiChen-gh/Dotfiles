@@ -120,7 +120,8 @@ reverts to opencode. Override per launch with `HERDR_AGENT_CMD=omp` (or `opencod
 When seeding an initial prompt via `prefix+a --select`, the launcher passes omp a
 mode-600 temporary `@file` argument. omp consumes it after first-run setup, so the
 workflow does not depend on a guessed ready string or delay.
-The popup uses Enter for a newline, Ctrl+Enter to submit, and Esc to skip.
+The popup uses Enter for a newline, Ctrl+S to submit, and Esc to skip.
+Encoded Ctrl+Enter remains supported when the host terminal preserves it.
 
 opencode stays installed and coexists (omp uses its own `~/.omp` dir). Disable the
 experiment by unsetting `OMP_EXPERIMENT` and re-running `install.sh`; the opencode
