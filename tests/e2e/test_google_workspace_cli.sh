@@ -88,8 +88,22 @@ fi
 printf 'npm %s\n' "$*" >>"$FAKE_LOG"
 printf '%s\n' '0.22.5' >"$FAKE_VERSION_FILE"
 EOF
+cat >"$TMP/bin/node" <<'EOF'
+#!/bin/sh
+set -eu
+if [ "${1:-}" = "-p" ]; then
+    printf '%s\n' '24'
+    exit 0
+fi
+if [ "${1:-}" = "--version" ]; then
+    printf '%s\n' 'v24.0.0'
+    exit 0
+fi
+printf 'unexpected node invocation: %s\n' "$*" >&2
+exit 1
+EOF
 
-chmod +x "$TMP/bin/gws" "$TMP/bin/npm" "$TMP/npm-prefix/bin/gws"
+chmod +x "$TMP/bin/gws" "$TMP/bin/node" "$TMP/bin/npm" "$TMP/npm-prefix/bin/gws"
 
 PATH="$TMP/bin:$PATH"
 HOME="$TMP/home"
