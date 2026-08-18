@@ -257,6 +257,21 @@ elif [ "${current_worktree##*/}" = "$repo_name" ]; then
 else
   worktree_name=${current_worktree##*/}
 fi
+checkout_id=$(printf '%s' "$current_worktree" | git hash-object --stdin) \
+  || die "could not derive checkout identity"
+
+if [ "$treehouse_ready" = false ] && [ "$with_worktree" = false ] \
+  && command -v treehouse >/dev/null 2>&1; then
+  treehouse_status=$(cd "$primary_worktree" && treehouse status --json 2>/dev/null) \
+    || die "could not inspect Treehouse worktree ownership"
+  checkout_status=$(printf '%s' "$treehouse_status" \
+    | jq -r --arg checkout "$current_worktree" \
+      'if any(.[]; .path == $checkout) then "managed" else "unmanaged" end' 2>/dev/null) \
+    || die "could not parse Treehouse worktree ownership"
+  if [ "$checkout_status" = "managed" ]; then
+    die "Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree."
+  fi
+fi
 
 initial_prompt=""
 omp_prompt_file=""
@@ -295,7 +310,8 @@ if [ -z "$left" ] || [ "$left" = "null" ]; then die "could not read new pane id"
 "$herdr" workspace report-metadata "$task_workspace" \
   --source dotfiles:checkout \
   --token "repo=$repo_name" \
-  --token "worktree=$worktree_name" >/dev/null \
+  --token "worktree=$worktree_name" \
+  --token "checkout=$checkout_id" >/dev/null \
   || die "failed to report checkout metadata"
 "$herdr" tab rename "$task_tab" "$requested_label" >/dev/null \
   || die "failed to label task tab"
@@ -358,6 +374,26 @@ while true; do
     else
       missing_count=0
     fi
+  fi
+  sleep 1
+done
+
+shared_checkout_notified=false
+while true; do
+  workspace_list=$("$herdr" workspace list 2>&1) || {
+    sleep 1
+    continue
+  }
+  matching_workspaces=$(printf '%s' "$workspace_list" \
+    | jq -er --arg checkout "$checkout_id" \
+      '[.result.workspaces[]? | select(.tokens.checkout == $checkout)] | length' 2>/dev/null) || {
+    sleep 1
+    continue
+  }
+  if [ "$matching_workspaces" -eq 0 ]; then break; fi
+  if [ "$shared_checkout_notified" = false ]; then
+    toast "Task workspace still in use" "Another Herdr workspace still uses $current_worktree"
+    shared_checkout_notified=true
   fi
   sleep 1
 done

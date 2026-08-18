@@ -13,10 +13,13 @@ HOME_DIR="$TMP/home"
 MAIN="$TMP/repo"
 LINKED="$TMP/linked"
 QUOTED_LINKED="$TMP/linked'quoted"
-ACQUIRED="$TMP/treehouse-pool/1/repo"
+ACQUIRED="$TMP/treehouse-pool-with-a-deliberately-long-checkout-name-for-token-boundary-coverage/1/repo"
 HERDR_LOG="$TMP/herdr.log"
 TREEHOUSE_LOG="$TMP/treehouse.log"
-WORKSPACE_OPEN="$TMP/workspace-open"
+HERDR_STATE="$TMP/herdr-state"
+WORKSPACE_OPEN="$HERDR_STATE/test-workspace.open"
+WORKSPACE_LIST="$TMP/workspace-list.json"
+WORKSPACE_LIST_FAILURE="$TMP/workspace-list-failure"
 TRANSPORT_FAILURE="$TMP/transport-failure"
 TREEHOUSE_STARTED="$TMP/treehouse-started"
 TREEHOUSE_RELEASE="$TMP/treehouse-release"
@@ -24,7 +27,7 @@ AGENT_READY="$TMP/agent-ready"
 PROMPT_LOG="$TMP/prompt.log"
 PROMPT_INPUT="$TMP/prompt-input.py"
 
-mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "${ACQUIRED%/*}"
+mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "${ACQUIRED%/*}" "$HERDR_STATE"
 : > "$HOME_DIR/.omp/agent/.dotfiles-ready"
 
 git -C "$MAIN" init -q
@@ -36,41 +39,69 @@ git -C "$MAIN" commit -qm fixture
 git -C "$MAIN" worktree add --detach "$LINKED" >/dev/null
 git -C "$MAIN" worktree add --detach "$QUOTED_LINKED" >/dev/null
 git -C "$MAIN" worktree add --detach "$ACQUIRED" >/dev/null
+ACQUIRED_CHECKOUT_ID=$(printf '%s' "$ACQUIRED" | git hash-object --stdin)
+LINKED_CHECKOUT_ID=$(printf '%s' "$LINKED" | git hash-object --stdin)
+MAIN_CHECKOUT_ID=$(printf '%s' "$MAIN" | git hash-object --stdin)
+if [ "${#ACQUIRED}" -le 80 ]; then
+  echo "FAIL: acquired checkout path does not exercise Herdr's token boundary" >&2
+  exit 1
+fi
 
 cat > "$TMP/herdr" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >> "$FAKE_HERDR_LOG"
+workspace_id="${FAKE_WORKSPACE_ID:-test-workspace}"
+if [ "$workspace_id" = "test-workspace" ]; then
+  tab_id="test-tab"
+  pane_id="test-pane"
+  editor_id="test-editor"
+else
+  tab_id="$workspace_id-tab"
+  pane_id="$workspace_id-pane"
+  editor_id="$workspace_id-editor"
+fi
 case "$1 $2" in
   "workspace create")
-    : > "$FAKE_WORKSPACE_OPEN"
-    printf '%s\n' '{"result":{"workspace":{"workspace_id":"test-workspace"},"tab":{"tab_id":"test-tab"},"root_pane":{"pane_id":"test-pane"}}}'
+    : > "$FAKE_HERDR_STATE/$workspace_id.open"
+    printf '%s\n' "{\"result\":{\"workspace\":{\"workspace_id\":\"$workspace_id\"},\"tab\":{\"tab_id\":\"$tab_id\"},\"root_pane\":{\"pane_id\":\"$pane_id\"}}}"
     ;;
   "workspace get")
     if [ -e "$FAKE_TRANSPORT_FAILURE" ]; then
       printf '%s\n' 'server unavailable' >&2
       exit 1
     fi
-    if [ -e "$FAKE_WORKSPACE_OPEN" ]; then
-      printf '%s\n' '{"result":{"workspace":{"workspace_id":"test-workspace"}}}'
+    if [ -e "$FAKE_HERDR_STATE/$3.open" ]; then
+      printf '%s\n' "{\"result\":{\"workspace\":{\"workspace_id\":\"$3\"}}}"
     else
       printf '%s\n' '{"error":{"code":"workspace_not_found","message":"not found"}}'
       exit 1
     fi
     ;;
+  "workspace list")
+    if [ -e "$FAKE_WORKSPACE_LIST_FAILURE" ]; then
+      printf '%s\n' 'server unavailable' >&2
+      exit 1
+    fi
+    if [ -e "$FAKE_WORKSPACE_LIST" ]; then
+      cat "$FAKE_WORKSPACE_LIST"
+    else
+      printf '%s\n' '{"result":{"type":"workspace_list","workspaces":[]}}'
+    fi
+    ;;
   "workspace close")
-    rm -f "$FAKE_WORKSPACE_OPEN"
+    rm -f "$FAKE_HERDR_STATE/$3.open"
     ;;
   "workspace report-metadata")
     if [ -e "${FAKE_METADATA_FAILURE:-}" ]; then exit 10; fi
     ;;
   "pane split")
     if [ -e "${FAKE_SPLIT_FAILURE:-}" ]; then exit 7; fi
-    printf '%s\n' '{"result":{"pane":{"pane_id":"test-editor"}}}'
+    printf '%s\n' "{\"result\":{\"pane\":{\"pane_id\":\"$editor_id\"}}}"
     ;;
   "wait output")
     [ "$#" -eq 7 ] || exit 8
     : > "$FAKE_AGENT_READY"
-    printf '%s\n' '{"result":{"matched_line":"Ask anything","pane_id":"test-pane"}}'
+    printf '%s\n' "{\"result\":{\"matched_line\":\"Ask anything\",\"pane_id\":\"$pane_id\"}}"
     ;;
   "pane run")
     [ "$#" -eq 4 ] || exit 8
@@ -88,6 +119,10 @@ chmod +x "$TMP/herdr"
 
 cat > "$HOME_DIR/.local/bin/treehouse" <<'EOF'
 #!/bin/sh
+if [ "${1:-}" = "status" ] && [ "${2:-}" = "--json" ]; then
+  printf '%s\n' "[{\"name\":\"1\",\"path\":\"$FAKE_ACQUIRED\",\"status\":\"in-use\",\"lease_id\":\"\",\"lease_holder\":\"\",\"leased_at\":null,\"processes\":[]}]"
+  exit 0
+fi
 printf 'start cwd=%s shell=%s args=%s\n' "$PWD" "$SHELL" "$*" >> "$FAKE_TREEHOUSE_LOG"
 : > "$FAKE_TREEHOUSE_STARTED"
 if [ -e "${FAKE_TREEHOUSE_FAILURE:-}" ]; then exit 9; fi
@@ -171,13 +206,15 @@ reset_state() {
   : > "$HERDR_LOG"
   : > "$TREEHOUSE_LOG"
   : > "$PROMPT_LOG"
-  rm -f "$WORKSPACE_OPEN" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure" "$TMP/metadata-failure"
+  rm -f "$HERDR_STATE"/*.open "$WORKSPACE_LIST" "$WORKSPACE_LIST_FAILURE" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure" "$TMP/metadata-failure"
 }
 
 export FAKE_HERDR_LOG="$HERDR_LOG"
+export FAKE_HERDR_STATE="$HERDR_STATE"
+export FAKE_WORKSPACE_LIST="$WORKSPACE_LIST"
+export FAKE_WORKSPACE_LIST_FAILURE="$WORKSPACE_LIST_FAILURE"
 export FAKE_TREEHOUSE_LOG="$TREEHOUSE_LOG"
 export FAKE_ACQUIRED="$ACQUIRED"
-export FAKE_WORKSPACE_OPEN="$WORKSPACE_OPEN"
 export FAKE_TRANSPORT_FAILURE="$TRANSPORT_FAILURE"
 export FAKE_TREEHOUSE_STARTED="$TREEHOUSE_STARTED"
 export FAKE_AGENT_READY="$AGENT_READY"
@@ -243,7 +280,7 @@ HERDR_ACTIVE_PANE_CWD="$LINKED" \
 launcher_pid=$!
 
 wait_for_log "workspace create --cwd $ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$ACQUIRED" "$HERDR_LOG"
-wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=1" "$HERDR_LOG"
+wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=1 --token checkout=$ACQUIRED_CHECKOUT_ID" "$HERDR_LOG"
 assert_log "start cwd=$MAIN shell=$TREEHOUSE_SHELL args=get" "$TREEHOUSE_LOG"
 wait_for_log "tab rename test-tab agent" "$HERDR_LOG"
 wait_for_log "pane split test-pane --direction right --ratio 0.5 --cwd $ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$ACQUIRED" "$HERDR_LOG"
@@ -261,6 +298,59 @@ sleep 3
 kill -0 "$launcher_pid" 2>/dev/null || fail "transport failure released the Treehouse checkout"
 rm -f "$TRANSPORT_FAILURE"
 wait_for_exit "$launcher_pid"
+assert_log "returned status=0" "$TREEHOUSE_LOG"
+
+# Closing an owner must not return its checkout while another Herdr workspace
+# still reports that exact checkout.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_TREEHOUSE_SHELL_PATH="$TREEHOUSE_SHELL" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+  "$LAUNCHER" --with-worktree --without-agent --without-editor > "$TMP/shared-owner.out" 2>&1 &
+shared_owner_pid=$!
+wait_for_log "workspace create --cwd $ACQUIRED --no-focus" "$HERDR_LOG"
+: > "$HERDR_STATE/sibling-workspace.open"
+printf '%s\n' "{\"result\":{\"type\":\"workspace_list\",\"workspaces\":[{\"workspace_id\":\"sibling-workspace\",\"tokens\":{\"checkout\":\"$ACQUIRED_CHECKOUT_ID\"}}]}}" > "$WORKSPACE_LIST"
+rm -f "$WORKSPACE_OPEN"
+sleep 3
+kill -0 "$shared_owner_pid" 2>/dev/null || fail "Treehouse returned while a sibling workspace still used its checkout"
+printf '%s\n' '{"result":{"type":"workspace_list","workspaces":[]}}' > "$WORKSPACE_LIST"
+rm -f "$HERDR_STATE/sibling-workspace.open"
+wait_for_exit "$shared_owner_pid"
+assert_log "returned status=0" "$TREEHOUSE_LOG"
+
+# Workspace-list transport loss after the owner closes must retain Treehouse
+# ownership until Herdr becomes reachable again.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_TREEHOUSE_SHELL_PATH="$TREEHOUSE_SHELL" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+  "$LAUNCHER" --with-worktree --without-agent --without-editor > "$TMP/list-failure-owner.out" 2>&1 &
+list_failure_owner_pid=$!
+wait_for_log "workspace create --cwd $ACQUIRED --no-focus" "$HERDR_LOG"
+: > "$WORKSPACE_LIST_FAILURE"
+rm -f "$WORKSPACE_OPEN"
+sleep 3
+kill -0 "$list_failure_owner_pid" 2>/dev/null || fail "workspace-list transport failure released the Treehouse checkout"
+rm -f "$WORKSPACE_LIST_FAILURE"
+wait_for_exit "$list_failure_owner_pid"
+assert_log "returned status=0" "$TREEHOUSE_LOG"
+
+# A workspace for another canonical checkout does not keep this Treehouse
+# checkout in use, even when repository and worktree basenames could collide.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_TREEHOUSE_SHELL_PATH="$TREEHOUSE_SHELL" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+  "$LAUNCHER" --with-worktree --without-agent --without-editor > "$TMP/unrelated-owner.out" 2>&1 &
+unrelated_owner_pid=$!
+wait_for_log "workspace create --cwd $ACQUIRED --no-focus" "$HERDR_LOG"
+printf '%s\n' "{\"result\":{\"type\":\"workspace_list\",\"workspaces\":[{\"workspace_id\":\"unrelated-workspace\",\"tokens\":{\"repo\":\"repo\",\"worktree\":\"1\",\"checkout\":\"$LINKED_CHECKOUT_ID\"}}]}}" > "$WORKSPACE_LIST"
+rm -f "$WORKSPACE_OPEN"
+wait_for_exit "$unrelated_owner_pid"
 assert_log "returned status=0" "$TREEHOUSE_LOG"
 
 # Ready workspaces always stay in the background, so navigation can never race
@@ -285,8 +375,20 @@ HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
   "$LAUNCHER" --without-worktree --without-agent --without-editor
 assert_log "workspace create --cwd $LINKED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
-assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=linked" "$HERDR_LOG"
+assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=linked --token checkout=$LINKED_CHECKOUT_ID" "$HERDR_LOG"
 assert_not_log "treehouse get" "$TREEHOUSE_LOG"
+
+# A Treehouse pool checkout cannot host an independent Herdr workspace. Each
+# workspace must acquire its own checkout through Treehouse.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
+FAKE_WORKSPACE_ID="sibling-workspace" \
+  "$LAUNCHER" --without-worktree --without-agent --without-editor > "$TMP/shared-rejected.out" 2>&1 \
+  && fail "current-checkout mode created a sibling workspace in a Treehouse checkout"
+assert_not_log "workspace create" "$HERDR_LOG"
+assert_log "notification show New task workspace failed --body Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree." "$HERDR_LOG"
 
 # The primary checkout uses a stable name instead of repeating the repository.
 reset_state
@@ -294,7 +396,7 @@ HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$MAIN" \
   "$LAUNCHER" --without-worktree --without-agent --without-editor
-assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=primary" "$HERDR_LOG"
+assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=primary --token checkout=$MAIN_CHECKOUT_ID" "$HERDR_LOG"
 
 # Metadata is part of workspace setup; failure closes the partial workspace.
 reset_state
