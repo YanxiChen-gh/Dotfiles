@@ -131,8 +131,30 @@ with open(sys.argv[1], encoding="utf-8") as file:
 assert settings["enabledPlugins"]["vanta-doc-discovery@obsidian-local"] is True
 PY
 grep -qF 'setup_vanta_doc_discovery_plugin' "$ROOT/install.sh" || fail "installer does not run Doc Discovery setup"
-grep -qF 'glean_default_search' "$ROOT/opencode/skills/vanta-doc-discovery/SKILL.md" || fail "OpenCode adapter does not map Glean search"
-grep -qF 'glean_default_read_document' "$ROOT/opencode/skills/vanta-doc-discovery/SKILL.md" || fail "OpenCode adapter does not map Glean document reads"
+doc_discovery_skill="$ROOT/opencode/skills/vanta-doc-discovery/SKILL.md"
+python3 - "$doc_discovery_skill" <<'PY'
+from pathlib import Path
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+opencode_heading = "## OpenCode only"
+other_runtimes_heading = "## OMP and other runtimes"
+assert opencode_heading in text
+assert other_runtimes_heading in text
+client_neutral, client_branches = text.split(opencode_heading, 1)
+opencode_branch, other_runtimes = client_branches.split(other_runtimes_heading, 1)
+
+assert "Use the active runtime's mounted Glean search and document-read tools." in client_neutral
+assert "Mounted tool capabilities take precedence" in client_neutral
+assert "`opencode mcp list`" in client_neutral
+assert "glean_default_" not in client_neutral
+assert "Only when the active client is OpenCode" in opencode_branch
+assert "`mcp__claude_ai_Glean__search` means `glean_default_search`." in opencode_branch
+assert "`mcp__claude_ai_Glean__read_document` means `glean_default_read_document`." in opencode_branch
+assert "glean_default_" not in other_runtimes
+assert "In OMP and every other non-OpenCode client, use its mounted tools directly" in other_runtimes
+assert "compatibility: opencode" not in text
+PY
 
 HOME="$TMP/cursor/home"
 XDG_CONFIG_HOME="$HOME/.config"

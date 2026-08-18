@@ -65,7 +65,7 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 | Herdr workflow launch (`prefix+a`) | omp by default; `OMP_EXPERIMENT=0` selects OpenCode |
 | `opencode-claude-auth` (Anthropic SSO) | Native setup and `/login` |
 | Canary takeover | deferred (checkpoint/maturity-coupled) |
-| `vanta-doc-discovery` work Glean adapter | not ported - verify the Claude skill works over MCP first |
+| `vanta-doc-discovery` work Glean adapter | **supported** - uses the active runtime's mounted Glean search and document-read tools; OpenCode aliases remain client-conditional |
 | `tui.jsonc` | not ported (cosmetic TUI prefs) |
 
 The skills row is the important one: omp discovers `~/.claude/skills` and
