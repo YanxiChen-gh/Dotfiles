@@ -1,11 +1,11 @@
 ---
 name: auth-vanta-agents
-description: Check and repair OMP Glean MCP and slack-vanta authentication on work CDEs without exposing OAuth URLs or credentials to an agent transcript. Use when Glean MCP returns 401 or missing-auth errors, slack-vanta reports unauthenticated or missing scopes, or the user asks to authenticate agent work tools.
+description: Use when OMP Glean MCP returns 401 or missing-auth errors, slack-vanta reports unauthenticated or missing scopes, or the user asks to authenticate agent work tools on a work CDE.
 ---
 
 # Vanta agent authentication
 
-Use the Dotfiles-managed helper. Do not recreate either OAuth flow.
+Use OMP's native reauthentication command for Glean. Use the Dotfiles-managed helper for status and Slack authentication. Do not recreate either OAuth flow.
 
 ## Status
 
@@ -19,18 +19,16 @@ Pass `--profile <name>` when the OMP session uses a named profile. The helper re
 
 ## Repair
 
-If either service is missing, tell the user to run this themselves in a private interactive terminal:
+If Glean MCP is missing in an active OMP session, tell the user to type this directly into the current OMP input:
 
-```bash
-auth-vanta-agents
+```text
+/mcp reauth glean_default
 ```
 
-For a named OMP profile:
+Do not launch another OMP session or send the user to another terminal for Glean authentication. OMP handles the slash command locally.
 
-```bash
-auth-vanta-agents --profile <name>
-```
+If the Vanta Slack CLI is missing, tell the user to run `auth-vanta-agents` themselves in a private interactive terminal. Once Glean is ready, the helper skips Glean and opens only the Slack OAuth flow.
 
-Never run the repair command as an agent. Never capture or paste an authorization URL, redirect URL, authorization code, access token, refresh token, `agent.db`, or `token.json`. Do not copy credentials between CDEs.
+Never run a repair command as an agent. Never capture or paste an authorization URL, redirect URL, authorization code, access token, refresh token, `agent.db`, or `token.json`. Do not copy credentials between CDEs.
 
-After the user confirms completion, rerun `auth-vanta-agents --status`. Report success only when both Glean MCP and Vanta Slack CLI are ready.
+After the user confirms completion, rerun `auth-vanta-agents --status`. Pass `--profile <name>` for a named OMP profile. Report success only when both Glean MCP and Vanta Slack CLI are ready.
