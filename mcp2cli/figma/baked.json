@@ -1,0 +1,22 @@
+{
+  "figma": {
+    "source_type": "mcp",
+    "source": "https://mcp.figma.com/mcp",
+    "base_url": null,
+    "auth_headers": [],
+    "env_vars": {},
+    "cache_ttl": 3600,
+    "transport": "streamable",
+    "oauth": true,
+    "oauth_client_id": null,
+    "oauth_client_secret": null,
+    "oauth_client_name": "Claude Code",
+    "oauth_scope": null,
+    "oauth_redirect_uri": null,
+    "oauth_flow": "auto",
+    "include": [],
+    "exclude": [],
+    "methods": [],
+    "description": "Figma remote MCP server via OAuth"
+  }
+}

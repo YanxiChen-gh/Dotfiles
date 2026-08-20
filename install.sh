@@ -94,6 +94,7 @@ install_cursor_extensions
 
 # Setup MCP servers
 setup_langsmith_mcp
+setup_figma_mcp_cli || exit 1
 
 # Install LangSmith skills for Claude Code
 if command -v claude >/dev/null 2>&1; then

@@ -1,6 +1,11 @@
 # shellcheck shell=sh
 # Sourced by ../install.sh - function definitions only.
 
+setup_figma_mcp_cli() {
+    script_dir=$(resolve_script_dir) || return 1
+    "$script_dir/mcp2cli/figma/setup-figma"
+}
+
 # Setup LangSmith MCP server configuration
 # Usage: setup_langsmith_mcp
 setup_langsmith_mcp() {

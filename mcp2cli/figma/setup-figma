@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+script_dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+bin_dir="$HOME/.local/bin"
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/mcp2cli-figma"
+
+command -v uvx >/dev/null 2>&1 || {
+  echo "uvx is required to install figma-mcp-cli" >&2
+  exit 1
+}
+
+mkdir -p "$bin_dir" "$config_dir"
+cp "$script_dir/baked.json" "$config_dir/baked.json"
+chmod 600 "$config_dir/baked.json"
+
+cat >"$bin_dir/mcp2cli" <<'EOF'
+#!/bin/sh
+set -eu
+exec uvx --with 'mcp==1.22.0' mcp2cli "$@"
+EOF
+
+cat >"$bin_dir/figma-mcp-cli" <<'EOF'
+#!/bin/sh
+set -eu
+export MCP2CLI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/mcp2cli-figma"
+exec "$HOME/.local/bin/mcp2cli" @figma "$@"
+EOF
+
+chmod +x "$bin_dir/mcp2cli" "$bin_dir/figma-mcp-cli"
+printf 'Installed %s and %s\n' "$bin_dir/mcp2cli" "$bin_dir/figma-mcp-cli"
