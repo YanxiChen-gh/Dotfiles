@@ -197,9 +197,11 @@ PY
 fi
 
 command -v jq >/dev/null 2>&1 || die "jq not installed"
+agent_launch="$agent_cmd"
 if [ "$with_agent" = true ]; then
   command -v "$agent_cmd" >/dev/null 2>&1 || die "$agent_cmd not installed"
 fi
+
 if [ "$with_editor" = true ]; then
   command -v nvim >/dev/null 2>&1 || die "nvim not installed"
 fi
@@ -239,6 +241,16 @@ else
   fi
 
   workspace_cwd="$repo_root"
+fi
+if [ "$with_agent" = true ] && [ "$agent_cmd" = "omp" ]; then
+  omp_hyperlink_mode="auto"
+  if configured_mode=$(cd "$workspace_cwd" \
+    && "$agent_cmd" config get tui.hyperlinks 2>/dev/null); then
+    omp_hyperlink_mode="$configured_mode"
+  fi
+  if [ "$omp_hyperlink_mode" != "off" ]; then
+    agent_launch="env PI_FORCE_HYPERLINKS=1 $agent_cmd"
+  fi
 fi
 
 current_worktree=$(git -C "$workspace_cwd" rev-parse --show-toplevel 2>/dev/null) \
@@ -336,11 +348,11 @@ if [ "$with_agent" = true ]; then
     printf -v quoted_prompt_arg '%q' "@$omp_prompt_file"
     printf -v quoted_prompt_file '%q' "$omp_prompt_file"
     "$herdr" pane run "$left" \
-      "cd $quoted_workspace_cwd && clear; $agent_cmd $quoted_prompt_arg; agent_status=\$?; rm -f -- $quoted_prompt_file; (exit \$agent_status)" \
+      "cd $quoted_workspace_cwd && clear; $agent_launch $quoted_prompt_arg; agent_status=\$?; rm -f -- $quoted_prompt_file; (exit \$agent_status)" \
       || die "failed to launch agent in left pane"
     launched_prompt_file=""
   else
-    "$herdr" pane run "$left" "cd $quoted_workspace_cwd && clear; $agent_cmd" \
+    "$herdr" pane run "$left" "cd $quoted_workspace_cwd && clear; $agent_launch" \
       || die "failed to launch agent in left pane"
   fi
   if [ -n "$initial_prompt" ]; then

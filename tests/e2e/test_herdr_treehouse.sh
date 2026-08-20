@@ -110,7 +110,7 @@ case "$1 $2" in
       printf '%s\0' "$4" >> "$FAKE_PROMPT_LOG"
     fi
     case "$4" in
-      *"; omp @"*) sh -c "$4" >/dev/null 2>&1 & ;;
+      *"; env PI_FORCE_HYPERLINKS=1 omp @"*) sh -c "$4" >/dev/null 2>&1 & ;;
     esac
     ;;
 esac
@@ -173,6 +173,11 @@ cat > "$HOME_DIR/.local/bin/omp" <<'EOF'
 #!/bin/sh
 [ "${FAKE_OMP_UNAVAILABLE:-}" != "1" ] || exit 127
 case "${1:-}" in
+  config)
+    if [ "${2:-}" = "get" ] && [ "${3:-}" = "tui.hyperlinks" ]; then
+      printf '%s\n' "${FAKE_OMP_HYPERLINKS_MODE:-auto}"
+    fi
+    ;;
   @*)
     python3 - "${1#@}" "$FAKE_PROMPT_LOG" <<'PY'
 import sys
@@ -284,7 +289,7 @@ wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkou
 assert_log "start cwd=$MAIN shell=$TREEHOUSE_SHELL args=get" "$TREEHOUSE_LOG"
 wait_for_log "tab rename test-tab agent" "$HERDR_LOG"
 wait_for_log "pane split test-pane --direction right --ratio 0.5 --cwd $ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$ACQUIRED" "$HERDR_LOG"
-wait_for_log "pane run test-pane cd $ACQUIRED && clear; omp" "$HERDR_LOG"
+wait_for_log "pane run test-pane cd $ACQUIRED && clear; env PI_FORCE_HYPERLINKS=1 omp" "$HERDR_LOG"
 wait_for_log "pane run test-editor cd $ACQUIRED && clear; nvim" "$HERDR_LOG"
 wait_for_log "notification show Task workspace ready --body Setup finished without changing your current focus." "$HERDR_LOG"
 assert_not_log "workspace focus test-workspace" "$HERDR_LOG"
@@ -474,6 +479,17 @@ wait_for_log "pane run test-pane cd $LINKED && clear; opencode" "$HERDR_LOG"
 assert_not_log "wait output" "$HERDR_LOG"
 [ ! -s "$PROMPT_LOG" ] || fail "empty prompt was submitted"
 
+# OMP's persistent hyperlink opt-out must not be overridden by the Herdr launcher.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_AGENT_CMD=omp \
+FAKE_OMP_HYPERLINKS_MODE=off \
+  "$LAUNCHER" --without-worktree --with-agent --without-editor
+wait_for_log "pane run test-pane cd $LINKED && clear; omp" "$HERDR_LOG"
+assert_not_log "PI_FORCE_HYPERLINKS" "$HERDR_LOG"
+
 # A default-on environment still falls back to OpenCode when omp is unavailable.
 reset_state
 HOME="$HOME_DIR" \
@@ -500,7 +516,7 @@ FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="omp" \
 FAKE_INITIAL_PROMPT="$omp_prompt" \
   "$LAUNCHER" --select
-wait_for_log "pane run test-pane cd $TMP/linked\\'quoted && clear; omp @" "$HERDR_LOG"
+wait_for_log "pane run test-pane cd $TMP/linked\\'quoted && clear; env PI_FORCE_HYPERLINKS=1 omp @" "$HERDR_LOG"
 for _ in $(seq 1 500); do
   [ -s "$PROMPT_LOG" ] && break
   sleep 0.02
