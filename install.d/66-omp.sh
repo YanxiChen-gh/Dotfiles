@@ -84,6 +84,7 @@ configure_omp_defaults() {
     fi
 
     omp_default_model="openai-codex/gpt-5.6-sol"
+    omp_api_fallback_model="openai/gpt-5.6-sol"
 
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set hideThinkingBlock true >/dev/null) || return 1
@@ -101,14 +102,17 @@ configure_omp_defaults() {
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set modelRoles "$updated_roles" >/dev/null) || return 1
 
-    enabled_models=$(jq -cn --arg model "$omp_default_model" '[$model]') || {
+    enabled_models=$(jq -cn \
+        --arg default_model "$omp_default_model" \
+        --arg fallback_model "$omp_api_fallback_model" \
+        '[$default_model, $fallback_model]') || {
         echo "⚠️  Warning: could not configure the omp model allow-list"
         return 1
     }
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set enabledModels "$enabled_models" >/dev/null) || return 1
 
-    echo "✅ omp default model set to $omp_default_model; automatic model fallback disabled"
+    echo "✅ omp default model set to $omp_default_model; API fallback set to $omp_api_fallback_model"
     echo "   Start omp and run /login openai-codex to authenticate with ChatGPT."
 }
 

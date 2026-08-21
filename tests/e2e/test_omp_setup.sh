@@ -1,5 +1,5 @@
 #!/bin/sh
-# E2E: omp installs standalone, hides thinking, and defaults to ChatGPT Codex OAuth.
+# E2E: omp installs standalone and prefers ChatGPT Codex OAuth with OpenAI API fallback.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -186,9 +186,9 @@ jq -e '.default == "openai-codex/gpt-5.6-sol" and .smol == "openai/gpt-5.4-mini"
   echo "FAIL: Codex OAuth default did not preserve existing model roles" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-sol"]' \
+jq -e '. == ["openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
   "$OLD_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: enabledModels did not lock startup to the configured Codex default" >&2
+  echo "FAIL: enabledModels did not preserve Codex-first API fallback order" >&2
   exit 1
 }
 jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
@@ -222,9 +222,9 @@ jq -e '.default == "openai-codex/gpt-5.6-sol"' \
   echo "FAIL: Codex OAuth default was not selected without OPENAI_API_KEY" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-sol"]' \
+jq -e '. == ["openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
   "$UNMANAGED_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: strict Codex startup allow-list was not configured" >&2
+  echo "FAIL: dual-auth model allow-list was not configured" >&2
   exit 1
 }
 [ ! -e "$UNMANAGED_AGENT/fake-disabled-providers.json" ] || {
