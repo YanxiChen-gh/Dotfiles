@@ -1,5 +1,5 @@
 #!/bin/sh
-# E2E: omp installs standalone, hides thinking, and selects the OpenAI default when available.
+# E2E: omp installs standalone, hides thinking, and defaults to ChatGPT Codex OAuth.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -35,8 +35,28 @@ case "${1:-}" in
           printf '%s\n' '{}'
         fi
         ;;
+      get:disabledProviders)
+        if [ -f "$state_dir/fake-disabled-providers.json" ]; then
+          cat "$state_dir/fake-disabled-providers.json"
+        else
+          printf '%s\n' '[]'
+        fi
+        ;;
+      get:enabledModels)
+        if [ -f "$state_dir/fake-enabled-models.json" ]; then
+          cat "$state_dir/fake-enabled-models.json"
+        else
+          printf '%s\n' '[]'
+        fi
+        ;;
       set:modelRoles)
         printf '%s\n' "$4" > "$state_dir/fake-model-roles.json"
+        ;;
+      set:disabledProviders)
+        printf '%s\n' "$4" > "$state_dir/fake-disabled-providers.json"
+        ;;
+      set:enabledModels)
+        printf '%s\n' "$4" > "$state_dir/fake-enabled-models.json"
         ;;
       set:setupVersion)
         printf '%s\n' "$4" > "$state_dir/fake-setup-version"
@@ -134,6 +154,8 @@ ln -s "$ROOT/omp/agent/config.yml" "$OLD_AGENT/config.yml"
 ln -s "$ROOT/omp/agent/models.yml" "$OLD_AGENT/models.yml"
 printf 'restored: true\n' > "$OLD_AGENT/config.yml.pre-dotfiles"
 printf '%s\n' '{"smol":"openai/gpt-5.4-mini"}' > "$OLD_AGENT/fake-model-roles.json"
+printf '%s\n' '["anthropic",{"path":"/work","providers":["google"]}]' > "$OLD_AGENT/fake-disabled-providers.json"
+printf '%s\n' '["anthropic/*"]' > "$OLD_AGENT/fake-enabled-models.json"
 printf 'keep: true\n' > "$UNMANAGED_AGENT/config.yml"
 printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
 
@@ -159,13 +181,23 @@ printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
   echo "FAIL: harness extension was not linked" >&2
   exit 1
 }
-jq -e '.default == "openai/gpt-5.6-sol" and .smol == "openai/gpt-5.4-mini"' \
+jq -e '.default == "openai-codex/gpt-5.6-sol" and .smol == "openai/gpt-5.4-mini"' \
   "$OLD_AGENT/fake-model-roles.json" >/dev/null || {
-  echo "FAIL: OpenAI default did not preserve existing model roles" >&2
+  echo "FAIL: Codex OAuth default did not preserve existing model roles" >&2
   exit 1
 }
-[ "$(cat "$OLD_AGENT/fake-setup-version")" = "1" ] || {
-  echo "FAIL: OpenAI environment did not complete native setup" >&2
+jq -e '. == ["openai-codex/gpt-5.6-sol"]' \
+  "$OLD_AGENT/fake-enabled-models.json" >/dev/null || {
+  echo "FAIL: enabledModels did not lock startup to the configured Codex default" >&2
+  exit 1
+}
+jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
+  "$OLD_AGENT/fake-disabled-providers.json" >/dev/null || {
+  echo "FAIL: existing disabledProviders were changed by strict model setup" >&2
+  exit 1
+}
+[ ! -e "$OLD_AGENT/fake-setup-version" ] || {
+  echo "FAIL: OMP setup was marked complete instead of preserving native onboarding" >&2
   exit 1
 }
 [ "$(cat "$OLD_AGENT/fake-hide-thinking")" = "true" ] || {
@@ -185,8 +217,22 @@ jq -e '.default == "openai/gpt-5.6-sol" and .smol == "openai/gpt-5.4-mini"' \
 )
 grep -F 'keep: true' "$UNMANAGED_AGENT/config.yml" >/dev/null
 grep -F 'keep: true' "$UNMANAGED_AGENT/models.yml" >/dev/null
-[ ! -e "$UNMANAGED_AGENT/fake-model-roles.json" ] || {
-  echo "FAIL: model defaults changed without OPENAI_API_KEY" >&2
+jq -e '.default == "openai-codex/gpt-5.6-sol"' \
+  "$UNMANAGED_AGENT/fake-model-roles.json" >/dev/null || {
+  echo "FAIL: Codex OAuth default was not selected without OPENAI_API_KEY" >&2
+  exit 1
+}
+jq -e '. == ["openai-codex/gpt-5.6-sol"]' \
+  "$UNMANAGED_AGENT/fake-enabled-models.json" >/dev/null || {
+  echo "FAIL: strict Codex startup allow-list was not configured" >&2
+  exit 1
+}
+[ ! -e "$UNMANAGED_AGENT/fake-disabled-providers.json" ] || {
+  echo "FAIL: strict model setup created an unnecessary disabledProviders override" >&2
+  exit 1
+}
+[ ! -e "$UNMANAGED_AGENT/fake-setup-version" ] || {
+  echo "FAIL: OMP setup was marked complete without an OAuth login" >&2
   exit 1
 }
 [ "$(cat "$UNMANAGED_AGENT/fake-hide-thinking")" = "true" ] || {

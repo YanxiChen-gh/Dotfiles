@@ -83,12 +83,10 @@ configure_omp_defaults() {
         return 1
     fi
 
+    omp_default_model="openai-codex/gpt-5.6-sol"
+
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set hideThinkingBlock true >/dev/null) || return 1
-    if [ -z "${OPENAI_API_KEY:-}" ]; then
-        echo "✅ omp thinking blocks hidden by default"
-        return 0
-    fi
 
     model_roles=$(cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config get modelRoles 2>/dev/null) || {
@@ -96,15 +94,22 @@ configure_omp_defaults() {
         return 1
     }
     updated_roles=$(printf '%s' "$model_roles" \
-        | jq -c '.default = "openai/gpt-5.6-sol"') || {
+        | jq -c --arg default_model "$omp_default_model" '.default = $default_model') || {
         echo "⚠️  Warning: could not update omp model roles"
         return 1
     }
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set modelRoles "$updated_roles" >/dev/null) || return 1
+
+    enabled_models=$(jq -cn --arg model "$omp_default_model" '[$model]') || {
+        echo "⚠️  Warning: could not configure the omp model allow-list"
+        return 1
+    }
     (cd "$HOME" && env -u PI_CONFIG_FILES \
-        "$omp_binary" config set setupVersion 1 >/dev/null) || return 1
-    echo "✅ omp default model set to openai/gpt-5.6-sol; thinking blocks hidden"
+        "$omp_binary" config set enabledModels "$enabled_models" >/dev/null) || return 1
+
+    echo "✅ omp default model set to $omp_default_model; automatic model fallback disabled"
+    echo "   Start omp and run /login openai-codex to authenticate with ChatGPT."
 }
 
 setup_omp_config() {

@@ -42,9 +42,28 @@ around them.
 
 - `agent/extensions/dotfiles-harness.ts` - the ported gates, Herdr title bridge, and Slack notifier.
 - `install.d/66-omp.sh` links these into `~/.omp/agent/`, hides thinking blocks
-  by default, runs the Herdr integration, registers RTK (best-effort), and syncs
-  the Glean MCP overlay. With `OPENAI_API_KEY`, setup also selects
-  `openai/gpt-5.6-sol` without overriding its model-default reasoning level.
+  by default, and uses one `omp_default_model` value to set both the default
+  role and the one-model `enabledModels` allow-list. For new sessions, the
+  allow-list prevents OMP from automatically choosing Anthropic, Bedrock, or
+  another provider before Codex OAuth succeeds. The module then runs the Herdr
+  integration, registers RTK (best-effort), and syncs the Glean MCP overlay.
+  OMP stores the ChatGPT OAuth credential after native onboarding or
+  `/login openai-codex`.
+
+## Changing the default model
+
+`omp_default_model` in `install.d/66-omp.sh` is the source of truth. Change that
+one value when moving the default profile to another model; the installer writes
+the same selector to `modelRoles.default` and the strict `enabledModels`
+allow-list. The E2E test requires those settings to stay aligned.
+
+The strict allow-list controls automatic selection for new sessions. OMP 17.4.0
+and earlier restores a continued or resumed session's persisted model before
+applying this allow-list, so an old session can retain its prior model. These
+versions can also display other providers in setup and model-management UIs
+when the allowed model is logged out, and manual selection can bypass that UI
+scope. Treat this as a deterministic new-session default and fallback guard,
+not a security boundary around session restoration or the model picker.
 
 ## Parity with the opencode setup
 
@@ -52,7 +71,7 @@ Every piece of the opencode integration, mapped to its omp equivalent:
 
 | opencode | omp |
 | --- | --- |
-| Model + agents | `openai/gpt-5.6-sol` via `OPENAI_API_KEY`; native onboarding when absent |
+| Model + agents | `openai-codex/gpt-5.6-sol` via native ChatGPT OAuth; one-model allow-list prevents automatic fallback in new sessions |
 | Auto mode (`--auto` wrapper) | Native `yolo` default |
 | Scope / verify / PR / comment gates | ported in `dotfiles-harness.ts` (same scripts) |
 | Slack attention notifications | ported in `dotfiles-harness.ts` |
@@ -104,8 +123,10 @@ and maturity-data sync. Add it once the trial proves the rest is worth keeping.
 # 1. Install + link (on your Mac/Ona, where Herdr lives)
 ./install.sh                      # runs install_omp + setup_omp_config + install_herdr_omp_integration
 
-# 2. Start omp. OPENAI_API_KEY is discovered automatically when available.
-omp                               # otherwise complete native onboarding
+# 2. Authenticate privately, then start omp with the configured Codex model.
+# A fresh interactive install opens onboarding before any model request.
+omp
+# In an existing setup, run /login openai-codex, exit, then start a new session.
 herdr integration status          # should show omp: current (v3)
 
 # 3. Run it in a Herdr pane and confirm it shows as an `omp` agent, not a plain shell
