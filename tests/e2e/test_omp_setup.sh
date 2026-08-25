@@ -181,12 +181,12 @@ printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
   echo "FAIL: harness extension was not linked" >&2
   exit 1
 }
-jq -e '.default == "openai-codex/gpt-5.6-sol" and .smol == "openai/gpt-5.4-mini"' \
+jq -e '.default == "openai-codex/gpt-5.6-terra" and .smol == "openai/gpt-5.4-mini"' \
   "$OLD_AGENT/fake-model-roles.json" >/dev/null || {
   echo "FAIL: Codex OAuth default did not preserve existing model roles" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
+jq -e '. == ["openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra"]' \
   "$OLD_AGENT/fake-enabled-models.json" >/dev/null || {
   echo "FAIL: enabledModels did not preserve Codex-first API fallback order" >&2
   exit 1
@@ -217,12 +217,12 @@ jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
 )
 grep -F 'keep: true' "$UNMANAGED_AGENT/config.yml" >/dev/null
 grep -F 'keep: true' "$UNMANAGED_AGENT/models.yml" >/dev/null
-jq -e '.default == "openai-codex/gpt-5.6-sol"' \
+jq -e '.default == "openai-codex/gpt-5.6-terra"' \
   "$UNMANAGED_AGENT/fake-model-roles.json" >/dev/null || {
   echo "FAIL: Codex OAuth default was not selected without OPENAI_API_KEY" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
+jq -e '. == ["openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra"]' \
   "$UNMANAGED_AGENT/fake-enabled-models.json" >/dev/null || {
   echo "FAIL: dual-auth model allow-list was not configured" >&2
   exit 1

@@ -1,7 +1,7 @@
 # omp (oh-my-pi) harness
 
-A parallel harness that runs the same model and the same gates as the opencode
-setup, on [oh-my-pi](https://github.com/can1357/oh-my-pi) instead of opencode. It
+A parallel harness that runs the same gates as the opencode setup, on
+[oh-my-pi](https://github.com/can1357/oh-my-pi) instead of opencode. It
 exists to answer two questions: what does the config look like, and how much of
 `dotfiles-harness.js` survives once the harness gives you first-party batteries.
 
@@ -69,13 +69,13 @@ These versions can also display other providers in setup and model-management
 UIs. Treat the settings as deterministic new-session preference and fallback,
 not a request retry chain or model-picker security boundary.
 
-## Parity with the opencode setup
+## Comparison with the opencode setup
 
-Every piece of the opencode integration, mapped to its omp equivalent:
+The opencode integration, mapped to its omp equivalent:
 
 | opencode | omp |
 | --- | --- |
-| Model + agents | `openai-codex/gpt-5.6-sol` via ChatGPT OAuth by default; `openai/gpt-5.6-sol` via `OPENAI_API_KEY` when no Codex credential is configured at startup |
+| Model + agents | `openai-codex/gpt-5.6-terra` via ChatGPT OAuth by default; `openai/gpt-5.6-terra` via `OPENAI_API_KEY` when no Codex credential is configured at startup |
 | Auto mode (`--auto` wrapper) | Native `yolo` default |
 | Scope / verify / PR / comment gates | ported in `dotfiles-harness.ts` (same scripts) |
 | Slack attention notifications | ported in `dotfiles-harness.ts` |

@@ -83,8 +83,8 @@ configure_omp_defaults() {
         return 1
     fi
 
-    omp_default_model="openai-codex/gpt-5.6-sol"
-    omp_api_fallback_model="openai/gpt-5.6-sol"
+    omp_default_model="openai-codex/gpt-5.6-terra"
+    omp_api_fallback_model="openai/gpt-5.6-terra"
 
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set hideThinkingBlock true >/dev/null) || return 1
