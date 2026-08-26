@@ -163,7 +163,13 @@ setup_omp_rtk() {
 }
 
 setup_omp_mcp() {
-    command -v python3 >/dev/null 2>&1 || return 0
+    if ! command -v python3 >/dev/null 2>&1; then
+        if [ "${WORK_MACHINE:-}" = "1" ] && omp_experiment_enabled; then
+            echo "Warning: OMP MCP setup requires python3"
+            return 1
+        fi
+        return 0
+    fi
 
     script_dir=$(resolve_script_dir) || return 1
     if [ "${WORK_MACHINE:-}" = "1" ]; then
@@ -227,11 +233,21 @@ setup_omp_integration() {
         echo "⚠️  Cannot invalidate $ready_marker; Herdr will fall back to OpenCode"
         return 1
     fi
-    if ! validate_omp_maturity || ! install_omp || ! setup_omp_config || ! install_herdr_omp_integration; then
+    if ! validate_omp_maturity || ! install_omp || ! setup_omp_config; then
         echo "⚠️  omp integration is incomplete; Herdr will fall back to OpenCode"
         return 1
     fi
-    mkdir -p "${ready_marker%/*}"
-    : > "$ready_marker"
+    if [ "${WORK_MACHINE:-}" = "1" ] && ! setup_omp_mcp; then
+        echo "⚠️  omp integration is incomplete; Herdr will fall back to OpenCode"
+        return 1
+    fi
+    if ! install_herdr_omp_integration; then
+        echo "⚠️  omp integration is incomplete; Herdr will fall back to OpenCode"
+        return 1
+    fi
+    if ! mkdir -p "${ready_marker%/*}" || ! : > "$ready_marker"; then
+        echo "⚠️  Cannot publish $ready_marker; Herdr will fall back to OpenCode"
+        return 1
+    fi
     echo "✅ omp integration ready for Herdr"
 }

@@ -612,15 +612,94 @@ done
   export HOME="$TMP/home"
   export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
   export AGENT_MATURITY_HOME="$MATURITY"
+  export WORK_MACHINE=1
   unset OMP_EXPERIMENT
   . "$ROOT/install.d/66-omp.sh"
   install_omp() { return 0; }
   setup_omp_config() { mkdir -p "$PI_CODING_AGENT_DIR"; return 0; }
   install_herdr_omp_integration() { return 0; }
+  setup_omp_mcp() { return 0; }
   setup_omp_integration
 )
 [ -f "$TMP/readiness-agent/.dotfiles-ready" ] || {
   echo "FAIL: successful omp setup did not publish Herdr readiness" >&2
+  exit 1
+}
+if (
+  export HOME="$TMP/home"
+  export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
+  export AGENT_MATURITY_HOME="$MATURITY"
+  export WORK_MACHINE=1
+  unset OMP_EXPERIMENT
+  . "$ROOT/install.d/66-omp.sh"
+  install_omp() { return 0; }
+  setup_omp_config() { return 0; }
+  setup_omp_mcp() { return 1; }
+  install_herdr_omp_integration() { return 0; }
+  setup_omp_integration
+); then
+  echo "FAIL: omp setup accepted missing Glean MCP provisioning" >&2
+  exit 1
+fi
+[ ! -e "$TMP/readiness-agent/.dotfiles-ready" ] || {
+  echo "FAIL: missing Glean MCP provisioning retained Herdr readiness" >&2
+  exit 1
+}
+(
+  export HOME="$TMP/home"
+  export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
+  export AGENT_MATURITY_HOME="$MATURITY"
+  export WORK_MACHINE=0
+  unset OMP_EXPERIMENT
+  . "$ROOT/install.d/66-omp.sh"
+  install_omp() { return 0; }
+  setup_omp_config() { return 0; }
+  setup_omp_mcp() { return 1; }
+  install_herdr_omp_integration() { return 0; }
+  setup_omp_integration
+)
+[ -f "$TMP/readiness-agent/.dotfiles-ready" ] || {
+  echo "FAIL: personal setup requires work Glean MCP provisioning" >&2
+  exit 1
+}
+grep -F 'if [ "${WORK_MACHINE:-}" != "1" ]; then' "$ROOT/install.sh" >/dev/null || {
+  echo "FAIL: personal OMP MCP cleanup is not dispatched by the installer" >&2
+  exit 1
+}
+grep -F '    setup_omp_mcp || true' "$ROOT/install.sh" >/dev/null || {
+  echo "FAIL: personal OMP MCP cleanup does not remain best effort" >&2
+  exit 1
+}
+if (
+  export PATH=/nonexistent
+  export WORK_MACHINE=1
+  unset OMP_EXPERIMENT
+  . "$ROOT/install.d/66-omp.sh"
+  setup_omp_mcp
+); then
+  echo "FAIL: work OMP MCP setup accepted a missing Python runtime" >&2
+  exit 1
+fi
+rm -rf "$TMP/marker-publication-agent"
+if (
+  export HOME="$TMP/home"
+  export PI_CODING_AGENT_DIR="$TMP/marker-publication-agent"
+  export AGENT_MATURITY_HOME="$MATURITY"
+  export WORK_MACHINE=1
+  unset OMP_EXPERIMENT
+  . "$ROOT/install.d/66-omp.sh"
+  install_omp() { return 0; }
+  setup_omp_config() { return 0; }
+  setup_omp_mcp() { return 0; }
+  install_herdr_omp_integration() { return 0; }
+  mkdir() { return 1; }
+  setup_omp_integration
+); then
+  echo "FAIL: omp setup accepted failed readiness marker publication" >&2
+  exit 1
+fi
+[ ! -e "$TMP/marker-publication-agent/.dotfiles-ready" ] || {
+  echo "FAIL: failed readiness marker publication left a marker" >&2
   exit 1
 }
 rm "$MATURITY/scripts/record-task-outcome.sh"
@@ -629,6 +708,7 @@ if (
   export AGENT_MATURITY_HOME="$MATURITY"
   export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
   unset OMP_EXPERIMENT
+  export WORK_MACHINE=1
   . "$ROOT/install.d/66-omp.sh"
   install_omp() { return 0; }
   setup_omp_config() { return 0; }
