@@ -8,9 +8,9 @@ next_tab = "prefix+right"
 previous_workspace = "prefix+up"
 next_workspace = "prefix+down"
 
-# Choose whether a new task workspace uses a treehouse worktree, OpenCode,
-# and an nvim split. OpenCode mode also accepts an initial prompt. Native
-# new_tab (prefix+c) still adds views to a workspace.
+# Choose the repository, checkout, coding agent or shell, and optional nvim
+# split for a new task workspace. Native new_tab (prefix+c) still adds views
+# to the current workspace.
 [[keys.command]]
 key = "prefix+a"
 type = "popup"
@@ -20,7 +20,7 @@ command = "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --select"
 [[keys.command]]
 key = "prefix+shift+a"
 type = "shell"
-description = "New task workspace (treehouse worktree: OpenCode + nvim)"
+description = "New task workspace (treehouse worktree: agent + nvim)"
 command = "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --with-editor"
 
 [ui.toast]

@@ -3,8 +3,8 @@
 #
 # By default, Treehouse opens a worktree and a small shell wrapper creates the
 # Herdr workspace inside it with omp, falling back to OpenCode when unavailable.
-# --select asks for the checkout, primary pane, optional nvim split, and - for
-# a coding agent - an initial prompt first.
+# --select asks for the repository, checkout, primary pane, optional nvim split,
+# and - for a coding agent - an initial prompt first.
 #
 # Treehouse remains the owner: `treehouse get` waits for its shell wrapper, the
 # wrapper waits for the Herdr workspace to close, then Treehouse performs its
@@ -50,6 +50,10 @@ handoff_ready=""
 treehouse_ready=false
 initial_prompt_file=""
 launched_prompt_file=""
+requested_repo_root=""
+requested_workspace_cwd=""
+clone_repository=""
+clone_root=""
 
 cleanup_prompt_files() {
   if [ -n "$initial_prompt_file" ]; then rm -f "$initial_prompt_file"; fi
@@ -75,6 +79,53 @@ die() {
   exit 1
 }
 
+resolve_worktree() {
+  local worktree
+  worktree=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) || return 1
+  (cd "$worktree" && pwd -P)
+}
+
+resolve_primary_checkout() {
+  local worktree primary
+  worktree=$(resolve_worktree "$1") || return 1
+  primary=$(git -C "$worktree" worktree list --porcelain \
+    | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')
+  [ -n "$primary" ] && [ -d "$primary" ] || return 1
+  (cd "$primary" && pwd -P)
+}
+
+resolve_repository_id() {
+  local worktree common_dir
+  worktree=$(resolve_worktree "$1") || return 1
+  common_dir=$(git -C "$worktree" rev-parse --git-common-dir 2>/dev/null) || return 1
+  case "$common_dir" in
+    /*) ;;
+    *) common_dir="$worktree/$common_dir" ;;
+  esac
+  (cd "$common_dir" && pwd -P)
+}
+
+treehouse_checkout_status() {
+  local primary checkout status paths candidate normalized
+  primary="$1"
+  checkout="$2"
+  if ! command -v treehouse >/dev/null 2>&1; then
+    printf 'unmanaged\n'
+    return 0
+  fi
+  status=$(cd "$primary" && treehouse status --json 2>/dev/null) || return 1
+  paths=$(printf '%s' "$status" | jq -r '.[].path' 2>/dev/null) || return 1
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    normalized=$(resolve_worktree "$candidate" 2>/dev/null) || continue
+    if [ "$normalized" = "$checkout" ]; then
+      printf 'managed\n'
+      return 0
+    fi
+  done <<< "$paths"
+  printf 'unmanaged\n'
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --select) select_setup=true ;;
@@ -84,6 +135,26 @@ while [ "$#" -gt 0 ]; do
     --without-agent | --shell) with_agent=false ;;
     --with-editor | --editor) with_editor=true ;;
     --without-editor | --no-editor) with_editor=false ;;
+    --repo-root)
+      [ "$#" -ge 2 ] || die "--repo-root requires a path"
+      requested_repo_root="$2"
+      shift
+      ;;
+    --workspace-cwd)
+      [ "$#" -ge 2 ] || die "--workspace-cwd requires a path"
+      requested_workspace_cwd="$2"
+      shift
+      ;;
+    --clone-repository)
+      [ "$#" -ge 2 ] || die "--clone-repository requires a reference"
+      clone_repository="$2"
+      shift
+      ;;
+    --clone-root)
+      [ "$#" -ge 2 ] || die "--clone-root requires a path"
+      clone_root="$2"
+      shift
+      ;;
     --treehouse-ready)
       treehouse_ready=true
       with_worktree=false
@@ -125,14 +196,168 @@ choose() {
     --prompt="$prompt > "
 }
 
+input_value() {
+  local prompt result
+  prompt="$1"
+  result=$(printf '\n' | fzf \
+    --height=100% \
+    --layout=reverse \
+    --border \
+    --no-multi \
+    --disabled \
+    --print-query \
+    --prompt="$prompt > ") || return 1
+  result=${result%%$'\n'*}
+  [ -n "$result" ] || return 1
+  printf '%s\n' "$result"
+}
+
+repository_ids=()
+repository_options=()
+repo_homes=()
+repo_home_options=()
+add_repo_home() {
+  local root known
+  root="$1"
+  case "$root" in
+    "~") root="$HOME" ;;
+    "~/"*) root="$HOME/${root#\~/}" ;;
+  esac
+  [ -d "$root" ] || return 0
+  root=$(cd "$root" && pwd -P) || return 0
+  for known in "${repo_homes[@]}"; do
+    [ "$known" != "$root" ] || return 0
+  done
+  repo_homes+=("$root")
+  repo_home_options+=("$root"$'\t'"$root")
+}
+
+add_repository() {
+  local candidate primary identity known label
+  candidate="$1"
+  primary=$(resolve_primary_checkout "$candidate") || return 0
+  identity=$(resolve_repository_id "$primary") || return 0
+  for known in "${repository_ids[@]}"; do
+    [ "$known" != "$identity" ] || return 0
+  done
+  repository_ids+=("$identity")
+  label=${primary##*/}
+  if [ "$identity" = "$current_repository_id" ]; then
+    label="$label [current]"
+  fi
+  repository_options+=("$label"$'\t'"$primary")
+}
+
+choose_repository() {
+  local selection
+  selection=$(printf '%s\n' "${repository_options[@]}" \
+    "+ Open local path..."$'\t'"__open__" \
+    "+ Clone GitHub repository..."$'\t'"__clone__" \
+    | fzf \
+      --height=100% \
+      --layout=reverse \
+      --border \
+      --no-multi \
+      --delimiter=$'\t' \
+      --with-nth=1 \
+      --prompt="Repository > ") || return 1
+  printf '%s\n' "${selection#*$'\t'}"
+}
+
+choose_repo_home() {
+  local selection
+  if [ "${#repo_homes[@]}" -eq 1 ]; then
+    printf '%s\n' "${repo_homes[0]}"
+    return 0
+  fi
+  selection=$(printf '%s\n' "${repo_home_options[@]}" | fzf \
+    --height=100% \
+    --layout=reverse \
+    --border \
+    --no-multi \
+    --delimiter=$'\t' \
+    --with-nth=1 \
+    --prompt="Repo home > ") || return 1
+  printf '%s\n' "${selection#*$'\t'}"
+}
+
 if [ "$select_setup" = true ]; then
   command -v fzf >/dev/null 2>&1 || die "fzf not installed"
+  command -v jq >/dev/null 2>&1 || die "jq not installed"
 
-  checkout=$(choose "Checkout" "Fresh Treehouse worktree" "Current checkout") || exit 0
+  current_worktree=$(resolve_worktree "$src_cwd") \
+    || die "Not a git repo: $src_cwd - open a task workspace from a repo workspace."
+  current_primary=$(resolve_primary_checkout "$current_worktree") \
+    || die "could not resolve primary checkout"
+  current_repository_id=$(resolve_repository_id "$current_worktree") \
+    || die "could not resolve repository identity"
+
+  add_repo_home "$(dirname "$current_primary")"
+  if [ -n "${HERDR_REPO_ROOTS:-}" ]; then
+    IFS=: read -r -a configured_roots <<< "$HERDR_REPO_ROOTS"
+    for configured_root in "${configured_roots[@]}"; do
+      add_repo_home "$configured_root"
+    done
+  fi
+
+  add_repository "$current_primary"
+  for repo_home in "${repo_homes[@]}"; do
+    for candidate in "$repo_home"/*; do
+      [ -d "$candidate" ] || continue
+      add_repository "$candidate"
+    done
+  done
+
+  repository=$(choose_repository) || exit 0
+  case "$repository" in
+    "__open__")
+      repository=$(input_value "Repository path") || exit 0
+      requested_repo_root=$(resolve_primary_checkout "$repository") \
+        || die "Not a git repo: $repository"
+      ;;
+    "__clone__")
+      clone_repository=$(input_value "GitHub repository") || exit 0
+      clone_root=$(choose_repo_home) || exit 0
+      ;;
+    *)
+      requested_repo_root=$(resolve_primary_checkout "$repository") \
+        || die "Not a git repo: $repository"
+      ;;
+  esac
+  if [ -n "$requested_repo_root" ]; then
+    selected_repository_id=$(resolve_repository_id "$requested_repo_root") \
+      || die "could not resolve selected repository identity"
+  else
+    selected_repository_id=""
+  fi
+
+  checkout_options=("Fresh Treehouse worktree" "Primary checkout")
+  if [ -n "$selected_repository_id" ] \
+    && [ "$selected_repository_id" = "$current_repository_id" ] \
+    && [ "$current_worktree" != "$current_primary" ]; then
+    if current_status=$(treehouse_checkout_status "$current_primary" "$current_worktree") \
+      && [ "$current_status" = "unmanaged" ]; then
+      checkout_options+=("Current checkout")
+    fi
+  fi
+  checkout=$(choose "Checkout" "${checkout_options[@]}") || exit 0
   primary=$(choose "Primary pane" "$agent_cmd" "Shell") || exit 0
   editor=$(choose "Editor" "No editor" "nvim right split") || exit 0
 
-  [ "$checkout" = "Fresh Treehouse worktree" ] || with_worktree=false
+  case "$checkout" in
+    "Fresh Treehouse worktree") with_worktree=true ;;
+    "Primary checkout")
+      with_worktree=false
+      if [ -n "$requested_repo_root" ]; then
+        requested_workspace_cwd="$requested_repo_root"
+      fi
+      ;;
+    "Current checkout")
+      with_worktree=false
+      requested_workspace_cwd="$current_worktree"
+      ;;
+    *) die "unknown checkout selection: $checkout" ;;
+  esac
   [ "$primary" = "$agent_cmd" ] || with_agent=false
   [ "$editor" = "nvim right split" ] && with_editor=true
 
@@ -170,6 +395,15 @@ if [ "$select_setup" = true ]; then
   if [ -n "$initial_prompt_file" ]; then
     detached_args+=(--initial-prompt-file "$initial_prompt_file")
   fi
+  if [ -n "$requested_repo_root" ]; then
+    detached_args+=(--repo-root "$requested_repo_root")
+  fi
+  if [ -n "$requested_workspace_cwd" ]; then
+    detached_args+=(--workspace-cwd "$requested_workspace_cwd")
+  fi
+  if [ -n "$clone_repository" ]; then
+    detached_args+=(--clone-repository "$clone_repository" --clone-root "$clone_root")
+  fi
 
   # start_new_session isolates setup from the popup PTY on both Linux and macOS.
   python3 - "$0" "${detached_args[@]}" <<'PY' \
@@ -197,6 +431,48 @@ PY
 fi
 
 command -v jq >/dev/null 2>&1 || die "jq not installed"
+if [ -n "$clone_repository" ]; then
+  command -v gh >/dev/null 2>&1 || die "gh not installed"
+  clone_metadata=$(gh repo view "$clone_repository" --json nameWithOwner,name 2>/dev/null) \
+    || die "Could not resolve GitHub repository: $clone_repository"
+  canonical_clone_repository=$(printf '%s' "$clone_metadata" \
+    | jq -r '.nameWithOwner // empty' 2>/dev/null) \
+    || die "Could not parse GitHub repository: $clone_repository"
+  clone_name=$(printf '%s' "$clone_metadata" | jq -r '.name // empty' 2>/dev/null) \
+    || die "Could not parse GitHub repository: $clone_repository"
+  if [ -z "$canonical_clone_repository" ] || [ -z "$clone_name" ]; then
+    die "Could not parse GitHub repository: $clone_repository"
+  fi
+  clone_root=$(cd "$clone_root" && pwd -P) \
+    || die "Clone destination root does not exist: $clone_root"
+  clone_destination="$clone_root/$clone_name"
+  if [ -e "$clone_destination" ]; then
+    physical_clone_destination=$(cd "$clone_destination" && pwd -P) \
+      || die "Clone destination already exists and is not $canonical_clone_repository: $clone_destination"
+    existing_worktree=$(resolve_worktree "$clone_destination") \
+      || die "Clone destination already exists and is not $canonical_clone_repository: $clone_destination"
+    if [ "$existing_worktree" != "$physical_clone_destination" ]; then
+      die "Clone destination already exists and is not $canonical_clone_repository: $clone_destination"
+    fi
+    existing_primary=$(resolve_primary_checkout "$existing_worktree") \
+      || die "Clone destination already exists and is not $canonical_clone_repository: $clone_destination"
+    existing_origin=$(git -C "$existing_primary" remote get-url origin 2>/dev/null) \
+      || die "Could not inspect existing repository: $clone_destination"
+    existing_metadata=$(gh repo view "$existing_origin" --json nameWithOwner 2>/dev/null) \
+      || die "Could not inspect existing repository: $clone_destination"
+    existing_repository=$(printf '%s' "$existing_metadata" \
+      | jq -r '.nameWithOwner // empty' 2>/dev/null) \
+      || die "Could not inspect existing repository: $clone_destination"
+    if [ "$existing_repository" != "$canonical_clone_repository" ]; then
+      die "Clone destination already exists and is not $canonical_clone_repository: $clone_destination"
+    fi
+  else
+    toast "Cloning repository" "$canonical_clone_repository into $clone_root"
+    gh repo clone "$canonical_clone_repository" "$clone_destination" \
+      || die "GitHub could not clone $canonical_clone_repository."
+  fi
+  requested_repo_root="$clone_destination"
+fi
 agent_launch="$agent_cmd"
 if [ "$with_agent" = true ]; then
   command -v "$agent_cmd" >/dev/null 2>&1 || die "$agent_cmd not installed"
@@ -210,18 +486,17 @@ if [ "$treehouse_ready" = true ]; then
   workspace_cwd="${TREEHOUSE_DIR:-$PWD}"
   if [ ! -d "$workspace_cwd" ]; then die "Treehouse checkout does not exist: $workspace_cwd"; fi
 else
-  repo_root=$(git -C "$src_cwd" rev-parse --show-toplevel 2>/dev/null) \
-    || die "Not a git repo: $src_cwd - open a task workspace from a repo workspace."
+  if [ -n "$requested_repo_root" ]; then
+    repo_root=$(resolve_primary_checkout "$requested_repo_root") \
+      || die "Not a git repo: $requested_repo_root"
+  else
+    repo_root=$(resolve_primary_checkout "$src_cwd") \
+      || die "Not a git repo: $src_cwd - open a task workspace from a repo workspace."
+  fi
 
   if [ "$with_worktree" = true ]; then
     command -v treehouse >/dev/null 2>&1 \
       || die "treehouse not installed (go install github.com/kunchenguid/treehouse@latest)"
-
-    # A relative Treehouse root must resolve from the primary checkout, not from
-    # an existing linked worktree, or each nested launch creates another pool.
-    repo_root=$(git -C "$repo_root" worktree list --porcelain \
-      | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')
-    if [ -z "$repo_root" ] || [ ! -d "$repo_root" ]; then die "could not resolve primary checkout"; fi
     git -C "$repo_root" worktree prune 2>/dev/null || true
 
     treehouse_shell="${HERDR_TREEHOUSE_SHELL_PATH:-$HOME/dotfiles/herdr/treehouse-task-shell.sh}"
@@ -240,7 +515,22 @@ else
     exit 0
   fi
 
-  workspace_cwd="$repo_root"
+  if [ -n "$requested_workspace_cwd" ]; then
+    workspace_cwd=$(resolve_worktree "$requested_workspace_cwd") \
+      || die "Not a git checkout: $requested_workspace_cwd"
+  elif [ -n "$requested_repo_root" ]; then
+    workspace_cwd="$repo_root"
+  else
+    workspace_cwd=$(resolve_worktree "$src_cwd") \
+      || die "Not a git checkout: $src_cwd"
+  fi
+  selected_repository_id=$(resolve_repository_id "$repo_root") \
+    || die "could not resolve selected repository identity"
+  workspace_repository_id=$(resolve_repository_id "$workspace_cwd") \
+    || die "could not resolve workspace repository identity"
+  if [ "$selected_repository_id" != "$workspace_repository_id" ]; then
+    die "Selected checkout does not belong to the selected repository."
+  fi
 fi
 if [ "$with_agent" = true ] && [ "$agent_cmd" = "omp" ]; then
   omp_hyperlink_mode="auto"
@@ -253,10 +543,10 @@ if [ "$with_agent" = true ] && [ "$agent_cmd" = "omp" ]; then
   fi
 fi
 
-current_worktree=$(git -C "$workspace_cwd" rev-parse --show-toplevel 2>/dev/null) \
+current_worktree=$(resolve_worktree "$workspace_cwd") \
   || die "could not resolve current worktree"
-primary_worktree=$(git -C "$workspace_cwd" worktree list --porcelain \
-  | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')
+primary_worktree=$(resolve_primary_checkout "$workspace_cwd") \
+  || die "could not resolve primary checkout"
 if [ -z "$primary_worktree" ] || [ ! -d "$primary_worktree" ]; then
   die "could not resolve primary checkout"
 fi
@@ -274,12 +564,8 @@ checkout_id=$(printf '%s' "$current_worktree" | git hash-object --stdin) \
 
 if [ "$treehouse_ready" = false ] && [ "$with_worktree" = false ] \
   && command -v treehouse >/dev/null 2>&1; then
-  treehouse_status=$(cd "$primary_worktree" && treehouse status --json 2>/dev/null) \
+  checkout_status=$(treehouse_checkout_status "$primary_worktree" "$current_worktree") \
     || die "could not inspect Treehouse worktree ownership"
-  checkout_status=$(printf '%s' "$treehouse_status" \
-    | jq -r --arg checkout "$current_worktree" \
-      'if any(.[]; .path == $checkout) then "managed" else "unmanaged" end' 2>/dev/null) \
-    || die "could not parse Treehouse worktree ownership"
   if [ "$checkout_status" = "managed" ]; then
     die "Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree."
   fi
