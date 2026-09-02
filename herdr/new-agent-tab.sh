@@ -216,15 +216,46 @@ repository_ids=()
 repository_options=()
 repo_homes=()
 repo_home_options=()
+default_repo_home() {
+  if [ -n "${HERDR_REPO_HOME:-}" ]; then
+    printf '%s\n' "$HERDR_REPO_HOME"
+  elif [ "${IS_ON_ONA:-}" = "true" ] || [ "${CURSOR_CLOUD:-}" = "1" ]; then
+    printf '/workspaces\n'
+  else
+    printf '%s/workspaces\n' "$HOME"
+  fi
+}
+
+normalize_repo_home() {
+  local path existing suffix component parent
+  path="$1"
+  case "$path" in
+    /*) ;;
+    *) path="$PWD/$path" ;;
+  esac
+  existing="$path"
+  suffix=""
+  while [ ! -d "$existing" ]; do
+    component=$(basename "$existing")
+    parent=$(dirname "$existing")
+    [ "$parent" != "$existing" ] || return 1
+    suffix="/$component$suffix"
+    existing="$parent"
+  done
+  existing=$(cd "$existing" && pwd -P) || return 1
+  printf '%s%s\n' "$existing" "$suffix"
+}
+
+
 add_repo_home() {
   local root known
   root="$1"
+  [ -n "$root" ] || return 0
   case "$root" in
     "~") root="$HOME" ;;
     "~/"*) root="$HOME/${root#\~/}" ;;
   esac
-  [ -d "$root" ] || return 0
-  root=$(cd "$root" && pwd -P) || return 0
+  root=$(normalize_repo_home "$root") || return 0
   for known in "${repo_homes[@]}"; do
     [ "$known" != "$root" ] || return 0
   done
@@ -292,7 +323,7 @@ if [ "$select_setup" = true ]; then
   current_repository_id=$(resolve_repository_id "$current_worktree") \
     || die "could not resolve repository identity"
 
-  add_repo_home "$(dirname "$current_primary")"
+  add_repo_home "$(default_repo_home)"
   if [ -n "${HERDR_REPO_ROOTS:-}" ]; then
     IFS=: read -r -a configured_roots <<< "$HERDR_REPO_ROOTS"
     for configured_root in "${configured_roots[@]}"; do
@@ -442,6 +473,9 @@ if [ -n "$clone_repository" ]; then
     || die "Could not parse GitHub repository: $clone_repository"
   if [ -z "$canonical_clone_repository" ] || [ -z "$clone_name" ]; then
     die "Could not parse GitHub repository: $clone_repository"
+  fi
+  if [ ! -d "$clone_root" ]; then
+    mkdir -p "$clone_root" || die "Could not create clone destination root: $clone_root"
   fi
   clone_root=$(cd "$clone_root" && pwd -P) \
     || die "Clone destination root does not exist: $clone_root"

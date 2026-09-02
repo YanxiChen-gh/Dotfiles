@@ -18,10 +18,19 @@ OTHER="$TMP/other"
 OTHER_ACQUIRED="$TMP/other-treehouse/1/other"
 CONFIGURED_ROOT="$TMP/configured-root"
 CONFIGURED_REPO="$CONFIGURED_ROOT/configured"
+CANONICAL_ROOT="$TMP/canonical-home"
+CANONICAL_REPO="$CANONICAL_ROOT/canonical"
 CLONE_ROOT="$TMP/clone-root"
 CLONED_REPO="$CLONE_ROOT/cloned-repo"
 NESTED_CLONE_ROOT="$MAIN/clone-root"
 NESTED_CLONED_REPO="$NESTED_CLONE_ROOT/cloned-repo"
+LOCAL_DEFAULT_HOME="$HOME_DIR/workspaces"
+LOCAL_CLONED_REPO="$LOCAL_DEFAULT_HOME/cloned-repo"
+DEEP_HOME_PARENT="$TMP/missing-parent"
+DEEP_REPO_HOME="$DEEP_HOME_PARENT/nested-home"
+DEEP_CLONED_REPO="$DEEP_REPO_HOME/cloned-repo"
+IMPLICIT_ROOT="$TMP/implicit-root"
+IMPLICIT_REPO="$IMPLICIT_ROOT/implicit"
 HERDR_LOG="$TMP/herdr.log"
 TREEHOUSE_LOG="$TMP/treehouse.log"
 HERDR_STATE="$TMP/herdr-state"
@@ -37,7 +46,7 @@ PROMPT_INPUT="$TMP/prompt-input.py"
 FZF_INPUT_LOG="$TMP/fzf-input.log"
 GH_LOG="$TMP/gh.log"
 
-mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CLONE_ROOT" "$HERDR_STATE"
+mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$CLONE_ROOT" "$HERDR_STATE"
 : > "$HOME_DIR/.omp/agent/.dotfiles-ready"
 
 git -C "$MAIN" init -q
@@ -64,6 +73,20 @@ git -C "$CONFIGURED_REPO" config user.email test@example.com
 printf 'configured\n' > "$CONFIGURED_REPO/fixture.txt"
 git -C "$CONFIGURED_REPO" add fixture.txt
 git -C "$CONFIGURED_REPO" commit -qm fixture
+
+git -C "$CANONICAL_REPO" init -q
+git -C "$CANONICAL_REPO" config user.name test
+git -C "$CANONICAL_REPO" config user.email test@example.com
+printf 'canonical\n' > "$CANONICAL_REPO/fixture.txt"
+git -C "$CANONICAL_REPO" add fixture.txt
+git -C "$CANONICAL_REPO" commit -qm fixture
+
+git -C "$IMPLICIT_REPO" init -q
+git -C "$IMPLICIT_REPO" config user.name test
+git -C "$IMPLICIT_REPO" config user.email test@example.com
+printf 'implicit\n' > "$IMPLICIT_REPO/fixture.txt"
+git -C "$IMPLICIT_REPO" add fixture.txt
+git -C "$IMPLICIT_REPO" commit -qm fixture
 ACQUIRED_CHECKOUT_ID=$(printf '%s' "$ACQUIRED" | git hash-object --stdin)
 LINKED_CHECKOUT_ID=$(printf '%s' "$LINKED" | git hash-object --stdin)
 MAIN_CHECKOUT_ID=$(printf '%s' "$MAIN" | git hash-object --stdin)
@@ -195,6 +218,7 @@ case "$*" in
     ;;
   *"Repo home > "*)
     input=$(cat)
+    printf '%s\n' "$input" >> "$FAKE_FZF_INPUT_LOG"
     wanted="${FAKE_FZF_REPO_HOME:-}"
     selection=$(printf '%s\n' "$input" | awk -F '\t' -v wanted="$wanted" '$2 == wanted { print; exit }')
     [ -n "$selection" ] || exit 1
@@ -296,7 +320,7 @@ reset_state() {
   : > "$PROMPT_LOG"
   : > "$FZF_INPUT_LOG"
   : > "$GH_LOG"
-  rm -rf "$CLONED_REPO" "$NESTED_CLONE_ROOT"
+  rm -rf "$CLONED_REPO" "$NESTED_CLONE_ROOT" "$LOCAL_DEFAULT_HOME" "$DEEP_HOME_PARENT"
   rm -f "$HERDR_STATE"/*.open "$WORKSPACE_LIST" "$WORKSPACE_LIST_FAILURE" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure" "$TMP/metadata-failure"
 }
 
@@ -503,22 +527,107 @@ FAKE_METADATA_FAILURE="$TMP/metadata-failure" \
   && fail "metadata reporting failure returned success"
 assert_log "workspace close test-workspace" "$HERDR_LOG"
 
-# Repository discovery collapses linked and pooled worktrees to one primary
-# entry while including sibling and configured repositories.
+# Repository discovery is stable across source checkouts: the canonical home
+# and explicit migration roots are scanned, but arbitrary source siblings are not.
 reset_state
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$CANONICAL_ROOT" \
 HERDR_REPO_ROOTS="$CONFIGURED_ROOT" \
 FAKE_FZF_CANCEL=checkout \
   "$LAUNCHER" --select
 assert_log "$MAIN" "$FZF_INPUT_LOG"
-assert_log "$OTHER" "$FZF_INPUT_LOG"
+assert_log "$CANONICAL_REPO" "$FZF_INPUT_LOG"
 assert_log "$CONFIGURED_REPO" "$FZF_INPUT_LOG"
+assert_not_log "$OTHER" "$FZF_INPUT_LOG"
 assert_not_log "$LINKED" "$FZF_INPUT_LOG"
 assert_not_log "$QUOTED_LINKED" "$FZF_INPUT_LOG"
 assert_not_log "$ACQUIRED" "$FZF_INPUT_LOG"
 assert_not_log "workspace create" "$HERDR_LOG"
+
+# Empty migration-root entries are ignored rather than turning the launcher's
+# working directory into an implicit repository root.
+reset_state
+(
+  cd "$IMPLICIT_ROOT"
+  HOME="$HOME_DIR" \
+  HERDR_BIN_PATH="$TMP/herdr" \
+  HERDR_ACTIVE_PANE_CWD="$LINKED" \
+  HERDR_REPO_HOME="$CANONICAL_ROOT" \
+  HERDR_REPO_ROOTS=":$CONFIGURED_ROOT::" \
+  FAKE_FZF_CANCEL=checkout \
+    "$LAUNCHER" --select
+)
+assert_not_log "$IMPLICIT_REPO" "$FZF_INPUT_LOG"
+assert_log "$CONFIGURED_REPO" "$FZF_INPUT_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+
+# Cloud markers select /workspaces even when an extra migration root is
+# available, without relying on the host fixture's repository layout.
+reset_state
+HOME="$HOME_DIR" \
+IS_ON_ONA=true \
+CURSOR_CLOUD=0 \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_ROOTS="$CLONE_ROOT" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "$(printf '/workspaces\t/workspaces')" "$FZF_INPUT_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+
+# Local fallback advertises $HOME/workspaces without creating it during
+# discovery.
+reset_state
+HOME="$HOME_DIR" \
+IS_ON_ONA=false \
+CURSOR_CLOUD=0 \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_ROOTS="$CLONE_ROOT" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "$(printf '%s\t%s' "$LOCAL_DEFAULT_HOME" "$LOCAL_DEFAULT_HOME")" "$FZF_INPUT_LOG"
+[ ! -e "$LOCAL_DEFAULT_HOME" ] || fail "repository discovery created $LOCAL_DEFAULT_HOME"
+
+# Clone creates a missing local fallback home only after the clone action is
+# confirmed, then continues through the normal shared-checkout path.
+reset_state
+HOME="$HOME_DIR" \
+IS_ON_ONA=false \
+CURSOR_CLOUD=0 \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "repo clone VantaInc/cloned-repo $LOCAL_CLONED_REPO" "$GH_LOG"
+wait_for_log "workspace create --cwd $LOCAL_CLONED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+
+# An explicit nested repo home remains selectable even when none of its
+# directories exist yet; Clone creates the complete path.
+reset_state
+HOME="$HOME_DIR" \
+IS_ON_ONA=false \
+CURSOR_CLOUD=0 \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$DEEP_REPO_HOME" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "repo clone VantaInc/cloned-repo $DEEP_CLONED_REPO" "$GH_LOG"
+wait_for_log "workspace create --cwd $DEEP_CLONED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+
 
 # Selecting another repository's shared checkout creates the workspace there
 # without changing the source pane or involving Treehouse.
@@ -526,11 +635,12 @@ reset_state
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$TMP" \
 FAKE_FZF_REPOSITORY="$OTHER" \
 FAKE_FZF_CHECKOUT="Primary checkout" \
   "$LAUNCHER" --select
 wait_for_log "workspace create --cwd $OTHER --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
-assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=other --token worktree=primary --token checkout=$OTHER_CHECKOUT_ID" "$HERDR_LOG"
+wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=other --token worktree=primary --token checkout=$OTHER_CHECKOUT_ID" "$HERDR_LOG"
 assert_not_log "treehouse get" "$TREEHOUSE_LOG"
 
 # Selecting another repository's fresh checkout runs the existing Treehouse
@@ -540,13 +650,14 @@ HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_TREEHOUSE_SHELL_PATH="$TREEHOUSE_SHELL" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$TMP" \
 FAKE_ACQUIRED="$OTHER_ACQUIRED" \
 FAKE_FZF_REPOSITORY="$OTHER" \
 FAKE_FZF_CHECKOUT="Fresh Treehouse worktree" \
   "$LAUNCHER" --select
 wait_for_log "start cwd=$OTHER shell=$TREEHOUSE_SHELL args=get" "$TREEHOUSE_LOG"
 wait_for_log "workspace create --cwd $OTHER_ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$OTHER_ACQUIRED" "$HERDR_LOG"
-assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=other --token worktree=1 --token checkout=$OTHER_ACQUIRED_CHECKOUT_ID" "$HERDR_LOG"
+wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=other --token worktree=1 --token checkout=$OTHER_ACQUIRED_CHECKOUT_ID" "$HERDR_LOG"
 rm -f "$WORKSPACE_OPEN"
 wait_for_log "returned status=0" "$TREEHOUSE_LOG"
 
@@ -580,7 +691,7 @@ reset_state
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
-HERDR_REPO_ROOTS="$CLONE_ROOT" \
+HERDR_REPO_HOME="$CLONE_ROOT" \
 FAKE_FZF_REPOSITORY="__clone__" \
 FAKE_FZF_GITHUB_REPOSITORY="https://github.com/VantaInc/cloned-repo" \
 FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
@@ -597,9 +708,9 @@ wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkou
 : > "$GH_LOG"
 rm -f "$WORKSPACE_OPEN"
 HOME="$HOME_DIR" \
+HERDR_REPO_HOME="$CLONE_ROOT" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
-HERDR_REPO_ROOTS="$CLONE_ROOT" \
 FAKE_FZF_REPOSITORY="__clone__" \
 FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
 FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
@@ -614,9 +725,9 @@ wait_for_log "workspace create --cwd $CLONED_REPO --no-focus --env DOTFILES_HERD
 # setup stage from the detached launcher.
 reset_state
 HOME="$HOME_DIR" \
+HERDR_REPO_HOME="$CLONE_ROOT" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
-HERDR_REPO_ROOTS="$CLONE_ROOT" \
 FAKE_GH_FAILURE=clone \
 FAKE_FZF_REPOSITORY="__clone__" \
 FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
@@ -634,7 +745,7 @@ git -C "$MAIN" remote add origin https://github.com/VantaInc/cloned-repo.git
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
-HERDR_REPO_ROOTS="$NESTED_CLONE_ROOT" \
+HERDR_REPO_HOME="$NESTED_CLONE_ROOT" \
 FAKE_FZF_REPOSITORY="__clone__" \
 FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
 FAKE_FZF_REPO_HOME="$NESTED_CLONE_ROOT" \
