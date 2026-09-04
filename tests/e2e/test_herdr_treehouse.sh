@@ -171,6 +171,7 @@ chmod +x "$TMP/herdr"
 cat > "$HOME_DIR/.local/bin/treehouse" <<'EOF'
 #!/bin/sh
 if [ "${1:-}" = "status" ] && [ "${2:-}" = "--json" ]; then
+  printf 'status cwd=%s args=%s\n' "$PWD" "$*" >> "$FAKE_TREEHOUSE_LOG"
   printf '%s\n' "[{\"name\":\"1\",\"path\":\"$FAKE_ACQUIRED\",\"status\":\"in-use\",\"lease_id\":\"\",\"lease_holder\":\"\",\"leased_at\":null,\"processes\":[]}]"
   exit 0
 fi
@@ -527,8 +528,8 @@ FAKE_METADATA_FAILURE="$TMP/metadata-failure" \
   && fail "metadata reporting failure returned success"
 assert_log "workspace close test-workspace" "$HERDR_LOG"
 
-# Repository discovery is stable across source checkouts: the canonical home
-# and explicit migration roots are scanned, but arbitrary source siblings are not.
+# Repository discovery is stable across source checkouts, and selecting the
+# current repository reaches checkout options without inspecting Treehouse.
 reset_state
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
@@ -545,6 +546,8 @@ assert_not_log "$LINKED" "$FZF_INPUT_LOG"
 assert_not_log "$QUOTED_LINKED" "$FZF_INPUT_LOG"
 assert_not_log "$ACQUIRED" "$FZF_INPUT_LOG"
 assert_not_log "workspace create" "$HERDR_LOG"
+assert_log "Current checkout" "$FZF_INPUT_LOG"
+assert_not_log "status cwd=" "$TREEHOUSE_LOG"
 
 # Empty migration-root entries are ignored rather than turning the launcher's
 # working directory into an implicit repository root.
@@ -674,15 +677,17 @@ FAKE_FZF_CHECKOUT="Primary checkout" \
 wait_for_log "workspace create --cwd $CONFIGURED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
 assert_not_log "treehouse get" "$TREEHOUSE_LOG"
 
-# A managed source checkout never offers itself for a second independent
-# workspace even though the launch-time guard remains authoritative.
+# A managed source checkout stays selectable without blocking the picker, then
+# the detached launch-time guard rejects it before workspace creation.
 reset_state
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
-FAKE_FZF_CANCEL=checkout \
+FAKE_FZF_CHECKOUT="Current checkout" \
   "$LAUNCHER" --select
-assert_not_log "Current checkout" "$FZF_INPUT_LOG"
+assert_log "Current checkout" "$FZF_INPUT_LOG"
+wait_for_log "status cwd=$MAIN args=status --json" "$TREEHOUSE_LOG"
+wait_for_log "notification show New task workspace failed --body Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree." "$HERDR_LOG"
 assert_not_log "workspace create" "$HERDR_LOG"
 
 # Clone canonicalizes the GitHub reference, creates the primary checkout under

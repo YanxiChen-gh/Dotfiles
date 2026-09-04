@@ -366,10 +366,7 @@ if [ "$select_setup" = true ]; then
   if [ -n "$selected_repository_id" ] \
     && [ "$selected_repository_id" = "$current_repository_id" ] \
     && [ "$current_worktree" != "$current_primary" ]; then
-    if current_status=$(treehouse_checkout_status "$current_primary" "$current_worktree") \
-      && [ "$current_status" = "unmanaged" ]; then
-      checkout_options+=("Current checkout")
-    fi
+    checkout_options+=("Current checkout")
   fi
   checkout=$(choose "Checkout" "${checkout_options[@]}") || exit 0
   primary=$(choose "Primary pane" "$agent_cmd" "Shell") || exit 0
