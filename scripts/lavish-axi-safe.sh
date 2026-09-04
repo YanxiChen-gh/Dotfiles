@@ -17,8 +17,8 @@ case "${1:-}" in
     *.html|*.htm) artifact_file="$1" ;;
 esac
 if [[ -n "$artifact_file" ]]; then
-    source "$SCRIPT_DIR/lavish-worktree-env.sh"
-    configure_lavish_worktree_env "$artifact_file"
+    source "$SCRIPT_DIR/lavish-session-env.sh"
+    configure_lavish_session_env "$artifact_file"
 fi
 
 if [[ "${IS_ON_ONA:-}" == true ]]; then

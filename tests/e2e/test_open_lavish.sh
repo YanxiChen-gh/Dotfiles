@@ -107,7 +107,8 @@ output=$(IS_ON_ONA='' LAVISH_AXI_PORT=4387 LAVISH_AXI_STATE_DIR="$TMP/shared-sta
 [ "$output" = 'http://127.0.0.1:4387/session/0123456789abcdef?no-gate=1' ] || fail "local URL mismatch"
 grep -q "$(printf '^\t\t\t\t4387\t%s\t/tmp/plan.html$' "$TMP/shared-state")" "$FAKE_NPX_LOG" || fail "local opening set remote loopback environment"
 mkdir -p "$TMP/worktree-a/.lavish" "$TMP/worktree-b/.lavish"
-: >"$TMP/worktree-a/.lavish/review.html"
+: >"$TMP/worktree-a/.lavish/review-a.html"
+: >"$TMP/worktree-a/.lavish/review-b.html"
 : >"$TMP/worktree-b/.lavish/review.html"
 
 cat >"$TMP/bin/git" <<EOF
@@ -122,7 +123,7 @@ fi
 EOF
 chmod +x "$TMP/bin/git"
 
-open_worktree_artifact() {
+open_artifact() {
     HOME="$TMP/home" \
         IS_ON_ONA=true \
         OPEN_LAVISH_EXPOSE_SCRIPT="$TMP/fake-expose" \
@@ -131,50 +132,58 @@ open_worktree_artifact() {
 
 : >"$FAKE_NPX_LOG"
 printf '%s\n' absent >"$FAKE_SERVER_STATE"
-open_worktree_artifact "$TMP/worktree-a/.lavish/review.html" >/dev/null
-open_worktree_artifact "$TMP/worktree-b/.lavish/review.html" >/dev/null
-worktree_a_identity=$(sed -n '1p' "$FAKE_NPX_LOG")
-worktree_b_identity=$(sed -n '2p' "$FAKE_NPX_LOG")
-worktree_a_config=$(printf '%s\n' "$worktree_a_identity" | cut -f1-6)
-worktree_b_config=$(printf '%s\n' "$worktree_b_identity" | cut -f1-6)
-[ "$worktree_a_config" != "$worktree_b_config" ] || fail "worktrees shared a Lavish identity"
-worktree_a_port=$(printf '%s\n' "$worktree_a_identity" | cut -f5)
-worktree_b_port=$(printf '%s\n' "$worktree_b_identity" | cut -f5)
-[ "$worktree_a_port" != "$worktree_b_port" ] || fail "worktrees shared a Lavish port"
-case "$worktree_a_identity" in
-    *"$TMP/home/.lavish-axi/worktrees/"*) ;;
-    *) fail "worktree A did not use isolated Lavish state" ;;
+open_artifact "$TMP/worktree-a/.lavish/review-a.html" >/dev/null
+open_artifact "$TMP/worktree-a/.lavish/review-b.html" >/dev/null
+open_artifact "$TMP/worktree-b/.lavish/review.html" >/dev/null
+agent_a_identity=$(sed -n '1p' "$FAKE_NPX_LOG")
+agent_b_identity=$(sed -n '2p' "$FAKE_NPX_LOG")
+other_worktree_identity=$(sed -n '3p' "$FAKE_NPX_LOG")
+agent_a_config=$(printf '%s\n' "$agent_a_identity" | cut -f1-6)
+agent_b_config=$(printf '%s\n' "$agent_b_identity" | cut -f1-6)
+other_worktree_config=$(printf '%s\n' "$other_worktree_identity" | cut -f1-6)
+[ "$agent_a_config" != "$agent_b_config" ] || fail "same-worktree artifacts shared a Lavish identity"
+[ "$agent_a_config" != "$other_worktree_config" ] || fail "different-worktree artifacts shared a Lavish identity"
+agent_a_port=$(printf '%s\n' "$agent_a_identity" | cut -f5)
+agent_b_port=$(printf '%s\n' "$agent_b_identity" | cut -f5)
+[ "$agent_a_port" != "$agent_b_port" ] || fail "same-worktree artifacts shared a Lavish port"
+case "$agent_a_identity" in
+    *"$TMP/home/.lavish-axi/sessions/"*) ;;
+    *) fail "agent A did not use isolated Lavish state" ;;
 esac
-case "$worktree_b_identity" in
-    *"$TMP/home/.lavish-axi/worktrees/"*) ;;
-    *) fail "worktree B did not use isolated Lavish state" ;;
+case "$agent_b_identity" in
+    *"$TMP/home/.lavish-axi/sessions/"*) ;;
+    *) fail "agent B did not use isolated Lavish state" ;;
+esac
+case "$other_worktree_identity" in
+    *"$TMP/home/.lavish-axi/sessions/"*) ;;
+    *) fail "other worktree did not use isolated Lavish state" ;;
 esac
 
 
 : >"$FAKE_NPX_LOG"
-HOME="$TMP/home" IS_ON_ONA=true "$SAFE_SCRIPT" poll "$TMP/worktree-a/.lavish/review.html" >/dev/null
+HOME="$TMP/home" IS_ON_ONA=true "$SAFE_SCRIPT" poll "$TMP/worktree-a/.lavish/review-a.html" >/dev/null
 poll_config=$(cut -f1-6 "$FAKE_NPX_LOG")
-[ "$poll_config" = "$worktree_a_config" ] || fail "poll did not reuse the worktree Lavish identity"
+[ "$poll_config" = "$agent_a_config" ] || fail "poll did not reuse the artifact Lavish identity"
 
 : >"$FAKE_NPX_LOG"
-HOME="$TMP/home" IS_ON_ONA=true "$SAFE_SCRIPT" end "$TMP/worktree-a/.lavish/review.html" >/dev/null
+HOME="$TMP/home" IS_ON_ONA=true "$SAFE_SCRIPT" end "$TMP/worktree-a/.lavish/review-a.html" >/dev/null
 end_config=$(cut -f1-6 "$FAKE_NPX_LOG")
-[ "$end_config" = "$worktree_a_config" ] || fail "end did not reuse the worktree Lavish identity"
+[ "$end_config" = "$agent_a_config" ] || fail "end did not reuse the artifact Lavish identity"
 
 : >"$FAKE_NPX_LOG"
 IS_ON_ONA=true LAVISH_AXI_PORT=48000 LAVISH_AXI_STATE_DIR="$TMP/shared-state" \
-    "$SAFE_SCRIPT" poll "$TMP/worktree-a/.lavish/review.html" >/dev/null
-grep -q "$(printf '^\t127.0.0.1\t127.0.0.1\t1\t48000\t%s\tpoll %s$' "$TMP/shared-state" "$TMP/worktree-a/.lavish/review.html")" "$FAKE_NPX_LOG" ||
+    "$SAFE_SCRIPT" poll "$TMP/worktree-a/.lavish/review-a.html" >/dev/null
+grep -q "$(printf '^\t127.0.0.1\t127.0.0.1\t1\t48000\t%s\tpoll %s$' "$TMP/shared-state" "$TMP/worktree-a/.lavish/review-a.html")" "$FAKE_NPX_LOG" ||
     fail "explicit Lavish identity was not preserved"
 
 : >"$FAKE_NPX_LOG"
-IS_ON_ONA=true LAVISH_AXI_PORT=48001 "$SAFE_SCRIPT" poll "$TMP/worktree-a/.lavish/review.html" >/dev/null
-grep -q "$(printf '^\t127.0.0.1\t127.0.0.1\t1\t48001\t\tpoll %s$' "$TMP/worktree-a/.lavish/review.html")" "$FAKE_NPX_LOG" ||
+IS_ON_ONA=true LAVISH_AXI_PORT=48001 "$SAFE_SCRIPT" poll "$TMP/worktree-a/.lavish/review-a.html" >/dev/null
+grep -q "$(printf '^\t127.0.0.1\t127.0.0.1\t1\t48001\t\tpoll %s$' "$TMP/worktree-a/.lavish/review-a.html")" "$FAKE_NPX_LOG" ||
     fail "explicit Lavish port was not preserved"
 
 : >"$FAKE_NPX_LOG"
-IS_ON_ONA=true LAVISH_AXI_STATE_DIR="$TMP/shared-state-only" "$SAFE_SCRIPT" poll "$TMP/worktree-a/.lavish/review.html" >/dev/null
-grep -q "$(printf '^\t127.0.0.1\t127.0.0.1\t1\t\t%s\tpoll %s$' "$TMP/shared-state-only" "$TMP/worktree-a/.lavish/review.html")" "$FAKE_NPX_LOG" ||
+IS_ON_ONA=true LAVISH_AXI_STATE_DIR="$TMP/shared-state-only" "$SAFE_SCRIPT" poll "$TMP/worktree-a/.lavish/review-a.html" >/dev/null
+grep -q "$(printf '^\t127.0.0.1\t127.0.0.1\t1\t\t%s\tpoll %s$' "$TMP/shared-state-only" "$TMP/worktree-a/.lavish/review-a.html")" "$FAKE_NPX_LOG" ||
     fail "explicit Lavish state directory was not preserved"
 
 resolve_script_dir() {

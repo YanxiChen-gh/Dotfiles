@@ -21,8 +21,8 @@ if [[ -z "$HTML_FILE" ]]; then
     exit 2
 fi
 shift
-source "$SCRIPT_DIR/lavish-worktree-env.sh"
-configure_lavish_worktree_env "$HTML_FILE"
+source "$SCRIPT_DIR/lavish-session-env.sh"
+configure_lavish_session_env "$HTML_FILE"
 
 
 LAVISH_PORT="${LAVISH_AXI_PORT:-4387}"

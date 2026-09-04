@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-configure_lavish_worktree_env() {
+configure_lavish_session_env() {
     local artifact_file="$1"
     local artifact_path
-    local identity_path
     local state_root
     local state_dir
     local port_file
@@ -14,18 +13,12 @@ configure_lavish_worktree_env() {
     fi
 
     artifact_path=$(realpath "$artifact_file")
-    if identity_path=$(git -C "$(dirname "$artifact_path")" rev-parse --show-toplevel 2>/dev/null); then
-        identity_path=$(realpath "$identity_path")
-    else
-        identity_path="$artifact_path"
-    fi
-
-    state_root="${LAVISH_WORKTREE_STATE_ROOT:-$HOME/.lavish-axi}"
-    state_dir="$state_root/worktrees/$(printf '%s' "$identity_path" | sha256sum | cut -c1-16)"
+    state_root="${LAVISH_SESSION_STATE_ROOT:-$HOME/.lavish-axi}"
+    state_dir="$state_root/sessions/$(printf '%s' "$artifact_path" | sha256sum | cut -c1-16)"
     port_file="$state_dir/port"
     mkdir -p "$state_dir"
 
-    exec 9>"$state_root/worktree-port-allocation.lock"
+    exec 9>"$state_root/session-port-allocation.lock"
     flock 9
     if [[ -s "$port_file" ]]; then
         IFS= read -r port <"$port_file"
@@ -39,7 +32,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
     print(listener.getsockname()[1])
 PY
 )
-            if ! grep -Rqx -- "$port" "$state_root/worktrees"/*/port 2>/dev/null; then
+            if ! grep -Rqx -- "$port" "$state_root/sessions"/*/port 2>/dev/null; then
                 printf '%s\n' "$port" >"$port_file"
                 break
             fi
