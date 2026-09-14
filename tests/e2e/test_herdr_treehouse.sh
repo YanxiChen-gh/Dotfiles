@@ -677,6 +677,18 @@ FAKE_FZF_CHECKOUT="Primary checkout" \
 wait_for_log "workspace create --cwd $CONFIGURED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
 assert_not_log "treehouse get" "$TREEHOUSE_LOG"
 
+# A managed source checkout reaches checkout selection without synchronously
+# inspecting Treehouse ownership.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "Current checkout" "$FZF_INPUT_LOG"
+assert_not_log "status cwd=" "$TREEHOUSE_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+
 # A managed source checkout stays selectable without blocking the picker, then
 # the detached launch-time guard rejects it before workspace creation.
 reset_state
