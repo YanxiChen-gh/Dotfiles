@@ -16,6 +16,12 @@ Herdr 0.8.0 resolves Ctrl-clicked pane URLs on its server, so `herdr --remote` o
 
 The relay trusts the remote account: while attached, a process on that account can request that the Mac open an HTTP(S) URL. The remote host must provide `ss`; the wrapper refuses to start Herdr unless it confirms that the forwarded port is bound only to `127.0.0.1`. One relay can own a remote target at a time, and local Herdr sessions are unchanged.
 
+## Herdr task workspaces
+
+`prefix+a` opens a repository-first task-workspace picker with a stable inventory independent of the invoking checkout. `HERDR_REPO_HOME` sets the canonical repo home; Ona and Cursor Cloud default to `/workspaces`, while other environments default to `$HOME/workspaces`. The picker lists the current repository first, then direct child Git repositories under that home, followed by direct children under optional colon-delimited `HERDR_REPO_ROOTS` migration roots. Linked and Treehouse worktrees collapse into their canonical primary repository entry. `Open local path...` accepts any existing Git checkout, while `Clone GitHub repository...` creates the canonical home if needed, clones there by default, and continues through the same checkout setup.
+
+Fresh checkout mode keeps Treehouse as the exclusive worktree owner. Shared mode can use a selected repository's primary checkout or the current unmanaged linked checkout. A Treehouse-managed current checkout cannot back a second workspace; use `prefix+c` for another tab in its owning workspace. `prefix+shift+a` remains the no-picker shortcut for a fresh current-repository worktree with an agent and nvim.
+
 ## Editor (Vim / Neovim)
 
 `.vimrc` at the repo root is symlinked to `~/.vimrc` by `create_symlinks` (vim-plug installs any missing plugins on startup). Neovim reads `~/.config/nvim/init.vim` rather than `~/.vimrc`, so `setup_nvim_config` links `nvim/init.vim` (which sources `~/.vimrc`) and `nvim/lsp.lua` there. Neovim uses its native LSP client with project-local TypeScript 7 `tsgo` when available and Mason's `typescript-language-server` with a pinned TypeScript 6 language-service fallback otherwise. Mason also installs and configures Bash and Go language servers; Java and OCaml servers are included when Java 21+ and opam are available.

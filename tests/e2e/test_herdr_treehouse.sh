@@ -14,6 +14,30 @@ MAIN="$TMP/repo"
 LINKED="$TMP/linked"
 QUOTED_LINKED="$TMP/linked'quoted"
 ACQUIRED="$TMP/treehouse-pool-with-a-deliberately-long-checkout-name-for-token-boundary-coverage/1/repo"
+OTHER="$TMP/other"
+OTHER_ACQUIRED="$TMP/other-treehouse/1/other"
+CONFIGURED_ROOT="$TMP/configured-root"
+CONFIGURED_REPO="$CONFIGURED_ROOT/configured"
+CANONICAL_ROOT="$TMP/canonical-home"
+CANONICAL_REPO="$CANONICAL_ROOT/canonical"
+CLONE_ROOT="$TMP/clone-root"
+CLONED_REPO="$CLONE_ROOT/cloned-repo"
+NESTED_CLONE_ROOT="$MAIN/clone-root"
+NESTED_CLONED_REPO="$NESTED_CLONE_ROOT/cloned-repo"
+LOCAL_DEFAULT_HOME="$HOME_DIR/workspaces"
+LOCAL_CLONED_REPO="$LOCAL_DEFAULT_HOME/cloned-repo"
+DEEP_HOME_PARENT="$TMP/missing-parent"
+DEEP_REPO_HOME="$DEEP_HOME_PARENT/nested-home"
+DEEP_CLONED_REPO="$DEEP_REPO_HOME/cloned-repo"
+IMPLICIT_ROOT="$TMP/implicit-root"
+IMPLICIT_REPO="$IMPLICIT_ROOT/implicit"
+NESTED_DISCOVERY_ROOT="$MAIN/discovery-root"
+NESTED_NON_REPO="$NESTED_DISCOVERY_ROOT/not-a-repository"
+DUPLICATE_ROOT_A="$TMP/duplicate-a"
+DUPLICATE_ROOT_B="$TMP/duplicate-b"
+DUPLICATE_REPO_A="$DUPLICATE_ROOT_A/shared"
+DUPLICATE_REPO_B="$DUPLICATE_ROOT_B/shared"
+ROOT_MISSING_HOME="/dotfiles-e2e-herdr-root-home-$$"
 HERDR_LOG="$TMP/herdr.log"
 TREEHOUSE_LOG="$TMP/treehouse.log"
 HERDR_STATE="$TMP/herdr-state"
@@ -26,8 +50,10 @@ TREEHOUSE_RELEASE="$TMP/treehouse-release"
 AGENT_READY="$TMP/agent-ready"
 PROMPT_LOG="$TMP/prompt.log"
 PROMPT_INPUT="$TMP/prompt-input.py"
+FZF_INPUT_LOG="$TMP/fzf-input.log"
+GH_LOG="$TMP/gh.log"
 
-mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "${ACQUIRED%/*}" "$HERDR_STATE"
+mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$NESTED_NON_REPO" "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B" "$CLONE_ROOT" "$HERDR_STATE"
 : > "$HOME_DIR/.omp/agent/.dotfiles-ready"
 
 git -C "$MAIN" init -q
@@ -39,9 +65,50 @@ git -C "$MAIN" commit -qm fixture
 git -C "$MAIN" worktree add --detach "$LINKED" >/dev/null
 git -C "$MAIN" worktree add --detach "$QUOTED_LINKED" >/dev/null
 git -C "$MAIN" worktree add --detach "$ACQUIRED" >/dev/null
+
+git -C "$OTHER" init -q
+git -C "$OTHER" config user.name test
+git -C "$OTHER" config user.email test@example.com
+printf 'other\n' > "$OTHER/fixture.txt"
+git -C "$OTHER" add fixture.txt
+git -C "$OTHER" commit -qm fixture
+git -C "$OTHER" worktree add --detach "$OTHER_ACQUIRED" >/dev/null
+
+git -C "$CONFIGURED_REPO" init -q
+git -C "$CONFIGURED_REPO" config user.name test
+git -C "$CONFIGURED_REPO" config user.email test@example.com
+printf 'configured\n' > "$CONFIGURED_REPO/fixture.txt"
+git -C "$CONFIGURED_REPO" add fixture.txt
+git -C "$CONFIGURED_REPO" commit -qm fixture
+
+git -C "$CANONICAL_REPO" init -q
+git -C "$CANONICAL_REPO" config user.name test
+git -C "$CANONICAL_REPO" config user.email test@example.com
+printf 'canonical\n' > "$CANONICAL_REPO/fixture.txt"
+git -C "$CANONICAL_REPO" add fixture.txt
+git -C "$CANONICAL_REPO" commit -qm fixture
+
+git -C "$IMPLICIT_REPO" init -q
+git -C "$IMPLICIT_REPO" config user.name test
+git -C "$IMPLICIT_REPO" config user.email test@example.com
+printf 'implicit\n' > "$IMPLICIT_REPO/fixture.txt"
+git -C "$IMPLICIT_REPO" add fixture.txt
+git -C "$IMPLICIT_REPO" commit -qm fixture
+
+for repository in "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B"; do
+  git -C "$repository" init -q
+  git -C "$repository" config user.name test
+  git -C "$repository" config user.email test@example.com
+  printf 'duplicate\n' > "$repository/fixture.txt"
+  git -C "$repository" add fixture.txt
+  git -C "$repository" commit -qm fixture
+done
 ACQUIRED_CHECKOUT_ID=$(printf '%s' "$ACQUIRED" | git hash-object --stdin)
 LINKED_CHECKOUT_ID=$(printf '%s' "$LINKED" | git hash-object --stdin)
 MAIN_CHECKOUT_ID=$(printf '%s' "$MAIN" | git hash-object --stdin)
+OTHER_ACQUIRED_CHECKOUT_ID=$(printf '%s' "$OTHER_ACQUIRED" | git hash-object --stdin)
+OTHER_CHECKOUT_ID=$(printf '%s' "$OTHER" | git hash-object --stdin)
+CLONED_CHECKOUT_ID=$(printf '%s' "$CLONED_REPO" | git hash-object --stdin)
 if [ "${#ACQUIRED}" -le 80 ]; then
   echo "FAIL: acquired checkout path does not exercise Herdr's token boundary" >&2
   exit 1
@@ -120,6 +187,7 @@ chmod +x "$TMP/herdr"
 cat > "$HOME_DIR/.local/bin/treehouse" <<'EOF'
 #!/bin/sh
 if [ "${1:-}" = "status" ] && [ "${2:-}" = "--json" ]; then
+  printf 'status cwd=%s args=%s\n' "$PWD" "$*" >> "$FAKE_TREEHOUSE_LOG"
   printf '%s\n' "[{\"name\":\"1\",\"path\":\"$FAKE_ACQUIRED\",\"status\":\"in-use\",\"lease_id\":\"\",\"lease_holder\":\"\",\"leased_at\":null,\"processes\":[]}]"
   exit 0
 fi
@@ -150,7 +218,32 @@ PY
 cat > "$HOME_DIR/.local/bin/fzf" <<'EOF'
 #!/bin/sh
 case "$*" in
-  *"Checkout > ")
+  *"Repository > "*)
+    input=$(cat)
+    printf '%s\n' "$input" >> "$FAKE_FZF_INPUT_LOG"
+    [ "${FAKE_FZF_CANCEL:-}" = "repository" ] && exit 1
+    wanted="${FAKE_FZF_REPOSITORY:-$FAKE_CURRENT_REPOSITORY}"
+    selection=$(printf '%s\n' "$input" | awk -F '\t' -v wanted="$wanted" '$2 == wanted { print; exit }')
+    [ -n "$selection" ] || exit 1
+    printf '%s\n' "$selection"
+    ;;
+  *"Repository path > "*)
+    printf '%s\n' "${FAKE_FZF_REPOSITORY_PATH:-}"
+    ;;
+  *"GitHub repository > "*)
+    printf '%s\n' "${FAKE_FZF_GITHUB_REPOSITORY:-}"
+    ;;
+  *"Repo home > "*)
+    input=$(cat)
+    printf '%s\n' "$input" >> "$FAKE_FZF_INPUT_LOG"
+    wanted="${FAKE_FZF_REPO_HOME:-}"
+    selection=$(printf '%s\n' "$input" | awk -F '\t' -v wanted="$wanted" '$2 == wanted { print; exit }')
+    [ -n "$selection" ] || exit 1
+    printf '%s\n' "$selection"
+    ;;
+  *"Checkout > "*)
+    input=$(cat)
+    printf '%s\n' "$input" >> "$FAKE_FZF_INPUT_LOG"
     [ "${FAKE_FZF_CANCEL:-}" = "checkout" ] && exit 1
     printf '%s\n' "${FAKE_FZF_CHECKOUT:-Fresh Treehouse worktree}"
     ;;
@@ -160,6 +253,32 @@ case "$*" in
 esac
 EOF
 chmod +x "$HOME_DIR/.local/bin/fzf"
+
+cat > "$HOME_DIR/.local/bin/gh" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_GH_LOG"
+case "$1 $2" in
+  "repo view")
+    [ "${FAKE_GH_FAILURE:-}" != "view" ] || exit 1
+    if [ "${3:-}" = "--json" ]; then
+      name_with_owner="${FAKE_GH_LOCAL_NAME_WITH_OWNER:-VantaInc/parent-repo}"
+    else
+      name_with_owner="${FAKE_GH_NAME_WITH_OWNER:-VantaInc/cloned-repo}"
+    fi
+    printf '{"nameWithOwner":"%s","name":"%s"}\n' \
+      "$name_with_owner" \
+      "${FAKE_GH_NAME:-cloned-repo}"
+    ;;
+  "repo clone")
+    [ "${FAKE_GH_FAILURE:-}" != "clone" ] || exit 1
+    mkdir -p "$4"
+    git -C "$4" init -q
+    git -C "$4" remote add origin "https://github.com/$3.git"
+    ;;
+  *) exit 2 ;;
+esac
+EOF
+chmod +x "$HOME_DIR/.local/bin/gh"
 
 for command in opencode nvim; do
   cat > "$HOME_DIR/.local/bin/$command" <<'EOF'
@@ -191,7 +310,12 @@ EOF
 chmod +x "$HOME_DIR/.local/bin/omp"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
-assert_log() { grep -F -- "$1" "$2" >/dev/null || fail "missing '$1' in $2"; }
+assert_log() {
+  if ! grep -F -- "$1" "$2" >/dev/null; then
+    cat "$2" >&2
+    fail "missing '$1' in $2"
+  fi
+}
 assert_not_log() { ! grep -F -- "$1" "$2" >/dev/null || fail "unexpected '$1' in $2"; }
 wait_for_log() {
   for _ in $(seq 1 500); do
@@ -211,6 +335,9 @@ reset_state() {
   : > "$HERDR_LOG"
   : > "$TREEHOUSE_LOG"
   : > "$PROMPT_LOG"
+  : > "$FZF_INPUT_LOG"
+  : > "$GH_LOG"
+  rm -rf "$CLONED_REPO" "$NESTED_CLONE_ROOT" "$LOCAL_DEFAULT_HOME" "$DEEP_HOME_PARENT"
   rm -f "$HERDR_STATE"/*.open "$WORKSPACE_LIST" "$WORKSPACE_LIST_FAILURE" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure" "$TMP/metadata-failure"
 }
 
@@ -224,6 +351,9 @@ export FAKE_TRANSPORT_FAILURE="$TRANSPORT_FAILURE"
 export FAKE_TREEHOUSE_STARTED="$TREEHOUSE_STARTED"
 export FAKE_AGENT_READY="$AGENT_READY"
 export FAKE_PROMPT_LOG="$PROMPT_LOG"
+export FAKE_FZF_INPUT_LOG="$FZF_INPUT_LOG"
+export FAKE_CURRENT_REPOSITORY="$MAIN"
+export FAKE_GH_LOG="$GH_LOG"
 
 # Enter inserts a newline and Ctrl+S reliably submits with terminal flow
 # control disabled. Encoded Ctrl+Enter remains supported where available.
@@ -414,6 +544,289 @@ FAKE_METADATA_FAILURE="$TMP/metadata-failure" \
   && fail "metadata reporting failure returned success"
 assert_log "workspace close test-workspace" "$HERDR_LOG"
 
+# Repository discovery is stable across source checkouts, and selecting the
+# current repository reaches checkout options without inspecting Treehouse.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$CANONICAL_ROOT" \
+HERDR_REPO_ROOTS="$CONFIGURED_ROOT" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "$MAIN" "$FZF_INPUT_LOG"
+assert_log "$CANONICAL_REPO" "$FZF_INPUT_LOG"
+assert_log "$CONFIGURED_REPO" "$FZF_INPUT_LOG"
+assert_not_log "$OTHER" "$FZF_INPUT_LOG"
+assert_not_log "$LINKED" "$FZF_INPUT_LOG"
+assert_not_log "$QUOTED_LINKED" "$FZF_INPUT_LOG"
+assert_not_log "$ACQUIRED" "$FZF_INPUT_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+assert_log "Current checkout" "$FZF_INPUT_LOG"
+assert_not_log "status cwd=" "$TREEHOUSE_LOG"
+
+# A repository home nested inside another checkout does not discover that
+# enclosing checkout through ordinary child directories.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$OTHER" \
+HERDR_REPO_HOME="$NESTED_DISCOVERY_ROOT" \
+FAKE_FZF_CANCEL=repository \
+  "$LAUNCHER" --select
+assert_log "$OTHER" "$FZF_INPUT_LOG"
+assert_not_log "$MAIN" "$FZF_INPUT_LOG"
+
+# Repositories with the same basename remain distinguishable in the picker.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$MAIN" \
+HERDR_REPO_HOME="$DUPLICATE_ROOT_A" \
+HERDR_REPO_ROOTS="$DUPLICATE_ROOT_B" \
+FAKE_FZF_CANCEL=repository \
+  "$LAUNCHER" --select
+assert_log "$(printf 'shared  %s\t%s' "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_A")" "$FZF_INPUT_LOG"
+assert_log "$(printf 'shared  %s\t%s' "$DUPLICATE_REPO_B" "$DUPLICATE_REPO_B")" "$FZF_INPUT_LOG"
+
+# Empty migration-root entries are ignored rather than turning the launcher's
+# working directory into an implicit repository root.
+reset_state
+(
+  cd "$IMPLICIT_ROOT"
+  HOME="$HOME_DIR" \
+  HERDR_BIN_PATH="$TMP/herdr" \
+  HERDR_ACTIVE_PANE_CWD="$LINKED" \
+  HERDR_REPO_HOME="$CANONICAL_ROOT" \
+  HERDR_REPO_ROOTS=":$CONFIGURED_ROOT::" \
+  FAKE_FZF_CANCEL=checkout \
+    "$LAUNCHER" --select
+)
+assert_not_log "$IMPLICIT_REPO" "$FZF_INPUT_LOG"
+assert_log "$CONFIGURED_REPO" "$FZF_INPUT_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+
+# Cloud markers select /workspaces even when an extra migration root is
+# available, without relying on the host fixture's repository layout.
+reset_state
+HOME="$HOME_DIR" \
+IS_ON_ONA=true \
+CURSOR_CLOUD=0 \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_ROOTS="$CLONE_ROOT" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "$(printf '/workspaces\t/workspaces')" "$FZF_INPUT_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+
+# Missing repository homes directly under / keep one canonical leading slash.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_REPO_HOME="$ROOT_MISSING_HOME" \
+HERDR_REPO_ROOTS="$CLONE_ROOT" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$ROOT_MISSING_HOME" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "$(printf '%s\t%s' "$ROOT_MISSING_HOME" "$ROOT_MISSING_HOME")" "$FZF_INPUT_LOG"
+
+# Local fallback advertises $HOME/workspaces without creating it during
+# discovery.
+reset_state
+HOME="$HOME_DIR" \
+IS_ON_ONA=false \
+CURSOR_CLOUD=0 \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_ROOTS="$CLONE_ROOT" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "$(printf '%s\t%s' "$LOCAL_DEFAULT_HOME" "$LOCAL_DEFAULT_HOME")" "$FZF_INPUT_LOG"
+[ ! -e "$LOCAL_DEFAULT_HOME" ] || fail "repository discovery created $LOCAL_DEFAULT_HOME"
+
+# Clone creates a missing local fallback home only after the clone action is
+# confirmed, then continues through the normal shared-checkout path.
+reset_state
+HOME="$HOME_DIR" \
+IS_ON_ONA=false \
+CURSOR_CLOUD=0 \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "repo clone VantaInc/cloned-repo $LOCAL_CLONED_REPO" "$GH_LOG"
+wait_for_log "workspace create --cwd $LOCAL_CLONED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+
+# An explicit nested repo home remains selectable even when none of its
+# directories exist yet; Clone creates the complete path.
+reset_state
+HOME="$HOME_DIR" \
+IS_ON_ONA=false \
+CURSOR_CLOUD=0 \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$DEEP_REPO_HOME" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "repo clone VantaInc/cloned-repo $DEEP_CLONED_REPO" "$GH_LOG"
+wait_for_log "workspace create --cwd $DEEP_CLONED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+
+
+# Selecting another repository's shared checkout creates the workspace there
+# without changing the source pane or involving Treehouse.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$TMP" \
+FAKE_FZF_REPOSITORY="$OTHER" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "workspace create --cwd $OTHER --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=other --token worktree=primary --token checkout=$OTHER_CHECKOUT_ID" "$HERDR_LOG"
+assert_not_log "treehouse get" "$TREEHOUSE_LOG"
+
+# Selecting another repository's fresh checkout runs the existing Treehouse
+# ownership bridge from that repository.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_TREEHOUSE_SHELL_PATH="$TREEHOUSE_SHELL" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$TMP" \
+FAKE_ACQUIRED="$OTHER_ACQUIRED" \
+FAKE_FZF_REPOSITORY="$OTHER" \
+FAKE_FZF_CHECKOUT="Fresh Treehouse worktree" \
+  "$LAUNCHER" --select
+wait_for_log "start cwd=$OTHER shell=$TREEHOUSE_SHELL args=get" "$TREEHOUSE_LOG"
+wait_for_log "workspace create --cwd $OTHER_ACQUIRED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1 --env TREEHOUSE_DIR=$OTHER_ACQUIRED" "$HERDR_LOG"
+wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=other --token worktree=1 --token checkout=$OTHER_ACQUIRED_CHECKOUT_ID" "$HERDR_LOG"
+rm -f "$WORKSPACE_OPEN"
+wait_for_log "returned status=0" "$TREEHOUSE_LOG"
+
+# Open local path accepts a repository outside the discovered list and then
+# uses its primary checkout.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_FZF_REPOSITORY="__open__" \
+FAKE_FZF_REPOSITORY_PATH="$CONFIGURED_REPO" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "workspace create --cwd $CONFIGURED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+assert_not_log "treehouse get" "$TREEHOUSE_LOG"
+
+# A managed source checkout reaches checkout selection without synchronously
+# inspecting Treehouse ownership.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "Current checkout" "$FZF_INPUT_LOG"
+assert_not_log "status cwd=" "$TREEHOUSE_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+
+# A managed source checkout stays selectable without blocking the picker, then
+# the detached launch-time guard rejects it before workspace creation.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
+FAKE_FZF_CHECKOUT="Current checkout" \
+  "$LAUNCHER" --select
+assert_log "Current checkout" "$FZF_INPUT_LOG"
+wait_for_log "status cwd=$MAIN args=status --json" "$TREEHOUSE_LOG"
+wait_for_log "notification show New task workspace failed --body Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree." "$HERDR_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+
+# Clone canonicalizes the GitHub reference, creates the primary checkout under
+# the selected repo home, and continues through shared-checkout setup.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$CLONE_ROOT" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="https://github.com/VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "repo view https://github.com/VantaInc/cloned-repo --json nameWithOwner,name" "$GH_LOG"
+wait_for_log "repo clone VantaInc/cloned-repo $CLONED_REPO" "$GH_LOG"
+wait_for_log "workspace create --cwd $CLONED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+wait_for_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=cloned-repo --token worktree=primary --token checkout=$CLONED_CHECKOUT_ID" "$HERDR_LOG"
+
+# Selecting an already-cloned matching repository reuses it instead of cloning
+# again or rejecting the destination.
+: > "$HERDR_LOG"
+: > "$GH_LOG"
+rm -f "$WORKSPACE_OPEN"
+HOME="$HOME_DIR" \
+HERDR_REPO_HOME="$CLONE_ROOT" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "repo view https://github.com/VantaInc/cloned-repo.git --json nameWithOwner" "$GH_LOG"
+assert_not_log "repo clone" "$GH_LOG"
+wait_for_log "workspace create --cwd $CLONED_REPO --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+
+
+# Clone failure happens before Herdr workspace creation and surfaces the failed
+# setup stage from the detached launcher.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_REPO_HOME="$CLONE_ROOT" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_GH_FAILURE=clone \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$CLONE_ROOT" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "notification show New task workspace failed --body GitHub could not clone VantaInc/cloned-repo." "$HERDR_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+
+# A non-repository collision nested inside another matching repository is
+# rejected instead of reusing the enclosing checkout.
+reset_state
+mkdir -p "$NESTED_CLONED_REPO"
+git -C "$MAIN" remote add origin https://github.com/VantaInc/cloned-repo.git
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$NESTED_CLONE_ROOT" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$NESTED_CLONE_ROOT" \
+FAKE_FZF_CHECKOUT="Primary checkout" \
+  "$LAUNCHER" --select
+wait_for_log "notification show New task workspace failed --body Clone destination already exists and is not VantaInc/cloned-repo: $NESTED_CLONED_REPO" "$HERDR_LOG"
+assert_not_log "repo clone" "$GH_LOG"
+assert_not_log "workspace create" "$HERDR_LOG"
+git -C "$MAIN" remote remove origin
+
 # The popup returns before Treehouse finishes provisioning. Releasing the fake
 # setup later creates the workspace without blocking the selector.
 reset_state
@@ -580,7 +993,7 @@ reset_state
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
-FAKE_FZF_CANCEL=checkout \
+FAKE_FZF_CANCEL=repository \
   "$LAUNCHER" --select
 [ ! -s "$HERDR_LOG" ] || fail "cancelled selector launched a workspace"
 [ ! -s "$TREEHOUSE_LOG" ] || fail "cancelled selector launched Treehouse"
