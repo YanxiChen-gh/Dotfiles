@@ -106,23 +106,39 @@ resolve_repository_id() {
 }
 
 treehouse_checkout_status() {
-  local primary checkout status paths candidate normalized
-  primary="$1"
-  checkout="$2"
-  if ! command -v treehouse >/dev/null 2>&1; then
-    printf 'unmanaged\n'
-    return 0
-  fi
-  status=$(cd "$primary" && treehouse status --json 2>/dev/null) || return 1
-  paths=$(printf '%s' "$status" | jq -r '.[].path' 2>/dev/null) || return 1
-  while IFS= read -r candidate; do
-    [ -n "$candidate" ] || continue
-    normalized=$(resolve_worktree "$candidate" 2>/dev/null) || continue
-    if [ "$normalized" = "$checkout" ]; then
-      printf 'managed\n'
+  local checkout ancestor state_file paths candidate normalized
+  checkout=$(resolve_worktree "$1") || return 1
+  ancestor=${checkout%/*}
+  [ -n "$ancestor" ] || ancestor="/"
+
+  while true; do
+    state_file="$ancestor/treehouse-state.json"
+    if [ -e "$state_file" ] || [ -L "$state_file" ]; then
+      # Treehouse status scans every pool checkout; ownership only needs its state inventory.
+      paths=$(jq -ce '
+        if type != "object" then error("invalid Treehouse state")
+        elif (has("version") and (.version | type) != "number") then error("invalid Treehouse state")
+        elif (.worktrees? | type) != "array" then error("invalid Treehouse state")
+        elif any(.worktrees[]; type != "object" or (.path? | type) != "string") then error("invalid Treehouse state")
+        else [.worktrees[].path]
+        end
+      ' "$state_file" 2>/dev/null) || return 1
+      while IFS= read -r -d '' candidate; do
+        [ -n "$candidate" ] || continue
+        normalized=$(resolve_worktree "$candidate" 2>/dev/null) || continue
+        if [ "$normalized" = "$checkout" ]; then
+          printf 'managed\n'
+          return 0
+        fi
+      done < <(printf '%s\n' "$paths" | jq -j '.[] | ., "\u0000"')
+      printf 'unmanaged\n'
       return 0
     fi
-  done <<< "$paths"
+    [ "$ancestor" != "/" ] || break
+    ancestor=${ancestor%/*}
+    [ -n "$ancestor" ] || ancestor="/"
+  done
+
   printf 'unmanaged\n'
 }
 
@@ -600,9 +616,8 @@ fi
 checkout_id=$(printf '%s' "$current_worktree" | git hash-object --stdin) \
   || die "could not derive checkout identity"
 
-if [ "$treehouse_ready" = false ] && [ "$with_worktree" = false ] \
-  && command -v treehouse >/dev/null 2>&1; then
-  checkout_status=$(treehouse_checkout_status "$primary_worktree" "$current_worktree") \
+if [ "$treehouse_ready" = false ] && [ "$with_worktree" = false ]; then
+  checkout_status=$(treehouse_checkout_status "$current_worktree") \
     || die "could not inspect Treehouse worktree ownership"
   if [ "$checkout_status" = "managed" ]; then
     die "Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree."

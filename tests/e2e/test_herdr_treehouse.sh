@@ -14,6 +14,11 @@ MAIN="$TMP/repo"
 LINKED="$TMP/linked"
 QUOTED_LINKED="$TMP/linked'quoted"
 ACQUIRED="$TMP/treehouse-pool-with-a-deliberately-long-checkout-name-for-token-boundary-coverage/1/repo"
+TREEHOUSE_STATE="${ACQUIRED%/1/repo}/treehouse-state.json"
+NEWLINE_POOL="$TMP/treehouse-newline"
+NEWLINE_ACQUIRED="$NEWLINE_POOL/1/repo
+checkout"
+NEWLINE_TREEHOUSE_STATE="$NEWLINE_POOL/treehouse-state.json"
 OTHER="$TMP/other"
 OTHER_ACQUIRED="$TMP/other-treehouse/1/other"
 CONFIGURED_ROOT="$TMP/configured-root"
@@ -53,7 +58,7 @@ PROMPT_INPUT="$TMP/prompt-input.py"
 FZF_INPUT_LOG="$TMP/fzf-input.log"
 GH_LOG="$TMP/gh.log"
 
-mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$NESTED_NON_REPO" "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B" "$CLONE_ROOT" "$HERDR_STATE"
+mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${NEWLINE_ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$NESTED_NON_REPO" "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B" "$CLONE_ROOT" "$HERDR_STATE"
 : > "$HOME_DIR/.omp/agent/.dotfiles-ready"
 
 git -C "$MAIN" init -q
@@ -65,6 +70,7 @@ git -C "$MAIN" commit -qm fixture
 git -C "$MAIN" worktree add --detach "$LINKED" >/dev/null
 git -C "$MAIN" worktree add --detach "$QUOTED_LINKED" >/dev/null
 git -C "$MAIN" worktree add --detach "$ACQUIRED" >/dev/null
+git -C "$MAIN" worktree add --detach "$NEWLINE_ACQUIRED" >/dev/null
 
 git -C "$OTHER" init -q
 git -C "$OTHER" config user.name test
@@ -331,12 +337,20 @@ wait_for_exit() {
   done
   fail "process $1 did not exit"
 }
+write_treehouse_state() {
+  jq -n --arg path "$ACQUIRED" \
+    '{worktrees: [{name: "1", path: $path}]}' > "$TREEHOUSE_STATE"
+  jq -n --arg path "$NEWLINE_ACQUIRED" \
+    '{worktrees: [{name: "1", path: $path}]}' > "$NEWLINE_TREEHOUSE_STATE"
+}
+
 reset_state() {
   : > "$HERDR_LOG"
   : > "$TREEHOUSE_LOG"
   : > "$PROMPT_LOG"
   : > "$FZF_INPUT_LOG"
   : > "$GH_LOG"
+  write_treehouse_state
   rm -rf "$CLONED_REPO" "$NESTED_CLONE_ROOT" "$LOCAL_DEFAULT_HOME" "$DEEP_HOME_PARENT"
   rm -f "$HERDR_STATE"/*.open "$WORKSPACE_LIST" "$WORKSPACE_LIST_FAILURE" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure" "$TMP/metadata-failure"
 }
@@ -512,18 +526,58 @@ HERDR_ACTIVE_PANE_CWD="$LINKED" \
 assert_log "workspace create --cwd $LINKED --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
 assert_log "workspace report-metadata test-workspace --source dotfiles:checkout --token repo=repo --token worktree=linked --token checkout=$LINKED_CHECKOUT_ID" "$HERDR_LOG"
 assert_not_log "treehouse get" "$TREEHOUSE_LOG"
+assert_not_log "status cwd=" "$TREEHOUSE_LOG"
 
-# A Treehouse pool checkout cannot host an independent Herdr workspace. Each
-# workspace must acquire its own checkout through Treehouse.
+# A Treehouse pool checkout cannot host an independent Herdr workspace, even
+# when the Treehouse executable is unavailable.
 reset_state
+mv "$HOME_DIR/.local/bin/treehouse" "$TMP/treehouse"
+shared_status=0
 HOME="$HOME_DIR" \
+PATH="/usr/bin:/bin" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
 FAKE_WORKSPACE_ID="sibling-workspace" \
   "$LAUNCHER" --without-worktree --without-agent --without-editor > "$TMP/shared-rejected.out" 2>&1 \
-  && fail "current-checkout mode created a sibling workspace in a Treehouse checkout"
+  || shared_status=$?
+mv "$TMP/treehouse" "$HOME_DIR/.local/bin/treehouse"
+[ "$shared_status" -ne 0 ] \
+  || fail "current-checkout mode created a sibling workspace in a Treehouse checkout"
 assert_not_log "workspace create" "$HERDR_LOG"
 assert_log "notification show New task workspace failed --body Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree." "$HERDR_LOG"
+
+# Managed checkout paths retain their record boundary even when they contain a newline.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$NEWLINE_ACQUIRED" \
+FAKE_WORKSPACE_ID="newline-workspace" \
+  "$LAUNCHER" --without-worktree --without-agent --without-editor > "$TMP/newline-rejected.out" 2>&1 \
+  && fail "newline Treehouse checkout created an independent workspace"
+assert_not_log "workspace create" "$HERDR_LOG"
+assert_log "notification show New task workspace failed --body Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree." "$HERDR_LOG"
+
+# A discovered Treehouse state file must fail closed when its shape is invalid.
+reset_state
+printf '%s\n' '{"worktrees":"invalid"}' > "$TREEHOUSE_STATE"
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
+  "$LAUNCHER" --without-worktree --without-agent --without-editor > "$TMP/malformed-state.out" 2>&1 \
+  && fail "malformed Treehouse state allowed a shared checkout"
+assert_not_log "workspace create" "$HERDR_LOG"
+assert_log "notification show New task workspace failed --body could not inspect Treehouse worktree ownership" "$HERDR_LOG"
+
+# A present null state version is malformed rather than equivalent to omission.
+reset_state
+printf '%s\n' '{"version":null,"worktrees":[]}' > "$TREEHOUSE_STATE"
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
+  "$LAUNCHER" --without-worktree --without-agent --without-editor > "$TMP/null-version.out" 2>&1 \
+  && fail "null Treehouse state version allowed a shared checkout"
+assert_not_log "workspace create" "$HERDR_LOG"
+assert_log "notification show New task workspace failed --body could not inspect Treehouse worktree ownership" "$HERDR_LOG"
 
 # The primary checkout uses a stable name instead of repeating the repository.
 reset_state
@@ -743,8 +797,8 @@ assert_log "Current checkout" "$FZF_INPUT_LOG"
 assert_not_log "status cwd=" "$TREEHOUSE_LOG"
 assert_not_log "workspace create" "$HERDR_LOG"
 
-# A managed source checkout stays selectable without blocking the picker, then
-# the detached launch-time guard rejects it before workspace creation.
+# A managed source checkout stays selectable, then the detached state-file
+# guard rejects it before workspace creation.
 reset_state
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
@@ -752,7 +806,7 @@ HERDR_ACTIVE_PANE_CWD="$ACQUIRED" \
 FAKE_FZF_CHECKOUT="Current checkout" \
   "$LAUNCHER" --select
 assert_log "Current checkout" "$FZF_INPUT_LOG"
-wait_for_log "status cwd=$MAIN args=status --json" "$TREEHOUSE_LOG"
+assert_not_log "status cwd=" "$TREEHOUSE_LOG"
 wait_for_log "notification show New task workspace failed --body Current checkout is already managed by Treehouse; choose a fresh Treehouse worktree." "$HERDR_LOG"
 assert_not_log "workspace create" "$HERDR_LOG"
 
