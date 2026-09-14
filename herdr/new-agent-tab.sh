@@ -266,7 +266,9 @@ add_repo_home() {
 add_repository() {
   local candidate primary identity known label
   candidate="$1"
+  candidate=$(cd "$candidate" && pwd -P) || return 0
   primary=$(resolve_primary_checkout "$candidate") || return 0
+  [ "$primary" = "$candidate" ] || return 0
   identity=$(resolve_repository_id "$primary") || return 0
   for known in "${repository_ids[@]}"; do
     [ "$known" != "$identity" ] || return 0
@@ -276,6 +278,7 @@ add_repository() {
   if [ "$identity" = "$current_repository_id" ]; then
     label="$label [current]"
   fi
+  label="$label  $primary"
   repository_options+=("$label"$'\t'"$primary")
 }
 

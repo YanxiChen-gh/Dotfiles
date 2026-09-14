@@ -31,6 +31,12 @@ DEEP_REPO_HOME="$DEEP_HOME_PARENT/nested-home"
 DEEP_CLONED_REPO="$DEEP_REPO_HOME/cloned-repo"
 IMPLICIT_ROOT="$TMP/implicit-root"
 IMPLICIT_REPO="$IMPLICIT_ROOT/implicit"
+NESTED_DISCOVERY_ROOT="$MAIN/discovery-root"
+NESTED_NON_REPO="$NESTED_DISCOVERY_ROOT/not-a-repository"
+DUPLICATE_ROOT_A="$TMP/duplicate-a"
+DUPLICATE_ROOT_B="$TMP/duplicate-b"
+DUPLICATE_REPO_A="$DUPLICATE_ROOT_A/shared"
+DUPLICATE_REPO_B="$DUPLICATE_ROOT_B/shared"
 HERDR_LOG="$TMP/herdr.log"
 TREEHOUSE_LOG="$TMP/treehouse.log"
 HERDR_STATE="$TMP/herdr-state"
@@ -46,7 +52,7 @@ PROMPT_INPUT="$TMP/prompt-input.py"
 FZF_INPUT_LOG="$TMP/fzf-input.log"
 GH_LOG="$TMP/gh.log"
 
-mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$CLONE_ROOT" "$HERDR_STATE"
+mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$NESTED_NON_REPO" "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B" "$CLONE_ROOT" "$HERDR_STATE"
 : > "$HOME_DIR/.omp/agent/.dotfiles-ready"
 
 git -C "$MAIN" init -q
@@ -87,6 +93,15 @@ git -C "$IMPLICIT_REPO" config user.email test@example.com
 printf 'implicit\n' > "$IMPLICIT_REPO/fixture.txt"
 git -C "$IMPLICIT_REPO" add fixture.txt
 git -C "$IMPLICIT_REPO" commit -qm fixture
+
+for repository in "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B"; do
+  git -C "$repository" init -q
+  git -C "$repository" config user.name test
+  git -C "$repository" config user.email test@example.com
+  printf 'duplicate\n' > "$repository/fixture.txt"
+  git -C "$repository" add fixture.txt
+  git -C "$repository" commit -qm fixture
+done
 ACQUIRED_CHECKOUT_ID=$(printf '%s' "$ACQUIRED" | git hash-object --stdin)
 LINKED_CHECKOUT_ID=$(printf '%s' "$LINKED" | git hash-object --stdin)
 MAIN_CHECKOUT_ID=$(printf '%s' "$MAIN" | git hash-object --stdin)
@@ -548,6 +563,30 @@ assert_not_log "$ACQUIRED" "$FZF_INPUT_LOG"
 assert_not_log "workspace create" "$HERDR_LOG"
 assert_log "Current checkout" "$FZF_INPUT_LOG"
 assert_not_log "status cwd=" "$TREEHOUSE_LOG"
+
+# A repository home nested inside another checkout does not discover that
+# enclosing checkout through ordinary child directories.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$OTHER" \
+HERDR_REPO_HOME="$NESTED_DISCOVERY_ROOT" \
+FAKE_FZF_CANCEL=repository \
+  "$LAUNCHER" --select
+assert_log "$OTHER" "$FZF_INPUT_LOG"
+assert_not_log "$MAIN" "$FZF_INPUT_LOG"
+
+# Repositories with the same basename remain distinguishable in the picker.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$MAIN" \
+HERDR_REPO_HOME="$DUPLICATE_ROOT_A" \
+HERDR_REPO_ROOTS="$DUPLICATE_ROOT_B" \
+FAKE_FZF_CANCEL=repository \
+  "$LAUNCHER" --select
+assert_log "$(printf 'shared  %s\t%s' "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_A")" "$FZF_INPUT_LOG"
+assert_log "$(printf 'shared  %s\t%s' "$DUPLICATE_REPO_B" "$DUPLICATE_REPO_B")" "$FZF_INPUT_LOG"
 
 # Empty migration-root entries are ignored rather than turning the launcher's
 # working directory into an implicit repository root.
