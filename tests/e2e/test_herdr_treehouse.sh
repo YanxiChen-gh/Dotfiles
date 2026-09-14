@@ -37,6 +37,7 @@ DUPLICATE_ROOT_A="$TMP/duplicate-a"
 DUPLICATE_ROOT_B="$TMP/duplicate-b"
 DUPLICATE_REPO_A="$DUPLICATE_ROOT_A/shared"
 DUPLICATE_REPO_B="$DUPLICATE_ROOT_B/shared"
+ROOT_MISSING_HOME="/dotfiles-e2e-herdr-root-home-$$"
 HERDR_LOG="$TMP/herdr.log"
 TREEHOUSE_LOG="$TMP/treehouse.log"
 HERDR_STATE="$TMP/herdr-state"
@@ -621,6 +622,20 @@ FAKE_FZF_CANCEL=checkout \
   "$LAUNCHER" --select
 assert_log "$(printf '/workspaces\t/workspaces')" "$FZF_INPUT_LOG"
 assert_not_log "workspace create" "$HERDR_LOG"
+
+# Missing repository homes directly under / keep one canonical leading slash.
+reset_state
+HOME="$HOME_DIR" \
+HERDR_REPO_HOME="$ROOT_MISSING_HOME" \
+HERDR_REPO_ROOTS="$CLONE_ROOT" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+FAKE_FZF_REPOSITORY="__clone__" \
+FAKE_FZF_GITHUB_REPOSITORY="VantaInc/cloned-repo" \
+FAKE_FZF_REPO_HOME="$ROOT_MISSING_HOME" \
+FAKE_FZF_CANCEL=checkout \
+  "$LAUNCHER" --select
+assert_log "$(printf '%s\t%s' "$ROOT_MISSING_HOME" "$ROOT_MISSING_HOME")" "$FZF_INPUT_LOG"
 
 # Local fallback advertises $HOME/workspaces without creating it during
 # discovery.

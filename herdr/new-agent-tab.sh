@@ -243,7 +243,11 @@ normalize_repo_home() {
     existing="$parent"
   done
   existing=$(cd "$existing" && pwd -P) || return 1
-  printf '%s%s\n' "$existing" "$suffix"
+  if [ "$existing" = "/" ]; then
+    printf '/%s\n' "${suffix#/}"
+  else
+    printf '%s%s\n' "$existing" "$suffix"
+  fi
 }
 
 
