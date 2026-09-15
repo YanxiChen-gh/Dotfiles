@@ -1,5 +1,5 @@
 ---
-description: Before writing code on a non-trivial task, scope it first: acceptance checks, declared implementation choices, PR-decomposition, and batched scope questions. Apply before starting any multi-file, interface-changing, or approach-forking work.
+description: Use when a task has a material unresolved product, interface, architecture, rollout, or migration decision that cannot be resolved from the request and repository context.
 alwaysApply: false
 ---
 
@@ -7,7 +7,6 @@ alwaysApply: false
 
 # Scope Before Code
 
-Before writing code on a non-trivial task, scope it first: restate the task in one line with concrete pass-to-pass acceptance checks, declare the key implementation choices (which API/library, reuse vs new abstraction, real fix vs workaround) *before* coding, propose a PR-decomposition for multi-part work, and batch genuine scope questions up front. Non-trivial = any approach/design fork, a new/changed public interface, multi-file or multi-system work, a "make it X" architectural ask, or you're unsure (default to non-trivial when unsure). Trivial = one obvious, cheaply-reversible change with no new interface - just proceed.
+When the request leaves a material product, interface, architecture, rollout, or migration choice unresolved, state the intended outcome and the key decision before choosing an implementation. Record assumptions that could change the result.
 
-Agents without an enforcing hook should do this by habit.
-
+For clear local work, inspect the repository, choose the established pattern, and proceed. Do not create an approval or planning loop unless the user requested one or the unresolved decision needs their input.

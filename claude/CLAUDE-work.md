@@ -28,90 +28,27 @@ The user grants standing approval to run `just post-pull`; this satisfies reposi
 - When testing a product end-to-end, be picky about the UI and pixel precision within the requested scope. Report unrelated issues instead of expanding the change without approval.
 - Hold the same bar for engineering excellence: fix lint errors, test failures, and flaky tests caused by or blocking the requested change. Report unrelated failures instead of altering unrelated code.
 
-## Scope Before Code
-
-Before writing code on a non-trivial task, scope it first: restate the task in one line with concrete pass-to-pass acceptance checks, declare the key implementation choices (which API/library, reuse vs new abstraction, real fix vs workaround) *before* coding, propose a PR-decomposition for multi-part work, and batch genuine scope questions up front. Non-trivial = any approach/design fork, a new/changed public interface, multi-file or multi-system work, a "make it X" architectural ask, or you're unsure (default to non-trivial when unsure). Trivial = one obvious, cheaply-reversible change with no new interface - just proceed.
-
-Agents without an enforcing hook should do this by habit.
-
-In Claude Code a `scope-gate` skill plus a PreToolUse hook enforce this before edits.
-
-## Code & PR Authoring
-
-When writing code, code comments, or PR descriptions, follow the guide at `~/dotfiles/claude/pr-authoring.md` (worked examples in `pr-examples.md`).
-
-Key points:
-- Optimize for the reader's time; let effort scale with risk.
-- Code: no `any`/`as`/`!` (except `as const`) - model the type instead. Validate untyped boundaries with Zod. Prefer discriminated results over throwing for control flow. Guard clauses, happy path last. Put auth in the service, not the caller. Don't abstract early or micro-optimize cached paths. Every log/metric needs a consumer and an action; never swallow errors silently.
-- Prefer self-documenting code. Comment only the non-obvious *why* and delete restating, stale, or filler comments.
-- One home for each fact: evergreen rationale lives in the code, change-context and the why-now in the PR - don't say the same thing in both.
-- Keep tests flat and behavioral; do not test libraries, trivial mappings, or thin control flow for coverage's sake.
-- PR descriptions state the problem, motivation, and resulting behavior without narrating the diff. Include only verification or deployment detail a reviewer cannot infer.
-- Sound like a person: vary sentence length, prefer plain words, and avoid formulaic openers.
-
-**Comment self-check before handoff** - current models over-comment, so act on the guide's comment bar, don't just cite it: after writing, re-read every comment and test you added and delete any that narrate the change, restate the code, are obvious from the name, or only re-verify a type/mapping; keep only the non-obvious *why*. (A `comment-self-check.sh` PostToolUse hook also nudges this; retire this note when models stop over-commenting - the agent-maturity `verbose-output` tag.)
-
-## Doc Authoring & Planning Artifacts
-
-### Doc authoring
-
-When writing a design doc, RFC, spec, runbook, or playbook, use a doc-authoring workflow/skill if your tool has one and follow `~/dotfiles/claude/doc-style/rubric.md` (the local `.md` is typically `gsync`'d to a Google Doc afterwards). Same throughline as PR authoring: thesis first, fence the scope, receipts not claims, one load-bearing frame, and a ruthless draft-then-cut pass - the failure mode is bloat and a buried point, not word choice.
-
-### Planning artifacts
-
-For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser, not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs). Open it with `open-lavish <file>` and give the user the single localhost URL that command returns; it owns Lavish startup and local service verification, while the configured port forwarder provides browser access from a remote environment. Use `lavish-axi-safe poll <file>` and `lavish-axi-safe end <file>` for follow-up commands so a server start or version upgrade retains the same loopback-safe configuration. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
-
 ## Git & Generated Files
 
 - Never add yourself (the AI agent) as a commit co-author. Do not append `Co-Authored-By:` trailers naming Claude, Codex, Cursor, or any agent, and do not add agent attribution to commit messages or PR descriptions unless I explicitly ask.
 - Never hand-edit `CHANGELOG.md` files or any file marked as auto-generated (generated-header banners, lockfiles, codegen output, build artifacts). Change the source and regenerate instead.
 
+## Code & PR Authoring
+
+## Optimize for the reader's time. Scale detail to risk and keep one home for each fact.
+
+- Write types and seams honestly. Avoid `any`, `as` except `as const`, and `!`; validate untyped boundaries.
+- Prefer clear names and small functions. Comments earn their place only when they preserve a non-obvious why.
+- Tests defend observable behavior, boundaries, and real errors. Do not add coverage-only tests.
+- PR descriptions explain the problem, resulting behavior, decision tradeoff, and reviewer-useful evidence. Do not narrate the diff or claim checks that did not run.
+- Use plain, concrete prose. A mechanical change can be one line; a risky change earns the context a reviewer cannot infer.
+
+Read `~/dotfiles/claude/pr-authoring.md` only when drafting PR text, writing code comments, or deciding whether a test carries real signal.
+
 ## Verification & PR Handoff
 
-Verification is part of the deliverable. Before opening a PR (`gh pr create`), run the workflow in `~/dotfiles/shared-skills/full-verification-workflow` (+ `evidence-template.md`). Put only the reviewer-useful results in the PR body. Two things that are easy to skip but matter:
+Choose the narrowest verification that proves the changed behavior. Exercise a real runtime path when unit checks cannot establish the user-visible, integration, or operational result. Report commands, observed results, and known gaps accurately.
 
-- **Exercise the running change end-to-end** (the actual browser/API/CLI path, not just unit tests) and record what you ran - a docs-only change just says "docs only, no runtime".
-- **Independent review before handoff** - a clean-context reviewer over the diff + evidence: it catches what you rationalized and vets whether the e2e actually ran. Apply its findings before opening the PR, but keep the verdict and grading notes in the handoff record rather than adding process ceremony to the PR description. Grading your own work doesn't count. It also enforces the `pr-authoring.md` minimal bar (a comment/test/description line only if it earns its place).
-
-The PR body should carry only verification a reviewer cannot infer from CI, such as e2e, browser, manual, or reproducible failure-path evidence. Omit routine unit-test, typecheck, lint, and CI status, and do not add an independent-review or grading section.
-
-The `verify-gate` hook backstops this at `gh pr create` (blocks a body missing verification evidence); do the above and it never fires. It only fires on work-org repos (default `VantaInc`), so personal repos are never gated. Escape hatch: `export VERIFY_GATE=off`.
-
-For Red Panda / web-app changes (`apps/web-client`, `packages/client-redpanda`, `apps/web`, `packages/web-ai`): stand up the local dev server, exercise the change end-to-end yourself, and hand off only once it actually works. Then expose it for browser testing (see the local-dev-environment rule for port forwarding) and share the URL.
-
-## PR Review Tone
-
-When leaving PR comments, reviews, or code feedback, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews and any automated review workflows.
-
-Be direct and curious, not prescriptive. Prefer questions over commands, use lowercase "lgtm" for approvals, and avoid verbose summaries, empty praise, or formal filler.
-
-## Local Dev Environment (Worktrees & Port Forwarding)
-
-### Git worktrees
-
-After creating a git worktree (any repo), provision it with `~/dotfiles/scripts/provision-worktree.sh <path>` - it hardlink-seeds `node_modules` and copies git-ignored local config (`.claude/settings.local.json`, `.dd-agent.env`, `.env*`); idempotent, no-op for anything absent. Don't run `yarn install` / `turbo generate-types` in a worktree unless you'll actually build there.
-
-In Zed remote sessions, agent-created worktrees don't appear in the sidebar's "Open Worktrees" list, but they do show in the `git: worktree` picker (`cmd-shift-P`) - so `git worktree add` is fine; open it from there.
-
-### Resolving browser URLs
-
-Assume the user's automatic SSH port forwarder mirrors new remote listeners onto the same loopback port on their machine. Always run `~/dotfiles/scripts/expose-port.sh <local-port> [verify-path]` before giving the user a local-server URL, and return the single `http://127.0.0.1:<port>` URL it prints on stdout. Do not use an editor port-forward, Tailscale, or a public tunnel by default.
-
-The script verifies the service from the host where the agent runs. In a remote CDE it cannot verify the laptop-side forward, so describe the URL as locally verified only when the browser actually reaches it. If it does not, keep the service running and ask the user to check the automatic forwarder rather than silently changing exposure methods.
-
-For Lavish artifacts, use `open-lavish <file>` instead of opening with `npx -y lavish-axi` directly, and use `lavish-axi-safe` for later `poll` or `end` commands. These helpers keep Lavish on loopback, prevent remote browser opening, safely reuse shared state, and delegate URL resolution to `expose-port.sh`. Do not manually stop another agent's shared Lavish server.
-
-In an Ona CDE, start the Vanta web stack with `~/dotfiles/scripts/vanta-dev-start-web-ona.sh`. The wrapper waits for local nginx, keeps browser assets safe, and returns its forwarded localhost URL.
-
-Use `~/dotfiles/scripts/expose-port.sh --tailscale <local-port> [verify-path]` only when the user explicitly asks for a tailnet URL or automatic forwarding is unavailable. The fallback owns the single ACL-permitted tailnet port `8080`; it must not replace another live mapping. For public sharing, use an approved sharing mechanism rather than widening the local SSH forward.
-
-Don't use a static share, publish, or export when you need a live server; it drops the interactive connection back to the agent.
-
-## MCP Server Preferences
-
-- **Glean MCP**: Use `glean_default` (search, chat, read_document) for all company/internal documentation lookups - Guru cards, Google Docs, Confluence, Slack threads, internal wikis, etc. Glean indexes all internal knowledge sources and respects permissions.
-- **Google Drive MCP**: Do NOT use the `google-drive-mcp` tools. Use Glean instead for reading Google Docs and other company documents.
-- **Datadog MCP**: Always available for logs, monitors, dashboards, and incident investigation.
-- **MongoDB MCP**: If not connected, connect it before querying (in Claude Code, run `/connect-mongo`). Troubleshooting: https://app.getguru.com/card/T6jjXGKc/Connect-to-MongoDB-using-MongoDB-Compass
+Before opening a PR, include only verification that gives a reviewer confidence beyond routine CI. Use an independent review for high-risk, cross-domain, or behaviorally hard-to-exercise changes. The deterministic `verify-gate` hook checks that a work-repository PR includes reviewer-useful evidence.
 
 @RTK.md

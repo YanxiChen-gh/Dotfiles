@@ -34,14 +34,12 @@ mkdir -p \
 : >"$HOME/.claude/skills/record-task-outcome/SKILL.md"
 : >"$HOME/.agents/skills/record-task-outcome/SKILL.md"
 : >"$HOME/.agent-maturity.env"
-printf '%s\n' '{"hooks":{"PreToolUse":[{"hooks":[{"command":"scope-gate-pretooluse.sh"}]}]}}' >"$HOME/.claude/settings.json"
-printf '%s\n' '{"hooks":{"PreToolUse":[{"hooks":[{"command":"scope-gate-pretooluse.sh"}]}]}}' >"$HOME/.codex/hooks.json"
+printf '%s\n' '{}' >"$HOME/.claude/settings.json"
+printf '%s\n' '{}' >"$HOME/.codex/hooks.json"
 EOF
 
 cat >"$HOME/.config/opencode/plugins/dotfiles-harness.js" <<'EOF'
-const scopeGate = "scope-gate-pretooluse.sh"
-const canaryPreflight = "canary_takeover_preflight"
-const canaryComplete = "canary_takeover_complete"
+const harness = "passive"
 EOF
 
 resolve_script_dir() {
@@ -61,8 +59,8 @@ curl() {
 
 output=$(setup_agent_maturity)
 printf '%s\n' "$output" | grep -q 'installed for Claude Code, Codex, and OpenCode'
-printf '%s\n' "$output" | grep -q 'open /hooks once'
-grep -q -- '--data-repo example/agent-maturity-data' "$HOME/bootstrap-args"
+! grep -qF 'scope-gate-pretooluse.sh' "$HOME/.claude/settings.json"
+! grep -qF 'scope-gate-pretooluse.sh' "$HOME/.codex/hooks.json"
 grep -qFx 'setup_agent_maturity || exit 1' "$ROOT/install.sh"
 maturity_line=$(grep -nFx 'setup_agent_maturity || exit 1' "$ROOT/install.sh" | cut -d: -f1)
 omp_line=$(grep -nFx 'setup_omp_integration || exit 1' "$ROOT/install.sh" | cut -d: -f1)
@@ -71,19 +69,6 @@ omp_line=$(grep -nFx 'setup_omp_integration || exit 1' "$ROOT/install.sh" | cut 
   exit 1
 }
 
-cat >"$HOME/.config/opencode/plugins/dotfiles-harness.js" <<'EOF'
-const scopeGate = "scope-gate-pretooluse.sh"
-const canaryPreflight = "canary_takeover_preflight"
-EOF
-if setup_agent_maturity >/dev/null 2>&1; then
-  printf 'FAIL: setup accepted an OpenCode plugin without canary completion\n' >&2
-  exit 1
-fi
-cat >"$HOME/.config/opencode/plugins/dotfiles-harness.js" <<'EOF'
-const scopeGate = "scope-gate-pretooluse.sh"
-const canaryPreflight = "canary_takeover_preflight"
-const canaryComplete = "canary_takeover_complete"
-EOF
 OBSIDIAN_ROOT="$TMP/obsidian"
 AI_PLUGIN="$OBSIDIAN_ROOT/.claude/plugins/ai-platform-team"
 OLD_AI_PLUGIN="$TMP/old-obsidian/.claude/plugins/ai-platform-team"

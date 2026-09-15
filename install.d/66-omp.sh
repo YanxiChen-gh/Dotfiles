@@ -206,11 +206,8 @@ validate_omp_maturity() {
     maturity="${AGENT_MATURITY_HOME:-$HOME/agent-maturity}"
     missing=""
     for path in \
-        "$maturity/scripts/scope-gate-userpromptsubmit.sh" \
-        "$maturity/scripts/scope-gate-pretooluse.sh" \
         "$maturity/scripts/record-task-outcome.sh" \
         "$maturity/scripts/sync-maturity-data.sh" \
-        "$HOME/.agents/skills/scope-gate/SKILL.md" \
         "$HOME/.agents/skills/record-task-outcome/SKILL.md" \
         "$HOME/.agent-maturity.env"
     do

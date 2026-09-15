@@ -1,22 +1,11 @@
 // Dotfiles harness ported to oh-my-pi (omp).
 //
-// This is the omp equivalent of opencode/plugins/dotfiles-harness.js. It keeps
-// only the capabilities that omp does NOT already provide first-party:
-//   - scope / verify / PR-authoring gates (shared agent-maturity + claude/hooks scripts)
-//   - the comment self-check reminder after edits
-//   - Slack attention notifications
+// omp already owns compaction and session orchestration. This extension adds
+// only personal integrations: deterministic PR evidence, comment reminders,
+// Lavish lifecycle safety, and Slack attention notifications.
 //
-// Everything the opencode plugin had to reconstruct by hand is gone here:
-//   - Herdr subagent/state sync         -> `herdr integration install omp` (native)
-//   - Herdr task workspace titles       -> this extension mirrors the OpenCode policy
-//   - session-lineage hydration/walk     -> omp tracks sessions natively
-//   - event/notification queue plumbing  -> omp lifecycle events are ordered + typed
-//   - same-session checkpoint automation -> omp has native auto-compaction
-//   - canary takeover                     -> deferred (maturity-flow coupled; see omp/README.md)
-//
-// omp runs as a single Bun process and does NOT sandbox extensions, so we shell
-// out with Bun.spawn exactly like the opencode plugin did - the gate scripts and
-// their stdin/exit-code contract are unchanged.
+// It runs in a single Bun process without an extension sandbox, so hook calls
+// use the existing stdin and exit-code contract.
 
 import { realpath } from "node:fs/promises"
 import { dirname, join } from "node:path"
@@ -116,9 +105,6 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
   const dotfiles = dirname(dirname(dirname(dirname(source))))
   const home = Bun.env.HOME ?? ""
   const hooks = join(dotfiles, "claude/hooks")
-  const maturity = Bun.env.AGENT_MATURITY_HOME ?? join(home, "agent-maturity")
-  const scopePrompt = join(maturity, "scripts/scope-gate-userpromptsubmit.sh")
-  const scopeGate = join(maturity, "scripts/scope-gate-pretooluse.sh")
   const notify = createSlackSender(home)
   const workspaceId = Bun.env.HERDR_WORKSPACE_ID
   const tabId = Bun.env.HERDR_TAB_ID
@@ -193,7 +179,6 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     },
   })
 
-  // Scope / verify / PR gates: block a tool call when a gate script exits 2.
   pi.on("tool_call", async (event, ctx) => {
     const tool = String(event.toolName ?? "").toLowerCase()
     const input = (event.input ?? {}) as Record<string, unknown>
@@ -218,20 +203,9 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
       }
     }
 
-    if (editTools.has(tool)) {
-      const result = await runHook(scopeGate, payload)
-      if (result.exitCode === 2) return { block: true, reason: result.stderr.trim() }
-      return
-    }
-
     if (shellTools.has(tool)) {
-      for (const script of [
-        join(hooks, "verify-gate-pretooluse.sh"),
-        join(hooks, "pr-authoring-gate-pretooluse.sh"),
-      ]) {
-        const result = await runHook(script, payload)
-        if (result.exitCode === 2) return { block: true, reason: result.stderr.trim() }
-      }
+      const result = await runHook(join(hooks, "verify-gate-pretooluse.sh"), payload)
+      if (result.exitCode === 2) return { block: true, reason: result.stderr.trim() }
     }
   })
 
@@ -273,14 +247,9 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     }
   })
 
-  // Add omp-specific and scope guidance without scheduling another user turn.
-  pi.on("before_agent_start", async (event, ctx) => {
-    const systemPrompt = [...event.systemPrompt, lavishPollGuidance]
-    const sessionId = ctx?.sessionManager?.getSessionId?.() ?? ""
-    const result = await runHook(scopePrompt, { session_id: sessionId })
-    const brief = result.stdout.trim()
-    if (brief) systemPrompt.push(brief)
-    return { systemPrompt }
+  // Add omp-specific Lavish guidance without scheduling another user turn.
+  pi.on("before_agent_start", async (event) => {
+    return { systemPrompt: [...event.systemPrompt, lavishPollGuidance] }
   })
 
   pi.on("session_start", async (_event, ctx) => {

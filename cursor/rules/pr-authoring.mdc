@@ -7,14 +7,12 @@ alwaysApply: false
 
 # Code & PR Authoring
 
-When writing code, code comments, or PR descriptions, follow the guide at `~/dotfiles/claude/pr-authoring.md` (worked examples in `pr-examples.md`).
+# Optimize for the reader's time. Scale detail to risk and keep one home for each fact.
 
-Key points:
-- Optimize for the reader's time; let effort scale with risk.
-- Code: no `any`/`as`/`!` (except `as const`) - model the type instead. Validate untyped boundaries with Zod. Prefer discriminated results over throwing for control flow. Guard clauses, happy path last. Put auth in the service, not the caller. Don't abstract early or micro-optimize cached paths. Every log/metric needs a consumer and an action; never swallow errors silently.
-- Prefer self-documenting code. Comment only the non-obvious *why* and delete restating, stale, or filler comments.
-- One home for each fact: evergreen rationale lives in the code, change-context and the why-now in the PR - don't say the same thing in both.
-- Keep tests flat and behavioral; do not test libraries, trivial mappings, or thin control flow for coverage's sake.
-- PR descriptions state the problem, motivation, and resulting behavior without narrating the diff. Include only verification or deployment detail a reviewer cannot infer.
-- Sound like a person: vary sentence length, prefer plain words, and avoid formulaic openers.
+- Write types and seams honestly. Avoid `any`, `as` except `as const`, and `!`; validate untyped boundaries.
+- Prefer clear names and small functions. Comments earn their place only when they preserve a non-obvious why.
+- Tests defend observable behavior, boundaries, and real errors. Do not add coverage-only tests.
+- PR descriptions explain the problem, resulting behavior, decision tradeoff, and reviewer-useful evidence. Do not narrate the diff or claim checks that did not run.
+- Use plain, concrete prose. A mechanical change can be one line; a risky change earns the context a reviewer cannot infer.
 
+Read `~/dotfiles/claude/pr-authoring.md` only when drafting PR text, writing code comments, or deciding whether a test carries real signal.

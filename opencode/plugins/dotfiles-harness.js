@@ -824,7 +824,7 @@ const createCanaryPreflight = async ({
   stateHome,
   sessionLineage,
 }) => {
-  const automatic = Bun.env.OPENCODE_CANARY_TAKEOVER !== "0"
+  const automatic = Bun.env.OPENCODE_CANARY_TAKEOVER === "1"
   const maturityData = Bun.env.AGENT_MATURITY_DATA_DIR ?? join(home, ".agent-maturity-data")
   const takeoverDirectory = join(maturityData, "takeovers")
   const auditDirectory = join(stateHome ?? join(home, ".local/state"), "opencode")
@@ -1549,8 +1549,6 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
   const configHome = Bun.env.XDG_CONFIG_HOME ?? join(home, ".config")
   const stateHome = Bun.env.XDG_STATE_HOME
   const maturity = Bun.env.AGENT_MATURITY_HOME ?? join(home, "agent-maturity")
-  const scopePrompt = join(maturity, "scripts/scope-gate-userpromptsubmit.sh")
-  const scopeGate = join(maturity, "scripts/scope-gate-pretooluse.sh")
   const hooks =
     typeof options.hooksDir === "string" ? options.hooksDir : join(dotfiles, "claude/hooks")
   const rootSession = {}
@@ -1714,16 +1712,10 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
         output.system.push(subagentContext)
         return
       }
-      const result = await runHook(scopePrompt, { session_id: input.sessionID })
-      if (result.stdout.trim()) output.system.push(result.stdout.trim())
       await checkpoints.system(input, output)
     },
-    "experimental.session.compacting": async (input, output) => {
-      await checkpoints.compacting(input, output)
-      const lineage = await sessionLineage(input.sessionID)
-      if (lineage.kind !== "root") return
-      const result = await runHook(scopePrompt, { session_id: input.sessionID })
-      if (result.stdout.trim()) output.context.push(result.stdout.trim())
+    "experimental.session.compacting": async (_input, output) => {
+      await checkpoints.compacting(_input, output)
     },
     "command.execute.before": checkpoints.command,
     tool: {
@@ -1746,11 +1738,6 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
         )
       }
 
-      if (lineage.kind === "unresolved" && ["edit", "write", "apply_patch"].includes(tool)) {
-        throw new Error(
-          "The root session approval could not be resolved. Stop and return this blocker to the parent.",
-        )
-      }
 
       const payload = {
         session_id: lineage.kind === "unresolved" ? input.sessionID : lineage.rootSessionID,
@@ -1763,32 +1750,11 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
         },
       }
 
-      if (["edit", "write", "apply_patch"].includes(tool)) {
-        const result = await runHook(scopeGate, payload)
-        if (isChild && (result.failed || (result.exitCode !== 0 && result.exitCode !== 2))) {
-          throw new Error(
-            "The root session approval could not be verified. Stop and return this blocker to the parent.",
-          )
-        }
-        if (result.exitCode === 2) {
-          if (isChild) {
-            throw new Error(
-              "The root session has not recorded approval for this edit. Stop and return this blocker to the parent.",
-            )
-          }
-          throw new Error(result.stderr.trim())
-        }
+      if (["bash", "shell"].includes(tool)) {
+        const result = await runHook(join(hooks, "verify-gate-pretooluse.sh"), payload)
+        if (result.exitCode === 2) throw new Error(result.stderr.trim())
       }
 
-      if (["bash", "shell"].includes(tool)) {
-        for (const script of [
-          join(hooks, "verify-gate-pretooluse.sh"),
-          join(hooks, "pr-authoring-gate-pretooluse.sh"),
-        ]) {
-          const result = await runHook(script, payload)
-          if (result.exitCode === 2) throw new Error(result.stderr.trim())
-        }
-      }
     },
     "tool.execute.after": async (input, output) => {
       if (!["edit", "write"].includes(input.tool.toLowerCase())) return

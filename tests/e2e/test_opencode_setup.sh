@@ -140,11 +140,6 @@ cat >/dev/null
 printf '%s\n' 'Verify gate test block' >&2
 exit 2
 EOF
-cat >"$HARNESS_HOOKS/pr-authoring-gate-pretooluse.sh" <<'EOF'
-#!/bin/sh
-cat >/dev/null
-exit 0
-EOF
 
 HERDR_TITLE_LOG="$TMP/herdr-title.log"
 HERDR_COMMAND_LOG="$TMP/herdr-command.log"
@@ -634,7 +629,6 @@ const client = {
     },
   },
 }
-process.env.OPENCODE_CANARY_TAKEOVER = "0"
 const hooks = await pluginModule.DotfilesHarnessPlugin(
   { client, directory: process.cwd() },
   {
@@ -643,7 +637,6 @@ const hooks = await pluginModule.DotfilesHarnessPlugin(
     slackPermissionDelayMs: 10,
   },
 )
-delete process.env.OPENCODE_CANARY_TAKEOVER
 const config = {}
 await hooks.config(config)
 
@@ -654,7 +647,7 @@ assert.equal(config.mcp.glean_default.oauth.clientId, process.env.MCP_CLIENT_ID)
 
 const system = []
 await hooks["experimental.chat.system.transform"]({ sessionID: "test-session" }, { system })
-assert.match(system.join("\n"), /scope-gate.*test prompt/)
+assert.equal(system.join("\n"), "")
 
 const sessionEvent = (type, info) => ({ event: { type, properties: { info } } })
 const event = (type, properties) => ({ event: { type, properties } })
@@ -1118,6 +1111,7 @@ const syncCanaryRecord = async ({ takeoverID, path }) => {
   await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "push", "-q"])
 }
 
+process.env.OPENCODE_CANARY_TAKEOVER = "1"
 const autoCanaryHooks = await pluginModule.DotfilesHarnessPlugin(
   { client, directory: process.cwd() },
   { hooksDir: process.env.HARNESS_HOOKS, slackNotify: async () => {} },
@@ -1387,9 +1381,7 @@ await hooks["experimental.session.compacting"](
   { sessionID: "approved-root" },
   compactionOutput,
 )
-assert.match(compactionOutput.context.join("\n"), /approved scope/)
 assert.match(compactionOutput.context.join("\n"), /verification already completed/)
-assert.match(compactionOutput.context.join("\n"), /scope-gate.*test prompt/)
 
 const compactedEvent = hooks.event(event("session.compacted", { sessionID: "approved-root" }))
 assert.equal(promptCalls.length, 0)
@@ -1627,31 +1619,7 @@ await hooks["tool.execute.before"](
   { args: { filePath: "src/app.js", content: "const value = true" } },
 )
 assert.ok(
-  spawnedInputs.some(({ command, input }) => {
-    return (
-      command.at(-1).endsWith("scope-gate-pretooluse.sh") &&
-      input.includes('"session_id":"approved-root"')
-    )
-  }),
-)
-
-void hooks.event(sessionEvent("session.created", { id: "unapproved-root" }))
-void hooks.event(
-  sessionEvent("session.created", {
-    id: "unapproved-child",
-    parentID: "unapproved-root",
-  }),
-)
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "write", sessionID: "unapproved-child", callID: "blocked-child-write-call" },
-    { args: { filePath: "src/app.js", content: "const value = true" } },
-  ),
-  (error) => {
-    assert.match(error.message, /return this blocker to the parent/)
-    assert.doesNotMatch(error.message, /scope-gate|Lavish/)
-    return true
-  },
+  !spawnedInputs.some(({ command }) => command.at(-1).endsWith("scope-gate-pretooluse.sh")),
 )
 
 await assert.rejects(
@@ -1712,12 +1680,9 @@ void hooks.event(
     parentID: "unresolved-parent",
   }),
 )
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "write", sessionID: "unresolved-grandchild", callID: "unresolved-child-write-call" },
-    { args: { filePath: "src/app.js", content: "const value = true" } },
-  ),
-  /root session approval could not be resolved.*return this blocker to the parent/,
+await hooks["tool.execute.before"](
+  { tool: "write", sessionID: "unresolved-grandchild", callID: "unresolved-child-write-call" },
+  { args: { filePath: "src/app.js", content: "const value = true" } },
 )
 
 const unresolvedSystem = []
@@ -1734,35 +1699,18 @@ await assert.rejects(
   /return questions to their parent/,
 )
 
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "write", sessionID: "test-session", callID: "write-call" },
-    { args: { filePath: "test.js", content: "const value = true" } },
-  ),
-  /scope blocked/,
-)
-
 await hooks["tool.execute.before"](
-  { tool: "apply_patch", sessionID: "test-session", callID: "brief-call" },
+  { tool: "write", sessionID: "test-session", callID: "write-call" },
+  { args: { filePath: "test.js", content: "const value = true" } },
+)
+await hooks["tool.execute.before"](
+  { tool: "apply_patch", sessionID: "test-session", callID: "mixed-patch-call" },
   {
     args: {
       patchText:
-        "*** Begin Patch\n*** Add File: /tmp/data/briefs/test-session.md\n+brief\n*** End Patch",
+        "*** Begin Patch\n*** Add File: /tmp/data/briefs/test-session.md\n+brief\n*** Update File: src/app.js\n-old\n+new\n*** End Patch",
     },
   },
-)
-
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "apply_patch", sessionID: "test-session", callID: "mixed-patch-call" },
-    {
-      args: {
-        patchText:
-          "*** Begin Patch\n*** Add File: /tmp/data/briefs/test-session.md\n+brief\n*** Update File: src/app.js\n-old\n+new\n*** End Patch",
-      },
-    },
-  ),
-  /scope blocked/,
 )
 
 const editOutput = { output: "edited" }

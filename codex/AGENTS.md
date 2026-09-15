@@ -6,33 +6,9 @@
 
 My Dotfiles repo lives at https://github.com/YanxiChen-gh/Dotfiles. When I mention "my Dotfiles" or "the Dotfiles repo", that's the link.
 
-## Code & PR Authoring
-
-When writing code, code comments, or PR descriptions, follow the guide at `~/dotfiles/claude/pr-authoring.md` (worked examples in `pr-examples.md`).
-
-Key points:
-- Optimize for the reader's time; let effort scale with risk.
-- Code: no `any`/`as`/`!` (except `as const`) - model the type instead. Validate untyped boundaries with Zod. Prefer discriminated results over throwing for control flow. Guard clauses, happy path last. Put auth in the service, not the caller. Don't abstract early or micro-optimize cached paths. Every log/metric needs a consumer and an action; never swallow errors silently.
-- Prefer self-documenting code. Comment only the non-obvious *why* and delete restating, stale, or filler comments.
-- One home for each fact: evergreen rationale lives in the code, change-context and the why-now in the PR - don't say the same thing in both.
-- Keep tests flat and behavioral; do not test libraries, trivial mappings, or thin control flow for coverage's sake.
-- PR descriptions state the problem, motivation, and resulting behavior without narrating the diff. Include only verification or deployment detail a reviewer cannot infer.
-- Sound like a person: vary sentence length, prefer plain words, and avoid formulaic openers.
-
-## PR Review Tone
-
-When leaving PR comments, reviews, or code feedback, follow the tone guide at `~/dotfiles/claude/review-tone.md`. This applies to direct reviews and any automated review workflows.
-
-Be direct and curious, not prescriptive. Prefer questions over commands, use lowercase "lgtm" for approvals, and avoid verbose summaries, empty praise, or formal filler.
-
 ## Writing Style
 
 Never use the em dash ("—"). Use a plain hyphen ("-") instead. This applies to everything you write on my behalf: chat responses, code, code comments, commit messages, PR descriptions, and docs.
-
-## Git & Generated Files
-
-- Never add yourself (the AI agent) as a commit co-author. Do not append `Co-Authored-By:` trailers naming Claude, Codex, Cursor, or any agent, and do not add agent attribution to commit messages or PR descriptions unless I explicitly ask.
-- Never hand-edit `CHANGELOG.md` files or any file marked as auto-generated (generated-header banners, lockfiles, codegen output, build artifacts). Change the source and regenerate instead.
 
 ## Autonomy & Approval
 
@@ -48,21 +24,22 @@ Never use the em dash ("—"). Use a plain hyphen ("-") instead. This applies to
 - When testing a product end-to-end, be picky about the UI and pixel precision within the requested scope. Report unrelated issues instead of expanding the change without approval.
 - Hold the same bar for engineering excellence: fix lint errors, test failures, and flaky tests caused by or blocking the requested change. Report unrelated failures instead of altering unrelated code.
 
-## Scope Before Code
+## Git & Generated Files
 
-Before writing code on a non-trivial task, scope it first: restate the task in one line with concrete pass-to-pass acceptance checks, declare the key implementation choices (which API/library, reuse vs new abstraction, real fix vs workaround) *before* coding, propose a PR-decomposition for multi-part work, and batch genuine scope questions up front. Non-trivial = any approach/design fork, a new/changed public interface, multi-file or multi-system work, a "make it X" architectural ask, or you're unsure (default to non-trivial when unsure). Trivial = one obvious, cheaply-reversible change with no new interface - just proceed.
+- Never add yourself (the AI agent) as a commit co-author. Do not append `Co-Authored-By:` trailers naming Claude, Codex, Cursor, or any agent, and do not add agent attribution to commit messages or PR descriptions unless I explicitly ask.
+- Never hand-edit `CHANGELOG.md` files or any file marked as auto-generated (generated-header banners, lockfiles, codegen output, build artifacts). Change the source and regenerate instead.
 
-Agents without an enforcing hook should do this by habit.
+## Code & PR Authoring
 
-## Doc Authoring & Planning Artifacts
+## Optimize for the reader's time. Scale detail to risk and keep one home for each fact.
 
-### Doc authoring
+- Write types and seams honestly. Avoid `any`, `as` except `as const`, and `!`; validate untyped boundaries.
+- Prefer clear names and small functions. Comments earn their place only when they preserve a non-obvious why.
+- Tests defend observable behavior, boundaries, and real errors. Do not add coverage-only tests.
+- PR descriptions explain the problem, resulting behavior, decision tradeoff, and reviewer-useful evidence. Do not narrate the diff or claim checks that did not run.
+- Use plain, concrete prose. A mechanical change can be one line; a risky change earns the context a reviewer cannot infer.
 
-When writing a design doc, RFC, spec, runbook, or playbook, use a doc-authoring workflow/skill if your tool has one and follow `~/dotfiles/claude/doc-style/rubric.md` (the local `.md` is typically `gsync`'d to a Google Doc afterwards). Same throughline as PR authoring: thesis first, fence the scope, receipts not claims, one load-bearing frame, and a ruthless draft-then-cut pass - the failure mode is bloat and a buried point, not word choice.
-
-### Planning artifacts
-
-For any plan, design doc, or pre-implementation review artifact (plan mode included), default to a **Lavish HTML artifact** to open and annotate in the browser, not a plain markdown file - make it rich (sections, diagrams, comparisons, decision inputs). Open it with `open-lavish <file>` and give the user the single localhost URL that command returns; it owns Lavish startup and local service verification, while the configured port forwarder provides browser access from a remote environment. Use `lavish-axi-safe poll <file>` and `lavish-axi-safe end <file>` for follow-up commands so a server start or version upgrade retains the same loopback-safe configuration. Fall back to markdown only when Lavish is unavailable or it's a throwaway one-liner.
+Read `~/dotfiles/claude/pr-authoring.md` only when drafting PR text, writing code comments, or deciding whether a test carries real signal.
 
 ## Skills
 

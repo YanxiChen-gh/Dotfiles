@@ -146,40 +146,37 @@ PY
         echo "✅ Claude Code verify-gate hook registered (work)"
     fi
 
-    # Register the pr-authoring gate PreToolUse(Bash) hook (work scope): blocks `gh pr create`
-    # / `gh pr edit --body` when an LLM judge (claude -p) grades the body as bloated against
-    # pr-authoring.md, so the guide lands on the first draft instead of a post-hoc /simplify-pr
-    # cleanup (Spec lever). Idempotent (deduped on the script name). Fail-open + kill switch
-    # (PR_AUTHORING_GATE=off) + retirement trigger live in the script itself.
-    pag_hook="$script_dir/claude/hooks/pr-authoring-gate-pretooluse.sh"
-    if [ "$WORK_MACHINE" = "1" ] && [ -f "$pag_hook" ]; then
-        chmod +x "$pag_hook" "$script_dir/claude/hooks/pr-authoring-gate-check.py" 2>/dev/null || true
-        PAG_HOOK_CMD="bash $pag_hook" python3 - "$claude_dir/settings.json" <<'PY'
-import json, os, sys
+    # Remove the retired LLM PR-authoring gate from prior installations. PR style is
+    # evaluated during drafting; only deterministic evidence remains a PR boundary.
+    if [ "$WORK_MACHINE" = "1" ] && [ -f "$claude_dir/settings.json" ]; then
+        python3 - "$claude_dir/settings.json" <<'PY'
+import json
+import sys
 
-path, cmd = sys.argv[1], os.environ["PAG_HOOK_CMD"]
-try:
-    with open(path) as f:
-        cfg = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    cfg = {}
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    config = json.load(f)
 
-pre = cfg.setdefault("hooks", {}).setdefault("PreToolUse", [])
-present = any(
-    "pr-authoring-gate-pretooluse.sh" in h.get("command", "")
-    for entry in pre
-    for h in entry.get("hooks", [])
-)
-if not present:
-    pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]})
-    with open(path, "w") as f:
-        json.dump(cfg, f, indent=2)
+hooks = config.get("hooks", {})
+entries = hooks.get("PreToolUse", [])
+filtered = []
+changed = False
+for entry in entries:
+    retained = [
+        hook
+        for hook in entry.get("hooks", [])
+        if "pr-authoring-gate-pretooluse.sh" not in hook.get("command", "")
+    ]
+    changed = changed or len(retained) != len(entry.get("hooks", []))
+    if retained:
+        filtered.append({**entry, "hooks": retained})
+if changed:
+    hooks["PreToolUse"] = filtered
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
         f.write("\n")
-    print("registered pr-authoring gate PreToolUse hook")
-else:
-    print("pr-authoring gate hook already registered")
+    print("removed retired Claude Code PR-authoring gate")
 PY
-        echo "✅ Claude Code pr-authoring gate hook registered (work)"
     fi
 }
 
@@ -233,9 +230,7 @@ setup_agent_maturity() {
 
     missing=""
     for path in \
-        "$HOME/.claude/skills/scope-gate/SKILL.md" \
         "$HOME/.claude/skills/canary-takeover/SKILL.md" \
-        "$HOME/.agents/skills/scope-gate/SKILL.md" \
         "$HOME/.agents/skills/canary-takeover/SKILL.md" \
         "$HOME/.claude/skills/record-task-outcome/SKILL.md" \
         "$HOME/.agents/skills/record-task-outcome/SKILL.md" \
@@ -245,24 +240,12 @@ setup_agent_maturity() {
     do
         [ -e "$path" ] || missing="$missing $path"
     done
-    [ -f "$HOME/.codex/hooks.json" ] || missing="$missing $HOME/.codex/hooks.json"
-    grep -qF 'scope-gate-pretooluse.sh' "$HOME/.claude/settings.json" 2>/dev/null \
-        || missing="$missing Claude-scope-hook"
-    grep -qF 'scope-gate-pretooluse.sh' "$config_home/opencode/plugins/dotfiles-harness.js" 2>/dev/null \
-        || missing="$missing OpenCode-scope-adapter"
-    grep -qF 'canary_takeover_preflight' "$config_home/opencode/plugins/dotfiles-harness.js" 2>/dev/null \
-        || missing="$missing OpenCode-canary-preflight"
-    grep -qF 'canary_takeover_complete' "$config_home/opencode/plugins/dotfiles-harness.js" 2>/dev/null \
-        || missing="$missing OpenCode-canary-completion"
-    grep -qF 'scope-gate-pretooluse.sh' "$HOME/.codex/hooks.json" 2>/dev/null \
-        || missing="$missing Codex-scope-hook"
     if [ -n "$missing" ]; then
         echo "⚠️  agent-maturity client integration incomplete; missing:$missing"
         return 1
     fi
 
     echo "✅ agent-maturity installed for Claude Code, Codex, and OpenCode"
-    echo "ℹ️  Codex: open /hooks once and trust the new agent-maturity hooks"
 }
 
 # Enable Vanta AI Platform skills for Claude Code, shared Agent Skills clients, and Cursor.
