@@ -42,20 +42,22 @@ around them.
 
 - `agent/extensions/dotfiles-harness.ts` - the ported gates, Herdr title bridge, and Slack notifier.
 - `install.d/66-omp.sh` links these into `~/.omp/agent/`, hides thinking blocks
-  by default, and defines the Codex OAuth default plus the standard OpenAI API
-  fallback once each. It writes the Codex selector to `modelRoles.default` and
-  writes both selectors, in preference order, to `enabledModels`. New sessions
-  use Codex when its credential is configured; without a Codex credential they
-  may use `OPENAI_API_KEY`. The module then runs the Herdr integration,
-  registers RTK (best-effort), and syncs the Glean MCP overlay. OMP stores the
-  ChatGPT OAuth credential after native onboarding or `/login openai-codex`.
+  by default, and defines the Codex OAuth default, the standard OpenAI API
+  fallback, and selectable Sol models for both providers. It writes the Codex
+  Terra selector to `modelRoles.default` and writes all four selectors to
+  `enabledModels`. New sessions use Codex Terra when its credential is
+  configured; without a Codex credential they may use `OPENAI_API_KEY`. The
+  module then runs the Herdr integration, registers RTK (best-effort), and syncs
+  the Glean MCP overlay. OMP stores the ChatGPT OAuth credential after native
+  onboarding or `/login openai-codex`.
 
-## Changing the default or fallback model
+## Changing available models
 
-`omp_default_model` and `omp_api_fallback_model` in `install.d/66-omp.sh` are
-the sources of truth. Change those values when moving either path; the installer
-generates `modelRoles.default` and the ordered `enabledModels` list from them.
-The E2E test requires the role and allow-list to stay aligned.
+`omp_default_model`, `omp_api_fallback_model`, `omp_codex_sol_model`, and
+`omp_api_sol_model` in `install.d/66-omp.sh` are the sources of truth. The
+installer assigns the default role, then generates the ordered `enabledModels`
+list from all four. The E2E test requires the role and allow-list to stay
+aligned.
 
 This is startup selection, not request-time failover. A stored Codex OAuth entry
 counts as authenticated before refresh, so an expired or revoked credential can
@@ -75,7 +77,7 @@ The opencode integration, mapped to its omp equivalent:
 
 | opencode | omp |
 | --- | --- |
-| Model + agents | `openai-codex/gpt-5.6-terra` via ChatGPT OAuth by default; `openai/gpt-5.6-terra` via `OPENAI_API_KEY` when no Codex credential is configured at startup |
+| Model + agents | `openai-codex/gpt-5.6-terra` via ChatGPT OAuth by default; `openai/gpt-5.6-terra` via `OPENAI_API_KEY` when no Codex credential is configured at startup; `openai-codex/gpt-5.6-sol` and `openai/gpt-5.6-sol` selectable through the same providers |
 | Auto mode (`--auto` wrapper) | Native `yolo` default |
 | Scope / verify / PR / comment gates | ported in `dotfiles-harness.ts` (same scripts) |
 | Slack attention notifications | ported in `dotfiles-harness.ts` |

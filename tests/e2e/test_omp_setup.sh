@@ -186,9 +186,9 @@ jq -e '.default == "openai-codex/gpt-5.6-terra" and .smol == "openai/gpt-5.4-min
   echo "FAIL: Codex OAuth default did not preserve existing model roles" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra"]' \
+jq -e '. == ["openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
   "$OLD_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: enabledModels did not preserve Codex-first API fallback order" >&2
+  echo "FAIL: enabledModels did not preserve Terra defaults and Sol selector entries" >&2
   exit 1
 }
 jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
@@ -222,9 +222,9 @@ jq -e '.default == "openai-codex/gpt-5.6-terra"' \
   echo "FAIL: Codex OAuth default was not selected without OPENAI_API_KEY" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra"]' \
+jq -e '. == ["openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
   "$UNMANAGED_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: dual-auth model allow-list was not configured" >&2
+  echo "FAIL: dual-auth model allow-list did not include Sol" >&2
   exit 1
 }
 [ ! -e "$UNMANAGED_AGENT/fake-disabled-providers.json" ] || {
