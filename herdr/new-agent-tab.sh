@@ -46,7 +46,6 @@ with_worktree=true
 with_agent=true
 with_editor=false
 select_setup=false
-handoff_ready=""
 treehouse_ready=false
 initial_prompt_file=""
 launched_prompt_file=""
@@ -183,11 +182,6 @@ while [ "$#" -gt 0 ]; do
       initial_prompt_file="$2"
       shift
       ;;
-    --handoff-ready)
-      [ "$#" -ge 2 ] || die "--handoff-ready requires a path"
-      handoff_ready="$2"
-      shift
-      ;;
     *) die "unknown option: $1" ;;
   esac
   shift
@@ -197,9 +191,6 @@ if [ "$select_setup" = false ] && [ -n "$initial_prompt_file" ]; then
   trap cleanup_prompt_files EXIT
 fi
 
-if [ -n "$handoff_ready" ]; then
-  printf 'ready\n' > "$handoff_ready" || die "could not signal detached launcher readiness"
-fi
 
 choose() {
   prompt="$1"
@@ -229,7 +220,6 @@ input_value() {
 }
 
 repository_ids=()
-repository_options=()
 repo_homes=()
 repo_home_options=()
 default_repo_home() {
@@ -298,23 +288,37 @@ add_repository() {
   if [ "$identity" = "$current_repository_id" ]; then
     label="$label [current]"
   fi
-  label="$label  $primary"
-  repository_options+=("$label"$'\t'"$primary")
+  printf '%s\t%s\n' "$label  $primary" "$primary"
+}
+
+discover_repositories() {
+  local repo_home candidate
+  printf '%s\n' \
+    "+ Open local path..."$'\t'"__open__" \
+    "+ Clone GitHub repository..."$'\t'"__clone__"
+  current_worktree=$(resolve_worktree "$src_cwd") || return 0
+  current_primary=$(resolve_primary_checkout "$current_worktree") || return 0
+  current_repository_id=$(resolve_repository_id "$current_worktree") || return 0
+  add_repository "$current_primary"
+  for repo_home in "${repo_homes[@]}"; do
+    for candidate in "$repo_home"/*; do
+      [ -d "$candidate" ] || continue
+      add_repository "$candidate"
+    done
+  done
 }
 
 choose_repository() {
   local selection
-  selection=$(printf '%s\n' "${repository_options[@]}" \
-    "+ Open local path..."$'\t'"__open__" \
-    "+ Clone GitHub repository..."$'\t'"__clone__" \
-    | fzf \
-      --height=100% \
-      --layout=reverse \
-      --border \
-      --no-multi \
-      --delimiter=$'\t' \
-      --with-nth=1 \
-      --prompt="Repository > ") || return 1
+  selection=$(fzf \
+    --height=100% \
+    --layout=reverse \
+    --border \
+    --no-multi \
+    --delimiter=$'\t' \
+    --with-nth=1 \
+    --prompt="Repository > " \
+    < <(discover_repositories)) || return 1
   printf '%s\n' "${selection#*$'\t'}"
 }
 
@@ -339,12 +343,6 @@ if [ "$select_setup" = true ]; then
   command -v fzf >/dev/null 2>&1 || die "fzf not installed"
   command -v jq >/dev/null 2>&1 || die "jq not installed"
 
-  current_worktree=$(resolve_worktree "$src_cwd") \
-    || die "Not a git repo: $src_cwd - open a task workspace from a repo workspace."
-  current_primary=$(resolve_primary_checkout "$current_worktree") \
-    || die "could not resolve primary checkout"
-  current_repository_id=$(resolve_repository_id "$current_worktree") \
-    || die "could not resolve repository identity"
 
   add_repo_home "$(default_repo_home)"
   if [ -n "${HERDR_REPO_ROOTS:-}" ]; then
@@ -354,15 +352,14 @@ if [ "$select_setup" = true ]; then
     done
   fi
 
-  add_repository "$current_primary"
-  for repo_home in "${repo_homes[@]}"; do
-    for candidate in "$repo_home"/*; do
-      [ -d "$candidate" ] || continue
-      add_repository "$candidate"
-    done
-  done
 
   repository=$(choose_repository) || exit 0
+  current_worktree=$(resolve_worktree "$src_cwd") \
+    || die "Not a git repo: $src_cwd - open a task workspace from a repo workspace."
+  current_primary=$(resolve_primary_checkout "$current_worktree") \
+    || die "could not resolve primary checkout"
+  current_repository_id=$(resolve_repository_id "$current_worktree") \
+    || die "could not resolve repository identity"
   case "$repository" in
     "__open__")
       repository=$(input_value "Repository path") || exit 0
@@ -423,11 +420,7 @@ if [ "$select_setup" = true ]; then
       exit 0
     fi
   fi
-  handoff_ready=$(mktemp "${TMPDIR:-/tmp}/herdr-new-agent-tab.XXXXXX") \
-    || die "could not create detached launcher handshake"
-  printf 'pending\n' > "$handoff_ready"
-
-  detached_args=(--handoff-ready "$handoff_ready")
+  detached_args=()
   if [ "$with_worktree" = true ]; then
     detached_args+=(--with-worktree)
   else
@@ -456,6 +449,7 @@ if [ "$select_setup" = true ]; then
     detached_args+=(--clone-repository "$clone_repository" --clone-root "$clone_root")
   fi
 
+  # Popen returning means the detached process was created successfully.
   # start_new_session isolates setup from the popup PTY on both Linux and macOS.
   python3 - "$0" "${detached_args[@]}" <<'PY' \
     || die "could not start detached launcher"
@@ -470,15 +464,8 @@ subprocess.Popen(
     start_new_session=True,
 )
 PY
-  for _ in $(seq 1 100); do
-    if [ "$(<"$handoff_ready")" = "ready" ]; then
-      rm -f "$handoff_ready"
-      exit 0
-    fi
-    sleep 0.02
-  done
-  rm -f "$handoff_ready"
-  die "timed out starting detached launcher"
+  initial_prompt_file=""
+  exit 0
 fi
 
 command -v jq >/dev/null 2>&1 || die "jq not installed"

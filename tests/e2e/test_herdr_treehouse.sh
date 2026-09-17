@@ -56,6 +56,7 @@ AGENT_READY="$TMP/agent-ready"
 PROMPT_LOG="$TMP/prompt.log"
 PROMPT_INPUT="$TMP/prompt-input.py"
 FZF_INPUT_LOG="$TMP/fzf-input.log"
+FZF_FIRST_INPUT="$TMP/fzf-first-input"
 GH_LOG="$TMP/gh.log"
 
 mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${NEWLINE_ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$NESTED_NON_REPO" "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B" "$CLONE_ROOT" "$HERDR_STATE"
@@ -225,6 +226,15 @@ cat > "$HOME_DIR/.local/bin/fzf" <<'EOF'
 #!/bin/sh
 case "$*" in
   *"Repository > "*)
+    if [ -n "${FAKE_FZF_FIRST_INPUT:-}" ]; then
+      IFS= read -r first_input || true
+      printf '%s\n' "$first_input" > "$FAKE_FZF_FIRST_INPUT"
+      if [ "${FAKE_FZF_SELECT_FIRST_INPUT:-}" = "true" ]; then
+        printf '%s\n' "$first_input"
+        exit 0
+      fi
+      exit 1
+    fi
     input=$(cat)
     printf '%s\n' "$input" >> "$FAKE_FZF_INPUT_LOG"
     [ "${FAKE_FZF_CANCEL:-}" = "repository" ] && exit 1
@@ -619,6 +629,43 @@ assert_not_log "workspace create" "$HERDR_LOG"
 assert_log "Current checkout" "$FZF_INPUT_LOG"
 assert_not_log "status cwd=" "$TREEHOUSE_LOG"
 
+# The repository picker renders its first action before slow Git discovery
+# finishes, so opening the popup never waits for repository metadata.
+reset_state
+cat > "$HOME_DIR/.local/bin/git" <<'EOF'
+#!/bin/sh
+if [ -n "${FAKE_GIT_DELAY:-}" ] && [ ! -e "${FAKE_FZF_FIRST_INPUT:-}" ]; then
+  sleep "$FAKE_GIT_DELAY"
+fi
+exec /usr/bin/git "$@"
+EOF
+chmod +x "$HOME_DIR/.local/bin/git"
+rm -f "$FZF_FIRST_INPUT"
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$CANONICAL_ROOT" \
+FAKE_FZF_FIRST_INPUT="$FZF_FIRST_INPUT" \
+FAKE_FZF_SELECT_FIRST_INPUT=true \
+FAKE_FZF_REPOSITORY_PATH="$CONFIGURED_REPO" \
+FAKE_FZF_CANCEL=checkout \
+FAKE_GIT_DELAY=3 \
+  "$LAUNCHER" --select &
+picker_pid=$!
+for _ in $(seq 1 100); do
+  [ -e "$FZF_FIRST_INPUT" ] && break
+  sleep 0.02
+done
+if [ ! -e "$FZF_FIRST_INPUT" ]; then
+  kill "$picker_pid" 2>/dev/null || true
+  wait "$picker_pid" 2>/dev/null || true
+  fail "repository picker waited for Git discovery"
+fi
+assert_log "+ Open local path..." "$FZF_FIRST_INPUT"
+wait_for_exit "$picker_pid"
+assert_log "Fresh Treehouse worktree" "$FZF_INPUT_LOG"
+rm -f "$HOME_DIR/.local/bin/git" "$FZF_FIRST_INPUT"
+
 # A repository home nested inside another checkout does not discover that
 # enclosing checkout through ordinary child directories.
 reset_state
@@ -901,6 +948,34 @@ wait_for_log "workspace create --cwd $ACQUIRED --no-focus" "$HERDR_LOG"
 rm -f "$WORKSPACE_OPEN"
 wait_for_log "returned status=0" "$TREEHOUSE_LOG"
 unset FAKE_TREEHOUSE_RELEASE
+
+# Successful process creation transfers prompt-file ownership immediately.
+# A delayed detached shell must not trip a launcher handshake timeout.
+reset_state
+cat > "$HOME_DIR/.local/bin/bash" <<'EOF'
+#!/bin/sh
+sleep 3
+exec /bin/bash "$@"
+EOF
+chmod +x "$HOME_DIR/.local/bin/bash"
+delayed_prompt="start after delayed detached shell"
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
+FAKE_FZF_CHECKOUT="Current checkout" \
+FAKE_FZF_PRIMARY="omp" \
+FAKE_INITIAL_PROMPT="$delayed_prompt" \
+  timeout 5 /bin/bash "$LAUNCHER" --select \
+  || fail "selector did not transfer launch ownership"
+for _ in $(seq 1 500); do
+  [ -s "$PROMPT_LOG" ] && break
+  sleep 0.02
+done
+[ "$(cat "$PROMPT_LOG")" = "$delayed_prompt" ] \
+  || fail "delayed launcher lost its initial prompt"
+assert_not_log "New task workspace failed" "$HERDR_LOG"
+rm -f "$HOME_DIR/.local/bin/bash"
 
 # OpenCode selection captures a multiline prompt, waits for readiness, and
 # submits the exact prompt once without focusing the new workspace.
