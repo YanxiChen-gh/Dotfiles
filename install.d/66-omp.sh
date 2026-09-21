@@ -186,6 +186,71 @@ setup_omp_mcp() {
     return 1
 }
 
+herdr_version_at_least() {
+    candidate_version=${1#v}
+    minimum_version=${2#v}
+
+    case "$candidate_version" in
+        *[!0-9.]*|.*|*.) return 1 ;;
+    esac
+    case "$minimum_version" in
+        *[!0-9.]*|.*|*.) return 1 ;;
+    esac
+
+    old_ifs=$IFS
+    IFS=.
+    set -- $candidate_version
+    IFS=$old_ifs
+    [ "$#" -eq 3 ] || return 1
+    candidate_major=$1
+    candidate_minor=$2
+    candidate_patch=$3
+
+    IFS=.
+    set -- $minimum_version
+    IFS=$old_ifs
+    [ "$#" -eq 3 ] || return 1
+    minimum_major=$1
+    minimum_minor=$2
+    minimum_patch=$3
+
+    [ -n "$candidate_major" ] && [ -n "$candidate_minor" ] && [ -n "$candidate_patch" ] || return 1
+    [ -n "$minimum_major" ] && [ -n "$minimum_minor" ] && [ -n "$minimum_patch" ] || return 1
+
+    [ "$candidate_major" -gt "$minimum_major" ] && return 0
+    [ "$candidate_major" -lt "$minimum_major" ] && return 1
+    [ "$candidate_minor" -gt "$minimum_minor" ] && return 0
+    [ "$candidate_minor" -lt "$minimum_minor" ] && return 1
+    [ "$candidate_patch" -ge "$minimum_patch" ]
+}
+
+ensure_herdr_omp_nested_session_isolation() {
+    required_version=0.9.1
+    reported_version=$("$herdr_bin" --version 2>/dev/null) || {
+        echo "⚠️  Warning: could not determine the installed Herdr version"
+        return 1
+    }
+    reported_version=${reported_version#herdr }
+
+    herdr_version_at_least "$reported_version" "$required_version" && return 0
+
+    echo "Updating Herdr to $required_version or newer for OMP nested-session isolation..."
+    if ! "$herdr_bin" update; then
+        echo "⚠️  Warning: Herdr update failed; OMP integration was not installed"
+        return 1
+    fi
+
+    reported_version=$("$herdr_bin" --version 2>/dev/null) || {
+        echo "⚠️  Warning: could not determine the updated Herdr version"
+        return 1
+    }
+    reported_version=${reported_version#herdr }
+    if ! herdr_version_at_least "$reported_version" "$required_version"; then
+        echo "⚠️  Warning: Herdr $required_version or newer is required for OMP nested-session isolation"
+        return 1
+    fi
+}
+
 install_herdr_omp_integration() {
     omp_experiment_enabled || return 0
 
@@ -197,6 +262,7 @@ install_herdr_omp_integration() {
         echo "⚠️  Herdr is unavailable; omp will not become the Herdr default"
         return 1
     fi
+    ensure_herdr_omp_nested_session_isolation || return 1
 
     if ! "$herdr_bin" integration install omp; then
         echo "⚠️  Warning: Herdr omp integration installation failed"

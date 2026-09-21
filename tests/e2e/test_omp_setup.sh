@@ -462,20 +462,69 @@ else
 fi
 
 : > "$TMP/herdr-integration.log"
+: > "$TMP/herdr-version"
 cat > "$TMP/bin/herdr" <<'EOF'
 #!/bin/sh
-printf '%s\n' "$*" >> "$HERDR_INTEGRATION_LOG"
+case "${1:-}" in
+  --version)
+    cat "$HERDR_VERSION_FILE"
+    ;;
+  update)
+    printf '%s\n' "$*" >> "$HERDR_INTEGRATION_LOG"
+    printf '%s\n' "${HERDR_UPDATED_VERSION:-herdr 0.9.1}" > "$HERDR_VERSION_FILE"
+    ;;
+  *)
+    printf '%s\n' "$*" >> "$HERDR_INTEGRATION_LOG"
+    ;;
+esac
 EOF
 chmod +x "$TMP/bin/herdr"
+printf '%s\n' 'herdr 0.10.0' > "$TMP/herdr-version"
 (
   export HOME="$TMP/home"
   export PATH="$TMP/bin:/usr/bin:/bin"
   export HERDR_INTEGRATION_LOG="$TMP/herdr-integration.log"
+  export HERDR_VERSION_FILE="$TMP/herdr-version"
   . "$ROOT/install.d/66-omp.sh"
   install_herdr_omp_integration
 )
 [ "$(cat "$TMP/herdr-integration.log")" = "integration install omp" ] || {
-  echo "FAIL: native Herdr omp integration was not installed" >&2
+  echo "FAIL: current Herdr did not install the native OMP integration" >&2
+  exit 1
+}
+
+printf '%s\n' 'herdr 0.8.0' > "$TMP/herdr-version"
+: > "$TMP/herdr-integration.log"
+(
+  export HOME="$TMP/home"
+  export PATH="$TMP/bin:/usr/bin:/bin"
+  export HERDR_INTEGRATION_LOG="$TMP/herdr-integration.log"
+  export HERDR_VERSION_FILE="$TMP/herdr-version"
+  . "$ROOT/install.d/66-omp.sh"
+  install_herdr_omp_integration
+)
+[ "$(cat "$TMP/herdr-integration.log")" = "update
+integration install omp" ] || {
+  echo "FAIL: stale Herdr was not updated before OMP integration installation" >&2
+  exit 1
+}
+
+printf '%s\n' 'herdr 0.8.0' > "$TMP/herdr-version"
+: > "$TMP/herdr-integration.log"
+if (
+  export HOME="$TMP/home"
+  export PATH="$TMP/bin:/usr/bin:/bin"
+  export HERDR_INTEGRATION_LOG="$TMP/herdr-integration.log"
+  export HERDR_VERSION_FILE="$TMP/herdr-version"
+  export HERDR_UPDATED_VERSION='herdr 0.8.0'
+  . "$ROOT/install.d/66-omp.sh"
+  install_herdr_omp_integration
+); then
+  echo "FAIL: unsupported Herdr installed the OMP integration" >&2
+  exit 1
+fi
+[ "$(cat "$TMP/herdr-integration.log")" = "update" ] || {
+  echo "FAIL: unsupported Herdr integration was installed after a failed update" >&2
   exit 1
 }
 
@@ -525,7 +574,11 @@ printf '%s\n' "python3 $*" >> "$OMP_GATE_LOG"
 EOF
 cat > "$TMP/bin/herdr" <<'EOF'
 #!/bin/sh
-printf '%s\n' "herdr $*" >> "$OMP_GATE_LOG"
+if [ "${1:-}" = "--version" ]; then
+  printf '%s\n' 'herdr 0.9.1'
+else
+  printf '%s\n' "herdr $*" >> "$OMP_GATE_LOG"
+fi
 EOF
 chmod +x "$TMP/bin/omp" "$TMP/bin/rtk" "$TMP/bin/python3" "$TMP/bin/herdr"
 
