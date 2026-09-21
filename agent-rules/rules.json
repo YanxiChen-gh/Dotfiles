@@ -154,7 +154,7 @@
       {"file": "opencode/AGENTS-work.md", "scope": "work"}
     ],
     "title": "OpenCode Global Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "verification-and-handoff"],
+    "rules": ["dotfiles-repo", "writing-style", "mcp-preferences", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "verification-and-handoff"],
     "footer": ""
   }
 }

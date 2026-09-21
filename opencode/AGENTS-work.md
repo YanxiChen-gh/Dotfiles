@@ -10,6 +10,13 @@ My Dotfiles repo lives at https://github.com/YanxiChen-gh/Dotfiles. When I menti
 
 Never use the em dash ("—"). Use a plain hyphen ("-") instead. This applies to everything you write on my behalf: chat responses, code, code comments, commit messages, PR descriptions, and docs.
 
+## MCP Server Preferences
+
+- **Glean MCP**: `glean_default` is configured and available in OMP. For every company or internal-knowledge lookup, MUST use its `search`, `chat`, or `read_document` tools before external web search. This includes Guru, Google Docs, Confluence, Slack, and internal wikis. Glean indexes these sources and respects permissions.
+- **Google Drive MCP**: Do NOT use the `google-drive-mcp` tools. Use Glean instead for reading Google Docs and other company documents.
+- **Datadog MCP**: Always available for logs, monitors, dashboards, and incident investigation.
+- **MongoDB MCP**: If not connected, connect it before querying (in Claude Code, run `/connect-mongo`). Troubleshooting: https://app.getguru.com/card/T6jjXGKc/Connect-to-MongoDB-using-MongoDB-Compass
+
 ## Autonomy & Approval
 
 - For requests to answer, explain, review, diagnose, or plan, inspect the relevant material and report the result. Do not implement changes unless requested.
