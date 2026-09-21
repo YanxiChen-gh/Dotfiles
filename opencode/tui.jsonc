@@ -4,5 +4,6 @@
     "enabled": true,
     "notifications": true,
     "sound": false
-  }
+  },
+  "plugin": ["./herdr-tui-session.js"]
 }

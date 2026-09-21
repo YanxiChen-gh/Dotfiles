@@ -57,6 +57,7 @@ PROMPT_LOG="$TMP/prompt.log"
 PROMPT_INPUT="$TMP/prompt-input.py"
 FZF_INPUT_LOG="$TMP/fzf-input.log"
 FZF_FIRST_INPUT="$TMP/fzf-first-input"
+FZF_STARTED="$TMP/fzf-started"
 GH_LOG="$TMP/gh.log"
 
 mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${NEWLINE_ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$NESTED_NON_REPO" "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B" "$CLONE_ROOT" "$HERDR_STATE"
@@ -226,6 +227,9 @@ cat > "$HOME_DIR/.local/bin/fzf" <<'EOF'
 #!/bin/sh
 case "$*" in
   *"Repository > "*)
+    if [ -n "${FAKE_FZF_STARTED:-}" ]; then
+      : > "$FAKE_FZF_STARTED"
+    fi
     if [ -n "${FAKE_FZF_FIRST_INPUT:-}" ]; then
       IFS= read -r first_input || true
       printf '%s\n' "$first_input" > "$FAKE_FZF_FIRST_INPUT"
@@ -628,43 +632,49 @@ assert_not_log "$ACQUIRED" "$FZF_INPUT_LOG"
 assert_not_log "workspace create" "$HERDR_LOG"
 assert_log "Current checkout" "$FZF_INPUT_LOG"
 assert_not_log "status cwd=" "$TREEHOUSE_LOG"
+awk -v repository="$MAIN" '
+  index($0, repository) && !repository_line { repository_line = NR }
+  index($0, "+ Open local path...") && !open_line { open_line = NR }
+  END { exit !(repository_line && open_line && repository_line < open_line) }
+' "$FZF_INPUT_LOG" || fail "repository actions appeared before existing repositories"
 
-# The repository picker renders its first action before slow Git discovery
-# finishes, so opening the popup never waits for repository metadata.
+# The repository picker starts before slow Git discovery, then streams existing
+# repositories before the actions for opening or cloning another repository.
 reset_state
 cat > "$HOME_DIR/.local/bin/git" <<'EOF'
 #!/bin/sh
-if [ -n "${FAKE_GIT_DELAY:-}" ] && [ ! -e "${FAKE_FZF_FIRST_INPUT:-}" ]; then
+if [ -n "${FAKE_GIT_DELAY:-}" ] && [ ! -e "${FAKE_FZF_STARTED:-}" ]; then
   sleep "$FAKE_GIT_DELAY"
 fi
 exec /usr/bin/git "$@"
 EOF
 chmod +x "$HOME_DIR/.local/bin/git"
-rm -f "$FZF_FIRST_INPUT"
+rm -f "$FZF_STARTED" "$FZF_FIRST_INPUT"
 HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
 HERDR_REPO_HOME="$CANONICAL_ROOT" \
+FAKE_FZF_STARTED="$FZF_STARTED" \
 FAKE_FZF_FIRST_INPUT="$FZF_FIRST_INPUT" \
 FAKE_FZF_SELECT_FIRST_INPUT=true \
-FAKE_FZF_REPOSITORY_PATH="$CONFIGURED_REPO" \
 FAKE_FZF_CANCEL=checkout \
 FAKE_GIT_DELAY=3 \
   "$LAUNCHER" --select &
 picker_pid=$!
 for _ in $(seq 1 100); do
-  [ -e "$FZF_FIRST_INPUT" ] && break
+  [ -e "$FZF_STARTED" ] && break
   sleep 0.02
 done
-if [ ! -e "$FZF_FIRST_INPUT" ]; then
+if [ ! -e "$FZF_STARTED" ]; then
   kill "$picker_pid" 2>/dev/null || true
   wait "$picker_pid" 2>/dev/null || true
   fail "repository picker waited for Git discovery"
 fi
-assert_log "+ Open local path..." "$FZF_FIRST_INPUT"
 wait_for_exit "$picker_pid"
+assert_log "$MAIN" "$FZF_FIRST_INPUT"
+assert_not_log "+ Open local path..." "$FZF_FIRST_INPUT"
 assert_log "Fresh Treehouse worktree" "$FZF_INPUT_LOG"
-rm -f "$HOME_DIR/.local/bin/git" "$FZF_FIRST_INPUT"
+rm -f "$HOME_DIR/.local/bin/git" "$FZF_STARTED" "$FZF_FIRST_INPUT"
 
 # A repository home nested inside another checkout does not discover that
 # enclosing checkout through ordinary child directories.

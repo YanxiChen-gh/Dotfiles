@@ -293,19 +293,20 @@ add_repository() {
 
 discover_repositories() {
   local repo_home candidate
+  if current_worktree=$(resolve_worktree "$src_cwd") \
+    && current_primary=$(resolve_primary_checkout "$current_worktree") \
+    && current_repository_id=$(resolve_repository_id "$current_worktree"); then
+    add_repository "$current_primary"
+    for repo_home in "${repo_homes[@]}"; do
+      for candidate in "$repo_home"/*; do
+        [ -d "$candidate" ] || continue
+        add_repository "$candidate"
+      done
+    done
+  fi
   printf '%s\n' \
     "+ Open local path..."$'\t'"__open__" \
     "+ Clone GitHub repository..."$'\t'"__clone__"
-  current_worktree=$(resolve_worktree "$src_cwd") || return 0
-  current_primary=$(resolve_primary_checkout "$current_worktree") || return 0
-  current_repository_id=$(resolve_repository_id "$current_worktree") || return 0
-  add_repository "$current_primary"
-  for repo_home in "${repo_homes[@]}"; do
-    for candidate in "$repo_home"/*; do
-      [ -d "$candidate" ] || continue
-      add_repository "$candidate"
-    done
-  done
 }
 
 choose_repository() {
