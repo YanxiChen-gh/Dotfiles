@@ -173,8 +173,9 @@ case "$1 $2" in
     if [ -e "${FAKE_SPLIT_FAILURE:-}" ]; then exit 7; fi
     printf '%s\n' "{\"result\":{\"pane\":{\"pane_id\":\"$editor_id\"}}}"
     ;;
-  "wait output")
+  "pane wait-output")
     [ "$#" -eq 7 ] || exit 8
+    [ "${FAKE_AGENT_WAIT_FAILURE:-0}" = 0 ] || exit 1
     : > "$FAKE_AGENT_READY"
     printf '%s\n' "{\"result\":{\"matched_line\":\"Ask anything\",\"pane_id\":\"$pane_id\"}}"
     ;;
@@ -186,7 +187,14 @@ case "$1 $2" in
     fi
     case "$4" in
       *"; env PI_FORCE_HYPERLINKS=1 omp @"*) sh -c "$4" >/dev/null 2>&1 & ;;
+      *"; opencode --prompt "*) bash -c "$4" >/dev/null 2>&1 & ;;
     esac
+    ;;
+  "tab rename" | "notification show")
+    ;;
+  *)
+    printf 'unsupported Herdr command: %s %s\n' "$1" "$2" >&2
+    exit 2
     ;;
 esac
 EOF
@@ -303,6 +311,10 @@ chmod +x "$HOME_DIR/.local/bin/gh"
 for command in opencode nvim; do
   cat > "$HOME_DIR/.local/bin/$command" <<'EOF'
 #!/bin/sh
+if [ "${1:-}" = "--prompt" ]; then
+  [ "$#" -eq 2 ] || exit 2
+  printf '%s\0' "$2" >> "$FAKE_PROMPT_LOG"
+fi
 exit 0
 EOF
   chmod +x "$HOME_DIR/.local/bin/$command"
@@ -359,6 +371,9 @@ write_treehouse_state() {
 }
 
 reset_state() {
+  if [ -e "$WORKSPACE_OPEN" ]; then
+    wait_for_log "notification show Task workspace ready" "$HERDR_LOG"
+  fi
   : > "$HERDR_LOG"
   : > "$TREEHOUSE_LOG"
   : > "$PROMPT_LOG"
@@ -987,8 +1002,8 @@ done
 assert_not_log "New task workspace failed" "$HERDR_LOG"
 rm -f "$HOME_DIR/.local/bin/bash"
 
-# OpenCode selection captures a multiline prompt, waits for readiness, and
-# submits the exact prompt once without focusing the new workspace.
+# OpenCode receives the fallback prompt exactly once even when its initial
+# screen is unavailable, without closing or focusing the workspace.
 reset_state
 initial_prompt="Review 'quoted' input
 then keep && literal"
@@ -996,12 +1011,12 @@ HOME="$HOME_DIR" \
 HERDR_BIN_PATH="$TMP/herdr" \
 HERDR_ACTIVE_PANE_CWD="$LINKED" \
 HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
-OMP_EXPERIMENT=0 \
+PI_CODING_AGENT_DIR="$TMP/missing-omp-readiness" \
 FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="opencode" \
 FAKE_INITIAL_PROMPT="$initial_prompt" \
+FAKE_AGENT_WAIT_FAILURE=1 \
   "$LAUNCHER" --select
-wait_for_log "wait output test-pane --match Ask anything --timeout 30000" "$HERDR_LOG"
 for _ in $(seq 1 500); do
   [ -s "$PROMPT_LOG" ] && break
   sleep 0.02
@@ -1015,6 +1030,7 @@ expected = sys.argv[2].encode()
 if submissions != [expected]:
     raise SystemExit(f"prompt submissions were {submissions!r}, expected {[expected]!r}")
 PY
+[ -e "$WORKSPACE_OPEN" ] || fail "fallback agent workspace was closed"
 assert_not_log "workspace focus test-workspace" "$HERDR_LOG"
 
 # An empty prompt still launches OpenCode but does not wait or submit input.
@@ -1028,7 +1044,6 @@ FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="opencode" \
   "$LAUNCHER" --select
 wait_for_log "pane run test-pane cd $LINKED && clear; opencode" "$HERDR_LOG"
-assert_not_log "wait output" "$HERDR_LOG"
 [ ! -s "$PROMPT_LOG" ] || fail "empty prompt was submitted"
 
 # OMP's persistent hyperlink opt-out must not be overridden by the Herdr launcher.
@@ -1082,7 +1097,6 @@ expected = sys.argv[2].encode()
 if actual != expected:
     raise SystemExit(f"omp prompt was {actual!r}, expected {expected!r}")
 PY
-assert_not_log "wait output" "$HERDR_LOG"
 
 # Treehouse acquisition failures are visible even though shortcut commands run
 # detached without a usable stderr.

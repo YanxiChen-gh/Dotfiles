@@ -139,13 +139,15 @@ omp
 ```
 
 The whole workflow follows the default: `prefix+a` / `prefix+shift+a` launch omp,
-and the `--select` picker offers omp. If omp is unavailable, the launcher falls
-back to OpenCode. Set `HERDR_AGENT_CMD=opencode` (or `omp`) in the environment
+and the `--select` picker offers omp. If omp is unavailable or its integration
+setup is incomplete, the launcher falls back to OpenCode. Set
+`HERDR_AGENT_CMD=opencode` (or `omp`) in the environment
 before starting Herdr to override its server-wide default.
 
 When seeding an initial prompt via `prefix+a --select`, the launcher passes omp a
-mode-600 temporary `@file` argument. omp consumes it after first-run setup, so the
-workflow does not depend on a guessed ready string or delay.
+mode-600 temporary `@file` argument. OpenCode receives its native `--prompt`
+argument. Both agents consume the prompt during startup, so the workflow does
+not depend on a guessed ready string or delay.
 The popup uses Enter for a newline, Ctrl+S to submit, and Esc to skip.
 Encoded Ctrl+Enter remains supported when the host terminal preserves it.
 

@@ -32,12 +32,9 @@ elif [ "${OMP_EXPERIMENT:-1}" != "0" ] && command -v omp >/dev/null 2>&1 \
 else
   agent_cmd="opencode"
 fi
-# String to wait for before typing an initial prompt into an already-running TUI.
-# omp receives its prompt as an @file launch argument and skips this path.
+# Custom agents can provide a readiness string before receiving prompt input.
 if [ "${HERDR_AGENT_READY_MATCH+set}" = set ]; then
   agent_ready_match="$HERDR_AGENT_READY_MATCH"
-elif [ "$agent_cmd" = "opencode" ]; then
-  agent_ready_match="Ask anything"
 else
   agent_ready_match=""
 fi
@@ -671,6 +668,11 @@ fi
 
 if [ "$with_agent" = true ]; then
   printf -v quoted_workspace_cwd '%q' "$workspace_cwd"
+  if [ "$agent_cmd" = "opencode" ] && [ -n "$initial_prompt" ]; then
+    printf -v quoted_prompt_arg '%q' "$initial_prompt"
+    agent_launch+=" --prompt $quoted_prompt_arg"
+    initial_prompt=""
+  fi
   if [ -n "$omp_prompt_file" ]; then
     printf -v quoted_prompt_arg '%q' "@$omp_prompt_file"
     printf -v quoted_prompt_file '%q' "$omp_prompt_file"
@@ -684,7 +686,7 @@ if [ "$with_agent" = true ]; then
   fi
   if [ -n "$initial_prompt" ]; then
     if [ -n "$agent_ready_match" ]; then
-      "$herdr" wait output "$left" --match "$agent_ready_match" --timeout 30000 >/dev/null \
+      "$herdr" pane wait-output "$left" --match "$agent_ready_match" --timeout 30000 >/dev/null \
         || die "timed out waiting for agent prompt input"
     else
       # No known ready string for this agent; give the TUI a moment to accept input.
