@@ -83,11 +83,11 @@ configure_omp_defaults() {
         return 1
     fi
 
-    omp_default_model="openai-codex/gpt-6-astra"
+    omp_default_model="openai-codex/gpt-5.6-sol"
+    omp_codex_astra_model="openai-codex/gpt-6-astra"
     omp_api_gpt6_sol_model="openai/gpt-6-sol"
     omp_codex_terra_model="openai-codex/gpt-5.6-terra"
     omp_api_terra_model="openai/gpt-5.6-terra"
-    omp_codex_sol_model="openai-codex/gpt-5.6-sol"
     omp_api_sol_model="openai/gpt-5.6-sol"
 
     (cd "$HOME" && env -u PI_CONFIG_FILES \
@@ -108,12 +108,12 @@ configure_omp_defaults() {
 
     enabled_models=$(jq -cn \
         --arg default_model "$omp_default_model" \
+        --arg codex_astra_model "$omp_codex_astra_model" \
         --arg api_gpt6_sol_model "$omp_api_gpt6_sol_model" \
         --arg codex_terra_model "$omp_codex_terra_model" \
         --arg api_terra_model "$omp_api_terra_model" \
-        --arg codex_sol_model "$omp_codex_sol_model" \
         --arg api_sol_model "$omp_api_sol_model" \
-        '[$default_model, $api_gpt6_sol_model, $codex_terra_model, $api_terra_model, $codex_sol_model, $api_sol_model]') || {
+        '[$default_model, $codex_astra_model, $api_gpt6_sol_model, $codex_terra_model, $api_terra_model, $api_sol_model]') || {
         echo "⚠️  Warning: could not configure the omp model allow-list"
         return 1
     }
@@ -121,7 +121,7 @@ configure_omp_defaults() {
         "$omp_binary" config set enabledModels "$enabled_models" >/dev/null) || return 1
 
     echo "✅ omp default model set to $omp_default_model"
-    echo "   Run /login openai-codex for GPT-6 Astra; set OPENAI_API_KEY for selectable OpenAI API models."
+    echo "   Run /login openai-codex for GPT-5.6 Sol; set OPENAI_API_KEY for selectable OpenAI API models."
 }
 
 setup_omp_config() {
