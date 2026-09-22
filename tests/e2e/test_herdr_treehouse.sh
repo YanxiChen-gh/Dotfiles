@@ -179,14 +179,22 @@ case "$1 $2" in
     : > "$FAKE_AGENT_READY"
     printf '%s\n' "{\"result\":{\"matched_line\":\"Ask anything\",\"pane_id\":\"$pane_id\"}}"
     ;;
+  "agent get")
+    [ "$#" -eq 3 ] || exit 8
+    ;;
+  "agent wait")
+    [ "$#" -eq 7 ] || exit 8
+    [ "${FAKE_AGENT_WAIT_FAILURE:-0}" = 0 ] || exit 1
+    : > "$FAKE_AGENT_READY"
+    ;;
+  "agent prompt")
+    [ "$#" -eq 4 ] || exit 8
+    [ -e "$FAKE_AGENT_READY" ] || exit 9
+    printf '%s\0' "$4" >> "$FAKE_PROMPT_LOG"
+    ;;
   "pane run")
     [ "$#" -eq 4 ] || exit 8
-    if [ -n "${FAKE_INITIAL_PROMPT:-}" ] && [ "$4" = "$FAKE_INITIAL_PROMPT" ]; then
-      [ -e "$FAKE_AGENT_READY" ] || exit 9
-      printf '%s\0' "$4" >> "$FAKE_PROMPT_LOG"
-    fi
     case "$4" in
-      *"; env PI_FORCE_HYPERLINKS=1 omp @"*) sh -c "$4" >/dev/null 2>&1 & ;;
       *"; opencode --prompt "*) bash -c "$4" >/dev/null 2>&1 & ;;
     esac
     ;;
@@ -328,14 +336,6 @@ case "${1:-}" in
     if [ "${2:-}" = "get" ] && [ "${3:-}" = "tui.hyperlinks" ]; then
       printf '%s\n' "${FAKE_OMP_HYPERLINKS_MODE:-auto}"
     fi
-    ;;
-  @*)
-    python3 - "${1#@}" "$FAKE_PROMPT_LOG" <<'PY'
-import sys
-
-with open(sys.argv[1], "rb") as source, open(sys.argv[2], "wb") as target:
-    target.write(source.read())
-PY
     ;;
 esac
 EOF
@@ -997,8 +997,15 @@ for _ in $(seq 1 500); do
   [ -s "$PROMPT_LOG" ] && break
   sleep 0.02
 done
-[ "$(cat "$PROMPT_LOG")" = "$delayed_prompt" ] \
-  || fail "delayed launcher lost its initial prompt"
+python3 - "$PROMPT_LOG" "$delayed_prompt" <<'PY'
+import sys
+
+with open(sys.argv[1], "rb") as prompt_log:
+    submissions = [value for value in prompt_log.read().split(b"\0") if value]
+expected = sys.argv[2].encode()
+if submissions != [expected]:
+    raise SystemExit(f"prompt submissions were {submissions!r}, expected {[expected]!r}")
+PY
 assert_not_log "New task workspace failed" "$HERDR_LOG"
 rm -f "$HOME_DIR/.local/bin/bash"
 
@@ -1068,8 +1075,8 @@ PI_CODING_AGENT_DIR="$TMP/missing-omp-agent" \
   "$LAUNCHER" --without-worktree --with-agent --without-editor
 wait_for_log "pane run test-pane cd $LINKED && clear; opencode" "$HERDR_LOG"
 
-# omp receives its initial prompt as an @file launch argument, so first-run
-# setup can finish without a guessed readiness delay. File bytes stay exact.
+# OMP receives its initial prompt through Herdr's agent prompt path, so OMP
+# sees a normal user submission and generates a conversation title.
 reset_state
 omp_prompt="leading
 internal
@@ -1083,7 +1090,10 @@ FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="omp" \
 FAKE_INITIAL_PROMPT="$omp_prompt" \
   "$LAUNCHER" --select
-wait_for_log "pane run test-pane cd $TMP/linked\\'quoted && clear; env PI_FORCE_HYPERLINKS=1 omp @" "$HERDR_LOG"
+wait_for_log "pane run test-pane cd $TMP/linked\\'quoted && clear; env PI_FORCE_HYPERLINKS=1 omp" "$HERDR_LOG"
+wait_for_log "agent wait test-pane --until idle --timeout 30000" "$HERDR_LOG"
+wait_for_log "agent prompt test-pane leading" "$HERDR_LOG"
+assert_not_log "omp @" "$HERDR_LOG"
 for _ in $(seq 1 500); do
   [ -s "$PROMPT_LOG" ] && break
   sleep 0.02
@@ -1092,10 +1102,10 @@ python3 - "$PROMPT_LOG" "$omp_prompt" <<'PY'
 import sys
 
 with open(sys.argv[1], "rb") as prompt_log:
-    actual = prompt_log.read()
+    submissions = [value for value in prompt_log.read().split(b"\0") if value]
 expected = sys.argv[2].encode()
-if actual != expected:
-    raise SystemExit(f"omp prompt was {actual!r}, expected {expected!r}")
+if submissions != [expected]:
+    raise SystemExit(f"prompt submissions were {submissions!r}, expected {[expected]!r}")
 PY
 
 # Treehouse acquisition failures are visible even though shortcut commands run

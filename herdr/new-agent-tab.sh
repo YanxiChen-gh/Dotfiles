@@ -45,7 +45,6 @@ with_editor=false
 select_setup=false
 treehouse_ready=false
 initial_prompt_file=""
-launched_prompt_file=""
 requested_repo_root=""
 requested_workspace_cwd=""
 clone_repository=""
@@ -53,7 +52,6 @@ clone_root=""
 
 cleanup_prompt_files() {
   if [ -n "$initial_prompt_file" ]; then rm -f "$initial_prompt_file"; fi
-  if [ -n "$launched_prompt_file" ]; then rm -f "$launched_prompt_file"; fi
 }
 
 # Detached shells have no visible stderr, so surface failures as a herdr toast,
@@ -610,18 +608,11 @@ if [ "$treehouse_ready" = false ] && [ "$with_worktree" = false ]; then
 fi
 
 initial_prompt=""
-omp_prompt_file=""
 if [ -n "$initial_prompt_file" ]; then
   [ -f "$initial_prompt_file" ] || die "initial prompt file does not exist"
-  if [ "$with_agent" = true ] && [ "$agent_cmd" = "omp" ] && [ -s "$initial_prompt_file" ]; then
-    omp_prompt_file="$initial_prompt_file"
-    launched_prompt_file="$initial_prompt_file"
-    initial_prompt_file=""
-  else
-    IFS= read -r -d '' initial_prompt < "$initial_prompt_file" || true
-    rm -f "$initial_prompt_file"
-    initial_prompt_file=""
-  fi
+  IFS= read -r -d '' initial_prompt < "$initial_prompt_file" || true
+  rm -f "$initial_prompt_file"
+  initial_prompt_file=""
 fi
 
 requested_label="shell"
@@ -673,27 +664,36 @@ if [ "$with_agent" = true ]; then
     agent_launch+=" --prompt $quoted_prompt_arg"
     initial_prompt=""
   fi
-  if [ -n "$omp_prompt_file" ]; then
-    printf -v quoted_prompt_arg '%q' "@$omp_prompt_file"
-    printf -v quoted_prompt_file '%q' "$omp_prompt_file"
-    "$herdr" pane run "$left" \
-      "cd $quoted_workspace_cwd && clear; $agent_launch $quoted_prompt_arg; agent_status=\$?; rm -f -- $quoted_prompt_file; (exit \$agent_status)" \
-      || die "failed to launch agent in left pane"
-    launched_prompt_file=""
-  else
-    "$herdr" pane run "$left" "cd $quoted_workspace_cwd && clear; $agent_launch" \
-      || die "failed to launch agent in left pane"
-  fi
+  "$herdr" pane run "$left" "cd $quoted_workspace_cwd && clear; $agent_launch" \
+    || die "failed to launch agent in left pane"
   if [ -n "$initial_prompt" ]; then
-    if [ -n "$agent_ready_match" ]; then
-      "$herdr" pane wait-output "$left" --match "$agent_ready_match" --timeout 30000 >/dev/null \
-        || die "timed out waiting for agent prompt input"
+    if [ "$agent_cmd" = "omp" ]; then
+      agent_detected=false
+      agent_attempt=0
+      while [ "$agent_attempt" -lt 300 ]; do
+        if "$herdr" agent get "$left" >/dev/null 2>&1; then
+          agent_detected=true
+          break
+        fi
+        agent_attempt=$((agent_attempt + 1))
+        sleep 0.1
+      done
+      [ "$agent_detected" = true ] || die "timed out waiting for OMP startup"
+      "$herdr" agent wait "$left" --until idle --timeout 30000 >/dev/null \
+        || die "timed out waiting for OMP prompt input"
+      "$herdr" agent prompt "$left" "$initial_prompt" >/dev/null \
+        || die "failed to submit initial OMP prompt"
     else
-      # No known ready string for this agent; give the TUI a moment to accept input.
-      sleep 3
+      if [ -n "$agent_ready_match" ]; then
+        "$herdr" pane wait-output "$left" --match "$agent_ready_match" --timeout 30000 >/dev/null \
+          || die "timed out waiting for agent prompt input"
+      else
+        # No known ready string for this agent; give the TUI a moment to accept input.
+        sleep 3
+      fi
+      "$herdr" pane run "$left" "$initial_prompt" \
+        || die "failed to submit initial agent prompt"
     fi
-    "$herdr" pane run "$left" "$initial_prompt" \
-      || die "failed to submit initial agent prompt"
   fi
 fi
 
