@@ -148,7 +148,14 @@ setup_herdr_config() {
     mkdir -p "$target_dir"
     rm -f "$target_config"
     ln -s "$source_config" "$target_config"
+    link_dotfiles_file "$script_dir/herdr" "$target_dir/launchers" || return 1
     echo "✅ Linked herdr config: $target_config -> $source_config"
+
+    skill_source="$script_dir/shared-skills/troubleshoot-herdr"
+    for skills_dir in "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.cursor/skills-cursor"; do
+        mkdir -p "$skills_dir" || return 1
+        link_dotfiles_file "$skill_source" "$skills_dir/troubleshoot-herdr" || return 1
+    done
 }
 
 # Symlink treehouse's config (worktree provisioning hook) into

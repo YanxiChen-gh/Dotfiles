@@ -92,7 +92,8 @@ def render(screen, buffer: list[str], cursor: int) -> None:
     visible_rows = rows[first_row : first_row + content_height]
 
     screen.write("\x1b[2J\x1b[H")
-    screen.write("\x1b[1mInitial prompt\x1b[0m\n")
+    title = os.environ.get("HERDR_PROMPT_TITLE", "Initial prompt")
+    screen.write(f"\x1b[1m{title}\x1b[0m\n")
     screen.write("Enter: newline | Ctrl+S: submit | Esc: skip\n")
     screen.write("-" * width + "\n")
     screen.write("\n".join(visible_rows))

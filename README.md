@@ -22,6 +22,16 @@ The relay trusts the remote account: while attached, a process on that account c
 
 Fresh checkout mode keeps Treehouse as the exclusive worktree owner. Shared mode can use a selected repository's primary checkout or the current unmanaged linked checkout. A Treehouse-managed current checkout cannot back a second workspace; use `prefix+c` for another tab in its owning workspace. `prefix+shift+a` remains the no-picker shortcut for a fresh current-repository worktree with an agent and nvim.
 
+## Herdr troubleshooting
+
+`prefix+t` (`Ctrl+G`, then `T`) asks for permission and what went wrong, then opens a `troubleshoot` tab in the originating workspace. It starts in Dotfiles and uses the same OMP/OpenCode selection as `prefix+a`, without Treehouse or the normal task-workspace launcher. `prefix+a` is unchanged.
+
+Choose **Diagnose** for read-only investigation, **Fix locally** for scoped repairs without publishing, or **Fix, ship, and sync** to additionally authorize the relevant Dotfiles fix on `main` and this machine's targeted sync. The last confirmed choice appears first but must be selected again. Cancelling either input opens nothing. These are agent instructions, not a security sandbox; disruptive actions still require specific permission.
+
+The launcher passes the original machine, workspace, pane, working directory, and source/installed Dotfiles paths to the [troubleshooting skill](shared-skills/troubleshoot-herdr/SKILL.md). `setup_herdr_config` links the launcher directory at `~/.config/herdr/launchers` to the same checkout as the config, so a stale `DOTFILES_DIR` cannot redirect troubleshooting to an older copy. It also links the skill for agent discovery on both personal and work machines. An existing agent can read the same skill if the shortcut cannot launch.
+
+Problem text lives in private temporary files until the launched agent exits. An unconfirmed submission retains those files and its tab for inspection; do not blindly retry. Mode preferences contain no problem text. Do not include secrets in the problem description.
+
 ## Editor (Vim / Neovim)
 
 `.vimrc` at the repo root is symlinked to `~/.vimrc` by `create_symlinks` (vim-plug installs any missing plugins on startup). Neovim reads `~/.config/nvim/init.vim` rather than `~/.vimrc`, so `setup_nvim_config` links `nvim/init.vim` (which sources `~/.vimrc`) and `nvim/lsp.lua` there. Neovim uses its native LSP client with project-local TypeScript 7 `tsgo` when available and Mason's `typescript-language-server` with a pinned TypeScript 6 language-service fallback otherwise. Mason also installs and configures Bash and Go language servers; Java and OCaml servers are included when Java 21+ and opam are available.

@@ -23,21 +23,38 @@ type = "shell"
 description = "New task workspace (treehouse worktree: agent + nvim)"
 command = "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --with-editor"
 
+[[keys.command]]
+key = "prefix+t"
+type = "popup"
+description = "Troubleshoot this environment"
+command = '"${HOME}/.config/herdr/launchers/troubleshoot.sh"'
+
 [ui.toast]
 delivery = "herdr"
 
 [ui.sidebar.spaces]
-rows = [
-  ["state_icon", "workspace"],
-  ["$repo", "$worktree"],
-]
+rows = [["state_icon", "workspace"], ["$repo", "$worktree"]]
 
 [ui.sidebar.agents.rows_by_agent]
 opencode = [
-  ["state_icon", "workspace", "tab"],
-  ["agent"],
-  ["$subagent_1"],
-  ["$subagent_2"],
-  ["$subagent_3"],
-  ["$subagent_summary"],
+  [
+    "state_icon",
+    "workspace",
+    "tab",
+  ],
+  [
+    "agent",
+  ],
+  [
+    "$subagent_1",
+  ],
+  [
+    "$subagent_2",
+  ],
+  [
+    "$subagent_3",
+  ],
+  [
+    "$subagent_summary",
+  ],
 ]

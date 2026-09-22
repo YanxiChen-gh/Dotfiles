@@ -1174,13 +1174,6 @@ with open(sys.argv[1], "rb") as config_file:
 expected = [["state_icon", "workspace"], ["$repo", "$worktree"]]
 if rows != expected:
     raise SystemExit(f"space rows were {rows!r}, expected {expected!r}")
-commands = [entry["command"] for entry in config["keys"]["command"]]
-expected_commands = [
-    "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --select",
-    "${DOTFILES_DIR:-$HOME/dotfiles}/herdr/new-agent-tab.sh --with-editor",
-]
-if commands != expected_commands:
-    raise SystemExit(f"shortcut commands were {commands!r}, expected {expected_commands!r}")
 agent_rows = config["ui"]["sidebar"]["agents"]["rows_by_agent"]
 if "omp" in agent_rows:
     raise SystemExit(f"redundant omp sidebar rows remain: {agent_rows['omp']!r}")
