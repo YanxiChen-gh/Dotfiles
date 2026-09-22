@@ -1,5 +1,5 @@
 #!/bin/sh
-# E2E: omp installs standalone and prefers ChatGPT Codex OAuth with OpenAI API fallback.
+# E2E: omp installs standalone and configures GPT-6 Sol as the default.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -181,14 +181,14 @@ printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
   echo "FAIL: harness extension was not linked" >&2
   exit 1
 }
-jq -e '.default == "openai-codex/gpt-5.6-terra" and .smol == "openai/gpt-5.4-mini"' \
+jq -e '.default == "openai/gpt-6-sol" and .smol == "openai/gpt-5.4-mini"' \
   "$OLD_AGENT/fake-model-roles.json" >/dev/null || {
-  echo "FAIL: Codex OAuth default did not preserve existing model roles" >&2
+  echo "FAIL: GPT-6 Sol default did not preserve existing model roles" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
+jq -e '. == ["openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
   "$OLD_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: enabledModels did not preserve Terra defaults and Sol selector entries" >&2
+  echo "FAIL: enabledModels did not include GPT-6 Sol and existing GPT-5.6 selectors" >&2
   exit 1
 }
 jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
@@ -217,14 +217,14 @@ jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
 )
 grep -F 'keep: true' "$UNMANAGED_AGENT/config.yml" >/dev/null
 grep -F 'keep: true' "$UNMANAGED_AGENT/models.yml" >/dev/null
-jq -e '.default == "openai-codex/gpt-5.6-terra"' \
+jq -e '.default == "openai/gpt-6-sol"' \
   "$UNMANAGED_AGENT/fake-model-roles.json" >/dev/null || {
-  echo "FAIL: Codex OAuth default was not selected without OPENAI_API_KEY" >&2
+  echo "FAIL: GPT-6 Sol was not selected by default" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
+jq -e '. == ["openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-sol"]' \
   "$UNMANAGED_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: dual-auth model allow-list did not include Sol" >&2
+  echo "FAIL: model allow-list did not include GPT-6 Sol and existing GPT-5.6 selectors" >&2
   exit 1
 }
 [ ! -e "$UNMANAGED_AGENT/fake-disabled-providers.json" ] || {

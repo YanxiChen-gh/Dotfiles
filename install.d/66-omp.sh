@@ -83,8 +83,9 @@ configure_omp_defaults() {
         return 1
     fi
 
-    omp_default_model="openai-codex/gpt-5.6-terra"
-    omp_api_fallback_model="openai/gpt-5.6-terra"
+    omp_default_model="openai/gpt-6-sol"
+    omp_codex_terra_model="openai-codex/gpt-5.6-terra"
+    omp_api_terra_model="openai/gpt-5.6-terra"
     omp_codex_sol_model="openai-codex/gpt-5.6-sol"
     omp_api_sol_model="openai/gpt-5.6-sol"
 
@@ -106,18 +107,19 @@ configure_omp_defaults() {
 
     enabled_models=$(jq -cn \
         --arg default_model "$omp_default_model" \
-        --arg fallback_model "$omp_api_fallback_model" \
+        --arg codex_terra_model "$omp_codex_terra_model" \
+        --arg api_terra_model "$omp_api_terra_model" \
         --arg codex_sol_model "$omp_codex_sol_model" \
         --arg api_sol_model "$omp_api_sol_model" \
-        '[$default_model, $fallback_model, $codex_sol_model, $api_sol_model]') || {
+        '[$default_model, $codex_terra_model, $api_terra_model, $codex_sol_model, $api_sol_model]') || {
         echo "⚠️  Warning: could not configure the omp model allow-list"
         return 1
     }
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set enabledModels "$enabled_models" >/dev/null) || return 1
 
-    echo "✅ omp default model set to $omp_default_model; API fallback set to $omp_api_fallback_model"
-    echo "   Start omp and run /login openai-codex to authenticate with ChatGPT."
+    echo "✅ omp default model set to $omp_default_model"
+    echo "   Set OPENAI_API_KEY for GPT-6 Sol; run /login openai-codex for selectable Codex models."
 }
 
 setup_omp_config() {
