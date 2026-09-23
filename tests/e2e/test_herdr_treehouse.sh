@@ -53,6 +53,7 @@ TRANSPORT_FAILURE="$TMP/transport-failure"
 TREEHOUSE_STARTED="$TMP/treehouse-started"
 TREEHOUSE_RELEASE="$TMP/treehouse-release"
 AGENT_READY="$TMP/agent-ready"
+MCP_READY="$TMP/mcp-ready"
 PROMPT_LOG="$TMP/prompt.log"
 PROMPT_INPUT="$TMP/prompt-input.py"
 FZF_INPUT_LOG="$TMP/fzf-input.log"
@@ -62,6 +63,7 @@ GH_LOG="$TMP/gh.log"
 
 mkdir -p "$HOME_DIR/.local/bin" "$HOME_DIR/.omp/agent" "$MAIN" "$OTHER" "${ACQUIRED%/*}" "${NEWLINE_ACQUIRED%/*}" "${OTHER_ACQUIRED%/*}" "$CONFIGURED_REPO" "$CANONICAL_REPO" "$IMPLICIT_REPO" "$NESTED_NON_REPO" "$DUPLICATE_REPO_A" "$DUPLICATE_REPO_B" "$CLONE_ROOT" "$HERDR_STATE"
 : > "$HOME_DIR/.omp/agent/.dotfiles-ready"
+printf '%s\n' '{"mcpServers":{"glean_default":{"type":"http","url":"https://example.invalid/mcp"}}}' > "$HOME_DIR/.omp/agent/mcp.json"
 
 git -C "$MAIN" init -q
 git -C "$MAIN" config user.name test
@@ -177,7 +179,8 @@ case "$1 $2" in
     [ "$#" -eq 7 ] || exit 8
     [ "${FAKE_AGENT_WAIT_FAILURE:-0}" = 0 ] || exit 1
     : > "$FAKE_AGENT_READY"
-    printf '%s\n' "{\"result\":{\"matched_line\":\"Ask anything\",\"pane_id\":\"$pane_id\"}}"
+    if [ "$4" = "--regex" ] && [ "$5" = "Connected.*glean_default" ]; then : > "$FAKE_MCP_READY"; fi
+    printf '%s\n' "{\"result\":{\"matched_line\":\"$5\",\"pane_id\":\"$pane_id\"}}"
     ;;
   "agent get")
     [ "$#" -eq 3 ] || exit 8
@@ -190,6 +193,7 @@ case "$1 $2" in
   "agent prompt")
     [ "$#" -eq 4 ] || exit 8
     [ -e "$FAKE_AGENT_READY" ] || exit 9
+    if [ "${FAKE_REQUIRE_MCP_READY:-0}" = 1 ]; then [ -e "$FAKE_MCP_READY" ] || exit 10; fi
     printf '%s\0' "$4" >> "$FAKE_PROMPT_LOG"
     ;;
   "pane run")
@@ -381,7 +385,7 @@ reset_state() {
   : > "$GH_LOG"
   write_treehouse_state
   rm -rf "$CLONED_REPO" "$NESTED_CLONE_ROOT" "$LOCAL_DEFAULT_HOME" "$DEEP_HOME_PARENT"
-  rm -f "$HERDR_STATE"/*.open "$WORKSPACE_LIST" "$WORKSPACE_LIST_FAILURE" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$TMP/split-failure" "$TMP/metadata-failure"
+  rm -f "$HERDR_STATE"/*.open "$WORKSPACE_LIST" "$WORKSPACE_LIST_FAILURE" "$TRANSPORT_FAILURE" "$TREEHOUSE_STARTED" "$TREEHOUSE_RELEASE" "$AGENT_READY" "$MCP_READY" "$TMP/split-failure" "$TMP/metadata-failure"
 }
 
 export FAKE_HERDR_LOG="$HERDR_LOG"
@@ -393,6 +397,7 @@ export FAKE_ACQUIRED="$ACQUIRED"
 export FAKE_TRANSPORT_FAILURE="$TRANSPORT_FAILURE"
 export FAKE_TREEHOUSE_STARTED="$TREEHOUSE_STARTED"
 export FAKE_AGENT_READY="$AGENT_READY"
+export FAKE_MCP_READY="$MCP_READY"
 export FAKE_PROMPT_LOG="$PROMPT_LOG"
 export FAKE_FZF_INPUT_LOG="$FZF_INPUT_LOG"
 export FAKE_CURRENT_REPOSITORY="$MAIN"
@@ -1089,9 +1094,11 @@ HERDR_PROMPT_INPUT_PATH="$PROMPT_INPUT" \
 FAKE_FZF_CHECKOUT="Current checkout" \
 FAKE_FZF_PRIMARY="omp" \
 FAKE_INITIAL_PROMPT="$omp_prompt" \
+FAKE_REQUIRE_MCP_READY=1 \
   "$LAUNCHER" --select
 wait_for_log "pane run test-pane cd $TMP/linked\\'quoted && clear; env PI_FORCE_HYPERLINKS=1 omp" "$HERDR_LOG"
 wait_for_log "agent wait test-pane --until idle --timeout 30000" "$HERDR_LOG"
+wait_for_log "pane wait-output test-pane --regex Connected.*glean_default --timeout 10000" "$HERDR_LOG"
 wait_for_log "agent prompt test-pane leading" "$HERDR_LOG"
 assert_not_log "omp @" "$HERDR_LOG"
 for _ in $(seq 1 500); do

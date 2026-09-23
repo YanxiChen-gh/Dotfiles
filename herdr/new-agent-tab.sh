@@ -664,6 +664,18 @@ if [ "$with_agent" = true ]; then
       [ "$agent_detected" = true ] || die "timed out waiting for OMP startup"
       "$herdr" agent wait "$left" --until idle --timeout 30000 >/dev/null \
         || die "timed out waiting for OMP prompt input"
+      omp_mcp_config="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}/mcp.json"
+      if jq -e '
+        .mcpServers.glean_default as $server
+        | ($server | type == "object" and (.enabled // true))
+          and ((.disabledServers // []) | index("glean_default") == null)
+      ' "$omp_mcp_config" >/dev/null 2>&1; then
+        # OMP can report idle during its fast startup window, before late MCP
+        # tools join the first turn's registry. Bound the wait so an unavailable
+        # Glean server cannot prevent the task workspace from opening.
+        "$herdr" pane wait-output "$left" --regex "Connected.*glean_default" --timeout 10000 >/dev/null 2>&1 \
+          || true
+      fi
       "$herdr" agent prompt "$left" "$initial_prompt" >/dev/null \
         || die "failed to submit initial OMP prompt"
     else
