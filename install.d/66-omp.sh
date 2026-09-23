@@ -33,8 +33,26 @@ install_omp() {
         esac
     fi
     if [ -x "$omp_binary" ] && omp_version_output=$("$omp_binary" --version 2>/dev/null); then
-        echo "✅ omp already installed ($omp_version_output)"
-        return 0
+        omp_required_version=18.2.11
+        omp_reported_version=${omp_version_output#omp/}
+        omp_reported_version=${omp_reported_version#omp }
+        if version_at_least "$omp_reported_version" "$omp_required_version"; then
+            echo "✅ omp already installed ($omp_version_output)"
+            return 0
+        fi
+
+        echo "Updating omp to $omp_required_version or newer for Codex GPT-6 Sol..."
+        if "$omp_binary" update \
+            && omp_version_output=$("$omp_binary" --version 2>/dev/null); then
+            omp_reported_version=${omp_version_output#omp/}
+            omp_reported_version=${omp_reported_version#omp }
+            if version_at_least "$omp_reported_version" "$omp_required_version"; then
+                echo "✅ omp updated ($omp_version_output)"
+                return 0
+            fi
+        fi
+        echo "⚠️  Warning: omp $omp_required_version or newer is required for Codex GPT-6 Sol"
+        return 1
     fi
 
     omp_version=${OMP_VERSION:-latest}
@@ -83,10 +101,11 @@ configure_omp_defaults() {
         return 1
     fi
 
-    omp_default_model="openai-codex/gpt-5.6-sol"
+    omp_default_model="openai-codex/gpt-6-sol"
     omp_codex_astra_model="openai-codex/gpt-6-astra"
     omp_api_gpt6_sol_model="openai/gpt-6-sol"
     omp_codex_terra_model="openai-codex/gpt-5.6-terra"
+    omp_codex_gpt56_sol_model="openai-codex/gpt-5.6-sol"
     omp_api_terra_model="openai/gpt-5.6-terra"
     omp_api_sol_model="openai/gpt-5.6-sol"
 
@@ -111,9 +130,10 @@ configure_omp_defaults() {
         --arg codex_astra_model "$omp_codex_astra_model" \
         --arg api_gpt6_sol_model "$omp_api_gpt6_sol_model" \
         --arg codex_terra_model "$omp_codex_terra_model" \
+        --arg codex_gpt56_sol_model "$omp_codex_gpt56_sol_model" \
         --arg api_terra_model "$omp_api_terra_model" \
         --arg api_sol_model "$omp_api_sol_model" \
-        '[$default_model, $codex_astra_model, $api_gpt6_sol_model, $codex_terra_model, $api_terra_model, $api_sol_model]') || {
+        '[$default_model, $codex_astra_model, $api_gpt6_sol_model, $codex_terra_model, $codex_gpt56_sol_model, $api_terra_model, $api_sol_model]') || {
         echo "⚠️  Warning: could not configure the omp model allow-list"
         return 1
     }
@@ -121,7 +141,7 @@ configure_omp_defaults() {
         "$omp_binary" config set enabledModels "$enabled_models" >/dev/null) || return 1
 
     echo "✅ omp default model set to $omp_default_model"
-    echo "   Run /login openai-codex for GPT-5.6 Sol; set OPENAI_API_KEY for selectable OpenAI API models."
+    echo "   Run /login openai-codex for Codex models; set OPENAI_API_KEY for selectable OpenAI API models."
 }
 
 setup_omp_config() {
@@ -190,7 +210,7 @@ setup_omp_mcp() {
     return 1
 }
 
-herdr_version_at_least() {
+version_at_least() {
     candidate_version=${1#v}
     minimum_version=${2#v}
 
@@ -236,7 +256,7 @@ ensure_herdr_omp_nested_session_isolation() {
     }
     reported_version=${reported_version#herdr }
 
-    herdr_version_at_least "$reported_version" "$required_version" && return 0
+    version_at_least "$reported_version" "$required_version" && return 0
 
     echo "Updating Herdr to $required_version or newer for OMP nested-session isolation..."
     if ! "$herdr_bin" update; then
@@ -249,7 +269,7 @@ ensure_herdr_omp_nested_session_isolation() {
         return 1
     }
     reported_version=${reported_version#herdr }
-    if ! herdr_version_at_least "$reported_version" "$required_version"; then
+    if ! version_at_least "$reported_version" "$required_version"; then
         echo "⚠️  Warning: Herdr $required_version or newer is required for OMP nested-session isolation"
         return 1
     fi

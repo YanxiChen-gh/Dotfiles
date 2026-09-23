@@ -1,5 +1,5 @@
 #!/bin/sh
-# E2E: omp installs standalone and configures Codex GPT-5.6 Sol as the default.
+# E2E: omp installs standalone and configures Codex GPT-6 Sol as the default.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -146,6 +146,40 @@ rm -f "$TMP/home/.local/bin/omp"
   exit 1
 }
 
+# Codex GPT-6 Sol discovery requires omp 18.2.11 or newer.
+STALE_HOME="$TMP/stale-home"
+mkdir -p "$STALE_HOME/.local/bin"
+printf '%s\n' 'omp/18.2.9' > "$TMP/stale-omp-version"
+cat > "$STALE_HOME/.local/bin/omp" <<'EOF'
+#!/bin/sh
+case "${1:-}" in
+  --version)
+    cat "$STALE_OMP_VERSION_FILE"
+    ;;
+  update)
+    printf '%s\n' update > "$STALE_OMP_UPDATE_LOG"
+    printf '%s\n' 'omp/18.2.11' > "$STALE_OMP_VERSION_FILE"
+    ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x "$STALE_HOME/.local/bin/omp"
+(
+  export HOME="$STALE_HOME"
+  export STALE_OMP_VERSION_FILE="$TMP/stale-omp-version"
+  export STALE_OMP_UPDATE_LOG="$TMP/stale-omp-update-log"
+  . "$ROOT/install.d/66-omp.sh"
+  install_omp
+)
+[ "$(cat "$TMP/stale-omp-update-log")" = "update" ] || {
+  echo "FAIL: stale omp was not updated for Codex GPT-6 Sol" >&2
+  exit 1
+}
+[ "$(cat "$TMP/stale-omp-version")" = "omp/18.2.11" ] || {
+  echo "FAIL: omp did not reach the required Codex GPT-6 Sol version" >&2
+  exit 1
+}
+
 # Migration removes only links created by the old Dotfiles setup.
 OLD_AGENT="$TMP/old-agent"
 UNMANAGED_AGENT="$TMP/unmanaged-agent"
@@ -181,14 +215,14 @@ printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
   echo "FAIL: harness extension was not linked" >&2
   exit 1
 }
-jq -e '.default == "openai-codex/gpt-5.6-sol" and .smol == "openai/gpt-5.4-mini"' \
+jq -e '.default == "openai-codex/gpt-6-sol" and .smol == "openai/gpt-5.4-mini"' \
   "$OLD_AGENT/fake-model-roles.json" >/dev/null || {
-  echo "FAIL: Codex GPT-5.6 Sol default did not preserve existing model roles" >&2
+  echo "FAIL: Codex GPT-6 Sol default did not preserve existing model roles" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
+jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
   "$OLD_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: enabledModels did not retain Codex GPT-6 Astra and the other selectors" >&2
+  echo "FAIL: enabledModels did not retain the alternate Codex and API selectors" >&2
   exit 1
 }
 jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
@@ -217,14 +251,14 @@ jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
 )
 grep -F 'keep: true' "$UNMANAGED_AGENT/config.yml" >/dev/null
 grep -F 'keep: true' "$UNMANAGED_AGENT/models.yml" >/dev/null
-jq -e '.default == "openai-codex/gpt-5.6-sol"' \
+jq -e '.default == "openai-codex/gpt-6-sol"' \
   "$UNMANAGED_AGENT/fake-model-roles.json" >/dev/null || {
-  echo "FAIL: Codex GPT-5.6 Sol was not selected by default" >&2
+  echo "FAIL: Codex GPT-6 Sol was not selected by default" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-5.6-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
+jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
   "$UNMANAGED_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: model allow-list did not retain Codex GPT-6 Astra and the other selectors" >&2
+  echo "FAIL: model allow-list did not retain the alternate Codex and API selectors" >&2
   exit 1
 }
 [ ! -e "$UNMANAGED_AGENT/fake-disabled-providers.json" ] || {

@@ -42,33 +42,29 @@ around them.
 
 - `agent/extensions/dotfiles-harness.ts` - the ported gates, Herdr title bridge, and Slack notifier.
 - `install.d/66-omp.sh` links these into `~/.omp/agent/`, hides thinking blocks
-  by default, and selects Codex GPT-5.6 Sol via ChatGPT OAuth. Codex GPT-6
-  Astra and GPT-5.6 Terra remain selectable, along with GPT-6 Sol and GPT-5.6
-  Terra/Sol via the OpenAI API. It writes `openai-codex/gpt-5.6-sol` to
-  `modelRoles.default` and all six selectors to `enabledModels`. New sessions
-  use Codex GPT-5.6 Sol after `/login openai-codex`; `OPENAI_API_KEY` enables
-  the selectable API models.
+  by default, and selects Codex GPT-6 Sol via ChatGPT OAuth. Codex GPT-6 Astra
+  and GPT-5.6 Terra/Sol remain selectable, along with GPT-6 Sol and GPT-5.6
+  Terra/Sol via the OpenAI API. It writes `openai-codex/gpt-6-sol` to
+  `modelRoles.default` and all seven selectors to `enabledModels`. New sessions
+  use Codex GPT-6 Sol after `/login openai-codex`; `OPENAI_API_KEY` enables the
+  selectable API models. Omp 18.2.11 or newer is installed because that release
+  enables Codex discovery and requests for GPT-6 Sol.
   The module then runs the Herdr integration, registers RTK (best-effort),
   and syncs the Glean MCP overlay.
 
 ## Changing available models
 
 `omp_default_model`, `omp_codex_astra_model`, `omp_api_gpt6_sol_model`,
-`omp_codex_terra_model`, `omp_api_terra_model`, and `omp_api_sol_model` in
-`install.d/66-omp.sh` are the sources of truth. The installer assigns the
-default role, then generates the ordered `enabledModels` list from all six.
-The E2E test requires the role and allow-list to stay aligned.
+`omp_codex_terra_model`, `omp_codex_gpt56_sol_model`, `omp_api_terra_model`,
+and `omp_api_sol_model` in `install.d/66-omp.sh` are the sources of truth. The
+installer assigns the default role, then generates the ordered `enabledModels`
+list from all seven. The E2E test requires the role and allow-list to stay
+aligned.
 
-This is startup selection, not request-time failover. Codex GPT-5.6 Sol
-requires `/login openai-codex`; OpenAI API models require `OPENAI_API_KEY`.
+This is startup selection, not request-time failover. Codex models require
+`/login openai-codex`; OpenAI API models require `OPENAI_API_KEY`.
 The installer leaves `disabledProviders` untouched to preserve global and
 path-scoped preferences.
-
-OMP 17.4.0 and earlier restores a continued or resumed session's persisted model
-before applying this allow-list, so an old session can retain its prior model.
-These versions can also display other providers in setup and model-management
-UIs. Treat the settings as deterministic new-session preference and fallback,
-not a request retry chain or model-picker security boundary.
 
 ## Comparison with the opencode setup
 
@@ -76,7 +72,7 @@ The opencode integration, mapped to its omp equivalent:
 
 | opencode | omp |
 | --- | --- |
-| Model + agents | `openai-codex/gpt-5.6-sol` via ChatGPT OAuth by default; GPT-6 Astra and GPT-5.6 Terra via Codex OAuth, and GPT-6 Sol and GPT-5.6 Terra/Sol via OpenAI API, remain selectable |
+| Model + agents | `openai-codex/gpt-6-sol` via ChatGPT OAuth by default; GPT-6 Astra and GPT-5.6 Terra/Sol via Codex OAuth, and GPT-6 Sol and GPT-5.6 Terra/Sol via OpenAI API, remain selectable |
 | Auto mode (`--auto` wrapper) | Native `yolo` default |
 | Scope / verify / PR / comment gates | ported in `dotfiles-harness.ts` (same scripts) |
 | Slack attention notifications | ported in `dotfiles-harness.ts` |
