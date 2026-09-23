@@ -24,13 +24,15 @@ Fresh checkout mode keeps Treehouse as the exclusive worktree owner. Shared mode
 
 ## Herdr troubleshooting
 
-`prefix+t` (`Ctrl+G`, then `T`) asks for permission and what went wrong, then opens a `troubleshoot` tab in the originating workspace. It starts in Dotfiles and uses the same OMP/OpenCode selection as `prefix+a`, without Treehouse or the normal task-workspace launcher. `prefix+a` is unchanged.
+`prefix+t` (`Ctrl+G`, then `T`) asks for permission, whether to include the originating session's history, and an optional problem note. It opens a separate `troubleshoot` workspace in the existing Dotfiles checkout and uses the same OMP/OpenCode selection as `prefix+a`, without Treehouse, a new worktree, or an editor split. `prefix+a` is unchanged.
 
-Choose **Diagnose** for read-only investigation, **Fix locally** for scoped repairs without publishing, or **Fix, ship, and sync** to additionally authorize the relevant Dotfiles fix on `main` and this machine's targeted sync. The last confirmed choice appears first but must be selected again. Cancelling either input opens nothing. These are agent instructions, not a security sandbox; disruptive actions still require specific permission.
+Choose **Diagnose** for read-only investigation, **Fix locally** for scoped repairs without publishing, or **Fix, ship, and sync** to additionally authorize the relevant Dotfiles fix on `main` and this machine's targeted sync. The last confirmed choice appears first but must be selected again. These are agent instructions, not a security sandbox; disruptive actions still require specific permission.
+
+**Include current session history** is selected by default. The launcher captures a bounded recent excerpt from the exact OMP or OpenCode session before creating the workspace, with a native source reference for older context. It follows persisted conversation state, excludes structured reasoning and binary attachments, and does not resume the original agent. When native history is unavailable, recent terminal output is attached as clearly labelled partial context. **Start without session history** skips history discovery and capture entirely. With usable context, submit a blank note with `Ctrl+S` to investigate the latest evidenced failure; otherwise a note is required. `Ctrl+C` cancels the note without launching, and cancelling either picker opens nothing.
 
 The launcher passes the original machine, workspace, pane, working directory, and source/installed Dotfiles paths to the [troubleshooting skill](shared-skills/troubleshoot-herdr/SKILL.md). `setup_herdr_config` links the launcher directory at `~/.config/herdr/launchers` to the same checkout as the config, so a stale `DOTFILES_DIR` cannot redirect troubleshooting to an older copy. It also links the skill for agent discovery on both personal and work machines. An existing agent can read the same skill if the shortcut cannot launch.
 
-Problem text lives in private temporary files until the launched agent exits. An unconfirmed submission retains those files and its tab for inspection; do not blindly retry. Mode preferences contain no problem text. Do not include secrets in the problem description.
+Problem text and the context snapshot live in private temporary files until the launched agent exits. An unconfirmed submission retains those files and its workspace for inspection; do not blindly retry. Mode preferences contain no conversation data. History and terminal output are not secret-sanitized: exclude history for sensitive sessions, and do not put secrets in the problem note.
 
 ## Editor (Vim / Neovim)
 

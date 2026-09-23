@@ -17,6 +17,9 @@ SEQUENCES = {
     b"\x1b[115;5u": "submit",
     b"\x1b[115;5:1u": "submit",
     b"\x1b[27;5;115~": "submit",
+    b"\x1b[99;5u": "cancel",
+    b"\x1b[99;5:1u": "cancel",
+    b"\x1b[27;5;99~": "cancel",
     b"\x1b[27u": "skip",
     b"\x1b[27;1u": "skip",
     b"\x1b[A": "up",
@@ -202,6 +205,8 @@ def collect_prompt(input_fd: int, screen) -> tuple[str, int]:
             action = read_escape_sequence(input_fd)
             if action == "submit":
                 return "".join(buffer), 0
+            if action == "cancel":
+                return "", 130
             if action == "skip":
                 return "", 0
             if action == "newline":
