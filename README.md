@@ -141,6 +141,10 @@ On work machines, `install.sh` pins and installs [`gws`](https://github.com/goog
 
 The OAuth client is shared configuration, not a per-machine Cloud project. Supply `GOOGLE_WORKSPACE_CLI_CLIENT_ID` and `GOOGLE_WORKSPACE_CLI_CLIENT_SECRET` through work secrets; Dotfiles syncs only those two Google Workspace values from Ona to Cursor Cloud. Alternatively, place the existing desktop client at `~/.config/gws/client_secret.json`. Never commit that file, `credentials.enc`, `.encryption_key`, or an exported refresh token. The helper rejects access-token and external-credentials-file overrides. Cursor's hybrid port forwarding normally handles the random localhost OAuth callback in a remote environment; if it does not, forward the printed port in the Ports panel before opening the URL.
 
+### Google Cloud CLI
+
+On work machines, `install.sh` installs `gcloud` without authenticating or setting a default project. Sign in with your Vanta account using `gcloud auth login --no-launch-browser` in a private interactive terminal, never through an agent transcript. To inspect Vertex errors, use `gcloud logging read 'severity>=ERROR AND protoPayload.serviceName="aiplatform.googleapis.com"' --project=prod-500617 --freshness=1h --limit=50`; Cloud Logging access requires the appropriate project IAM grant. Keep Google Cloud credentials out of Dotfiles.
+
 ### Vanta data apps
 
 On a work machine, provision [`VantaInc/data-apps`](https://github.com/VantaInc/data-apps) and its no-secret Snowflake profile with:

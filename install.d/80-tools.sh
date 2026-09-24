@@ -69,6 +69,75 @@ install_pup_cli() {
     fi
 }
 
+# Install the Google Cloud CLI for work without configuring credentials.
+install_google_cloud_cli() {
+    if [ "${WORK_MACHINE:-}" != "1" ]; then
+        return 0
+    fi
+
+    if command -v gcloud >/dev/null 2>&1; then
+        echo "Google Cloud CLI already installed"
+        return 0
+    fi
+
+    if [ "$OS" = "macos" ]; then
+        if ! command -v brew >/dev/null 2>&1; then
+            echo "Homebrew is required to install the Google Cloud CLI on macOS" >&2
+            return 1
+        fi
+        brew install --cask google-cloud-sdk
+        return
+    fi
+
+    if [ "$OS" != "linux" ]; then
+        echo "Unsupported OS for Google Cloud CLI: $OS" >&2
+        return 1
+    fi
+
+    case "$(uname -m)" in
+        x86_64|amd64)
+            cloud_arch="x86_64"
+            cloud_sha256="6c774c76793eedd501150b59da653610fbe3eaac169e822965b722de75a2f001"
+            ;;
+        aarch64|arm64)
+            cloud_arch="arm"
+            cloud_sha256="e50ea0141a027d5118d7dd011d2870e706466dc0fc437d95cae86a14e0d871bc"
+            ;;
+        *)
+            echo "Unsupported architecture for Google Cloud CLI: $(uname -m)" >&2
+            return 1
+            ;;
+    esac
+
+    cloud_dir="$HOME/.local/share/google-cloud-sdk"
+    cloud_link="$HOME/.local/bin/gcloud"
+    if [ -x "$cloud_dir/bin/gcloud" ] && [ -L "$cloud_link" ] && [ "$(readlink "$cloud_link")" = "$cloud_dir/bin/gcloud" ]; then
+        echo "Google Cloud CLI already installed at $cloud_link"
+        return 0
+    fi
+    if [ -e "$cloud_dir" ] || { [ -L "$cloud_link" ] && [ "$(readlink "$cloud_link")" != "$cloud_dir/bin/gcloud" ]; } || { [ -e "$cloud_link" ] && [ ! -L "$cloud_link" ]; }; then
+        echo "Refusing to replace an existing Google Cloud CLI installation" >&2
+        return 1
+    fi
+
+    cloud_tmp=$(mktemp -d) || return 1
+    cloud_archive="$cloud_tmp/google-cloud-cli.tar.gz"
+    cloud_url="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-586.0.0-linux-${cloud_arch}.tar.gz"
+    if ! curl -fsSL "$cloud_url" -o "$cloud_archive" ||
+       ! printf '%s  %s\n' "$cloud_sha256" "$cloud_archive" | sha256sum -c - >/dev/null ||
+       ! tar -xzf "$cloud_archive" -C "$cloud_tmp"; then
+        rm -rf "$cloud_tmp"
+        echo "Google Cloud CLI download or checksum verification failed" >&2
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$cloud_dir")" "$(dirname "$cloud_link")"
+    mv "$cloud_tmp/google-cloud-sdk" "$cloud_dir"
+    rm -rf "$cloud_tmp"
+    ln -s "$cloud_dir/bin/gcloud" "$cloud_link"
+    echo "Google Cloud CLI installed at $cloud_link; authenticate in a private terminal"
+}
+
 # Install Gas Town (gt) CLI and its dependencies
 # Installs: libicu-dev, tmux (apt), Dolt (binary), node (if missing), gt (npm)
 # Then initializes gt and Dolt for the workspace if not already done
