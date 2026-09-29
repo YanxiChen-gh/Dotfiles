@@ -64,6 +64,9 @@ case "${1:-}" in
       set:hideThinkingBlock)
         printf '%s\n' "$4" > "$state_dir/fake-hide-thinking"
         ;;
+      set:extendedContext)
+        printf '%s\n' "$4" > "$state_dir/fake-extended-context"
+        ;;
       *) exit 93 ;;
     esac
     ;;
@@ -146,7 +149,7 @@ rm -f "$TMP/home/.local/bin/omp"
   exit 1
 }
 
-# Codex GPT-6 Sol discovery requires omp 18.2.11 or newer.
+# Codex GPT-6.1 Sol discovery requires omp 18.4.4 or newer.
 STALE_HOME="$TMP/stale-home"
 mkdir -p "$STALE_HOME/.local/bin"
 printf '%s\n' 'omp/18.2.9' > "$TMP/stale-omp-version"
@@ -158,7 +161,7 @@ case "${1:-}" in
     ;;
   update)
     printf '%s\n' update > "$STALE_OMP_UPDATE_LOG"
-    printf '%s\n' 'omp/18.2.11' > "$STALE_OMP_VERSION_FILE"
+    printf '%s\n' 'omp/18.4.4' > "$STALE_OMP_VERSION_FILE"
     ;;
   *) exit 1 ;;
 esac
@@ -172,11 +175,11 @@ chmod +x "$STALE_HOME/.local/bin/omp"
   install_omp
 )
 [ "$(cat "$TMP/stale-omp-update-log")" = "update" ] || {
-  echo "FAIL: stale omp was not updated for Codex GPT-6 Sol" >&2
+  echo "FAIL: stale omp was not updated for Codex GPT-6.1 Sol" >&2
   exit 1
 }
-[ "$(cat "$TMP/stale-omp-version")" = "omp/18.2.11" ] || {
-  echo "FAIL: omp did not reach the required Codex GPT-6 Sol version" >&2
+[ "$(cat "$TMP/stale-omp-version")" = "omp/18.4.4" ] || {
+  echo "FAIL: omp did not reach the required Codex GPT-6.1 Sol version" >&2
   exit 1
 }
 
@@ -220,7 +223,7 @@ jq -e '.default == "openai-codex/gpt-6-sol" and .smol == "openai/gpt-5.4-mini"' 
   echo "FAIL: Codex GPT-6 Sol default did not preserve existing model roles" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
+jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6.1-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
   "$OLD_AGENT/fake-enabled-models.json" >/dev/null || {
   echo "FAIL: enabledModels did not retain the alternate Codex and API selectors" >&2
   exit 1
@@ -236,6 +239,10 @@ jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
 }
 [ "$(cat "$OLD_AGENT/fake-hide-thinking")" = "true" ] || {
   echo "FAIL: omp thinking blocks were not hidden by default" >&2
+  exit 1
+}
+[ "$(cat "$OLD_AGENT/fake-extended-context")" = "true" ] || {
+  echo "FAIL: extended context was not enabled for existing omp state" >&2
   exit 1
 }
 
@@ -256,7 +263,7 @@ jq -e '.default == "openai-codex/gpt-6-sol"' \
   echo "FAIL: Codex GPT-6 Sol was not selected by default" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
+jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6.1-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
   "$UNMANAGED_AGENT/fake-enabled-models.json" >/dev/null || {
   echo "FAIL: model allow-list did not retain the alternate Codex and API selectors" >&2
   exit 1
@@ -271,6 +278,10 @@ jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6-astra","openai/gpt-6-s
 }
 [ "$(cat "$UNMANAGED_AGENT/fake-hide-thinking")" = "true" ] || {
   echo "FAIL: omp thinking blocks were not hidden without OPENAI_API_KEY" >&2
+  exit 1
+}
+[ "$(cat "$UNMANAGED_AGENT/fake-extended-context")" = "true" ] || {
+  echo "FAIL: extended context was not enabled without OPENAI_API_KEY" >&2
   exit 1
 }
 

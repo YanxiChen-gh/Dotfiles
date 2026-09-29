@@ -33,7 +33,7 @@ install_omp() {
         esac
     fi
     if [ -x "$omp_binary" ] && omp_version_output=$("$omp_binary" --version 2>/dev/null); then
-        omp_required_version=18.2.11
+        omp_required_version=18.4.4
         omp_reported_version=${omp_version_output#omp/}
         omp_reported_version=${omp_reported_version#omp }
         if version_at_least "$omp_reported_version" "$omp_required_version"; then
@@ -41,7 +41,7 @@ install_omp() {
             return 0
         fi
 
-        echo "Updating omp to $omp_required_version or newer for Codex GPT-6 Sol..."
+        echo "Updating omp to $omp_required_version or newer for Codex GPT-6.1 Sol..."
         if "$omp_binary" update \
             && omp_version_output=$("$omp_binary" --version 2>/dev/null); then
             omp_reported_version=${omp_version_output#omp/}
@@ -51,7 +51,7 @@ install_omp() {
                 return 0
             fi
         fi
-        echo "⚠️  Warning: omp $omp_required_version or newer is required for Codex GPT-6 Sol"
+        echo "⚠️  Warning: omp $omp_required_version or newer is required for Codex GPT-6.1 Sol"
         return 1
     fi
 
@@ -102,6 +102,7 @@ configure_omp_defaults() {
     fi
 
     omp_default_model="openai-codex/gpt-6-sol"
+    omp_codex_gpt61_sol_model="openai-codex/gpt-6.1-sol"
     omp_codex_astra_model="openai-codex/gpt-6-astra"
     omp_api_gpt6_sol_model="openai/gpt-6-sol"
     omp_codex_terra_model="openai-codex/gpt-5.6-terra"
@@ -111,6 +112,8 @@ configure_omp_defaults() {
 
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set hideThinkingBlock true >/dev/null) || return 1
+    (cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config set extendedContext true >/dev/null) || return 1
 
     model_roles=$(cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config get modelRoles 2>/dev/null) || {
@@ -127,13 +130,14 @@ configure_omp_defaults() {
 
     enabled_models=$(jq -cn \
         --arg default_model "$omp_default_model" \
+        --arg codex_gpt61_sol_model "$omp_codex_gpt61_sol_model" \
         --arg codex_astra_model "$omp_codex_astra_model" \
         --arg api_gpt6_sol_model "$omp_api_gpt6_sol_model" \
         --arg codex_terra_model "$omp_codex_terra_model" \
         --arg codex_gpt56_sol_model "$omp_codex_gpt56_sol_model" \
         --arg api_terra_model "$omp_api_terra_model" \
         --arg api_sol_model "$omp_api_sol_model" \
-        '[$default_model, $codex_astra_model, $api_gpt6_sol_model, $codex_terra_model, $codex_gpt56_sol_model, $api_terra_model, $api_sol_model]') || {
+        '[$default_model, $codex_gpt61_sol_model, $codex_astra_model, $api_gpt6_sol_model, $codex_terra_model, $codex_gpt56_sol_model, $api_terra_model, $api_sol_model]') || {
         echo "⚠️  Warning: could not configure the omp model allow-list"
         return 1
     }
