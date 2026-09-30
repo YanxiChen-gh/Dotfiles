@@ -138,4 +138,13 @@ if [[ -n "$HEALTH_DIR" ]]; then
     trap - EXIT
 fi
 
-exec "$EXPOSE_SCRIPT" "$URL_PORT" "$URL_PATH"
+REVIEW_URL="$("$EXPOSE_SCRIPT" "$URL_PORT" "$URL_PATH")"
+printf '%s\n' "$REVIEW_URL"
+
+if [[ "${HERDR_ENV:-}" == 1 ]]; then
+    if ! "${HERDR_BIN_PATH:-herdr}" notification show "Lavish review ready" \
+        --body "${HTML_FILE##*/}${HERDR_PANE_ID:+ ($HERDR_PANE_ID)}: $REVIEW_URL" \
+        --sound request >/dev/null 2>&1; then
+        printf '%s\n' 'open-lavish: Herdr readiness notification failed; the review URL is available above.' >&2
+    fi
+fi

@@ -61,6 +61,7 @@ cat >"$TMP/fake-expose" <<'EOF'
 #!/bin/sh
 printf '%s %s\n' "$1" "$2" >>"$FAKE_EXPOSE_LOG"
 printf 'http://127.0.0.1:%s%s\n' "$1" "$2"
+[ "${FAKE_EXPOSE_FAIL:-0}" = 0 ]
 EOF
 
 chmod +x "$TMP/bin/npx" "$TMP/bin/curl" "$TMP/fake-expose"
@@ -69,6 +70,8 @@ FAKE_NPX_LOG="$TMP/npx.log"
 FAKE_EXPOSE_LOG="$TMP/expose.log"
 FAKE_SERVER_STATE="$TMP/server.state"
 export PATH FAKE_NPX_LOG FAKE_EXPOSE_LOG FAKE_SERVER_STATE
+HERDR_ENV=0
+export HERDR_ENV
 
 run_open() {
     IS_ON_ONA=true \
@@ -106,6 +109,30 @@ printf '%s\n' absent >"$FAKE_SERVER_STATE"
 output=$(IS_ON_ONA='' LAVISH_AXI_PORT=4387 LAVISH_AXI_STATE_DIR="$TMP/shared-state" OPEN_LAVISH_EXPOSE_SCRIPT="$TMP/fake-expose" "$SCRIPT" /tmp/plan.html 2>"$TMP/local.err")
 [ "$output" = 'http://127.0.0.1:4387/session/0123456789abcdef?no-gate=1' ] || fail "local URL mismatch"
 grep -q "$(printf '^\t\t\t\t4387\t%s\t/tmp/plan.html$' "$TMP/shared-state")" "$FAKE_NPX_LOG" || fail "local opening set remote loopback environment"
+
+cat >"$TMP/bin/herdr" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >>"$FAKE_HERDR_LOG"
+exit "${FAKE_HERDR_EXIT:-0}"
+EOF
+chmod +x "$TMP/bin/herdr"
+FAKE_HERDR_LOG="$TMP/herdr.log"
+export FAKE_HERDR_LOG
+: >"$FAKE_HERDR_LOG"
+output=$(HERDR_ENV=1 HERDR_BIN_PATH="$TMP/bin/herdr" HERDR_PANE_ID=w1:p1 run_open 2>"$TMP/ready.err")
+[ "$output" = 'http://127.0.0.1:4387/session/0123456789abcdef?no-gate=1' ] || fail "notification changed the review URL"
+[ "$(cat "$FAKE_HERDR_LOG")" = "notification show Lavish review ready --body plan.html (w1:p1): $output --sound request" ] || fail "ready notification did not identify the review and its URL"
+
+output=$(HERDR_ENV=1 HERDR_BIN_PATH="$TMP/bin/herdr" FAKE_HERDR_EXIT=1 run_open 2>"$TMP/notify-failed.err")
+[ "$output" = 'http://127.0.0.1:4387/session/0123456789abcdef?no-gate=1' ] || fail "notification failure lost the usable review URL"
+grep -q 'readiness notification failed' "$TMP/notify-failed.err" || fail "notification failure was silent"
+
+: >"$FAKE_HERDR_LOG"
+if HERDR_ENV=1 HERDR_BIN_PATH="$TMP/bin/herdr" FAKE_EXPOSE_FAIL=1 run_open >"$TMP/expose-failed.out" 2>"$TMP/expose-failed.err"; then
+    fail "unverified review should not be ready"
+fi
+[ ! -s "$FAKE_HERDR_LOG" ] || fail "failed URL verification emitted a ready notification"
+[ ! -s "$TMP/expose-failed.out" ] || fail "failed URL verification returned a review URL"
 mkdir -p "$TMP/worktree-a/.lavish" "$TMP/worktree-b/.lavish"
 : >"$TMP/worktree-a/.lavish/review-a.html"
 : >"$TMP/worktree-a/.lavish/review-b.html"

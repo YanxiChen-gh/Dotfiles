@@ -98,6 +98,13 @@ Lavish review is active, the harness blocks `ask` for that OMP session so the
 managed poll remains the only approval channel. Explicit end, Send & End, or
 process shutdown clears the guard; normal turn settlement does not.
 
+The opener emits a Herdr review-ready notification with the verified URL and a
+request sound. OMP also shows an in-app readiness notice. The harness reminds the
+model to share the returned URL in chat with a natural review handoff before it
+waits; it does not enforce a message template or notify on every poll. Failed
+URL verification does not announce readiness, and notification failure does not
+discard a usable URL.
+
 On work machines, `auth-vanta-agents` reports OMP Glean and `slack-vanta`
 status without reading credential payloads. Run it yourself in a private
 terminal to repair missing auth; agents may run only `auth-vanta-agents --status`.

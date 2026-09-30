@@ -90,6 +90,7 @@ const invokesLavish = (command: string) => /\b(?:lavish-axi(?:-safe)?|open-lavis
 const lavishPollGuidance =
   "Lavish feedback mode is `managed-async` in an interactive omp TUI. " +
   "Open the review with `open-lavish <file>`, then run each `lavish-axi-safe poll <file>` as one managed Bash job with `async: true`. " +
+  "Always share the URL returned by the opener in a brief user-facing message before waiting for feedback; say what is ready and what input would help. " +
   "When feedback is delivered, process it and start the next async poll. While the review is active, never use `ask`, an approval popup, Hub, or a detached shell."
 
 const shellCommand = (input: Record<string, unknown>): string => {
@@ -226,6 +227,15 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
         event.content.some((item) => item.type === "text" && /\bstatus:\s*ended\b/.test(item.text))
       if (opened) activeLavishSessions.add(sessionId)
       if (/\blavish-axi(?:-safe)?\s+end\b/.test(command) || pollEnded) activeLavishSessions.delete(sessionId)
+      if (opened) {
+        if (ctx.mode === "tui") ctx.ui.notify("Lavish review ready - feedback is available in the review page.", "info")
+        return {
+          content: [
+            ...event.content,
+            { type: "text", text: "Share the returned review URL with the user now, with a brief handoff explaining what to review. Then use the managed async feedback poll." },
+          ],
+        }
+      }
     }
 
     if (!editTools.has(tool)) return
