@@ -112,6 +112,14 @@ details in mind when troubleshooting:
 2. Global rules are linked at `~/.omp/agent/APPEND_SYSTEM.md`.
 3. Run `herdr integration status` after Herdr upgrades and confirm `omp: current`.
 
+PR-readiness handoffs follow the shared
+[verification and handoff rule](../agent-rules/verification-and-handoff.md):
+announce a successful PR push before readiness, then use the existing `babysit-pr`
+workflow through finite managed async polling rounds. OMP can yield the progress
+response and resume when a job result arrives. Keep the session open until the
+readiness or blocker update; this is session-owned monitoring, not a durable daemon.
+Push-only requests do not start babysitting, and monitoring does not expand permissions.
+
 Canary takeover is intentionally not ported - it is coupled to the checkpoint flow
 and maturity-data sync. Add it once the trial proves the rest is worth keeping.
 
