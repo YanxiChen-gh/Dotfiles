@@ -1,5 +1,5 @@
 #!/bin/sh
-# E2E: omp installs standalone and configures Codex GPT-6 Sol as the default.
+# E2E: omp installs standalone and configures Codex GPT-6.1 Sol with the full model catalog.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -55,8 +55,8 @@ case "${1:-}" in
       set:disabledProviders)
         printf '%s\n' "$4" > "$state_dir/fake-disabled-providers.json"
         ;;
-      set:enabledModels)
-        printf '%s\n' "$4" > "$state_dir/fake-enabled-models.json"
+      reset:enabledModels)
+        rm -f "$state_dir/fake-enabled-models.json"
         ;;
       set:setupVersion)
         printf '%s\n' "$4" > "$state_dir/fake-setup-version"
@@ -218,14 +218,13 @@ printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
   echo "FAIL: harness extension was not linked" >&2
   exit 1
 }
-jq -e '.default == "openai-codex/gpt-6-sol" and .smol == "openai/gpt-5.4-mini"' \
+jq -e '.default == "openai-codex/gpt-6.1-sol" and .smol == "openai/gpt-5.4-mini"' \
   "$OLD_AGENT/fake-model-roles.json" >/dev/null || {
-  echo "FAIL: Codex GPT-6 Sol default did not preserve existing model roles" >&2
+  echo "FAIL: Codex GPT-6.1 Sol default did not preserve existing model roles" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6.1-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
-  "$OLD_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: enabledModels did not retain the alternate Codex and API selectors" >&2
+[ ! -e "$OLD_AGENT/fake-enabled-models.json" ] || {
+  echo "FAIL: existing model allow-list was not removed" >&2
   exit 1
 }
 jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
@@ -258,14 +257,13 @@ jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
 )
 grep -F 'keep: true' "$UNMANAGED_AGENT/config.yml" >/dev/null
 grep -F 'keep: true' "$UNMANAGED_AGENT/models.yml" >/dev/null
-jq -e '.default == "openai-codex/gpt-6-sol"' \
+jq -e '.default == "openai-codex/gpt-6.1-sol"' \
   "$UNMANAGED_AGENT/fake-model-roles.json" >/dev/null || {
-  echo "FAIL: Codex GPT-6 Sol was not selected by default" >&2
+  echo "FAIL: Codex GPT-6.1 Sol was not selected by default" >&2
   exit 1
 }
-jq -e '. == ["openai-codex/gpt-6-sol","openai-codex/gpt-6.1-sol","openai-codex/gpt-6-astra","openai/gpt-6-sol","openai-codex/gpt-5.6-terra","openai-codex/gpt-5.6-sol","openai/gpt-5.6-terra","openai/gpt-5.6-sol"]' \
-  "$UNMANAGED_AGENT/fake-enabled-models.json" >/dev/null || {
-  echo "FAIL: model allow-list did not retain the alternate Codex and API selectors" >&2
+[ ! -e "$UNMANAGED_AGENT/fake-enabled-models.json" ] || {
+  echo "FAIL: new omp state has a model allow-list" >&2
   exit 1
 }
 [ ! -e "$UNMANAGED_AGENT/fake-disabled-providers.json" ] || {
