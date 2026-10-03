@@ -49,6 +49,19 @@ case "${1:-}" in
           printf '%s\n' '[]'
         fi
         ;;
+      get:edit.modelVariants)
+        if [ -f "$state_dir/fake-edit-variants.json" ]; then
+          cat "$state_dir/fake-edit-variants.json"
+        else
+          printf '%s\n' '{}'
+        fi
+        ;;
+      set:edit.modelVariants)
+        printf '%s\n' "$4" > "$state_dir/fake-edit-variants.json"
+        ;;
+      set:providers.openai-codex.codeMode)
+        printf '%s\n' "$4" > "$state_dir/fake-code-mode"
+        ;;
       set:modelRoles)
         printf '%s\n' "$4" > "$state_dir/fake-model-roles.json"
         ;;
@@ -193,6 +206,8 @@ printf 'restored: true\n' > "$OLD_AGENT/config.yml.pre-dotfiles"
 printf '%s\n' '{"smol":"openai/gpt-5.4-mini"}' > "$OLD_AGENT/fake-model-roles.json"
 printf '%s\n' '["anthropic",{"path":"/work","providers":["google"]}]' > "$OLD_AGENT/fake-disabled-providers.json"
 printf '%s\n' '["anthropic/*"]' > "$OLD_AGENT/fake-enabled-models.json"
+printf '%s\n' '{"gpt-6.1-sol":"replace","anthropic/":"replace","openai/":"hashline","openai-codex/":"patch"}' \
+  > "$OLD_AGENT/fake-edit-variants.json"
 printf 'keep: true\n' > "$UNMANAGED_AGENT/config.yml"
 printf 'keep: true\n' > "$UNMANAGED_AGENT/models.yml"
 
@@ -244,6 +259,30 @@ jq -e '. == ["anthropic",{"path":"/work","providers":["google"]}]' \
   echo "FAIL: extended context was not enabled for existing omp state" >&2
   exit 1
 }
+jq -e '
+  keys_unsorted[0:2] == ["openai/", "openai-codex/"]
+  and .["openai/"] == "apply_patch"
+  and .["openai-codex/"] == "apply_patch"
+  and .["gpt-6.1-sol"] == "replace"
+  and .["anthropic/"] == "replace"
+' "$OLD_AGENT/fake-edit-variants.json" >/dev/null || {
+  echo "FAIL: provider-wide patches did not take precedence while preserving user variants" >&2
+  exit 1
+}
+
+(
+  export HOME="$TMP/home"
+  export PI_CODING_AGENT_DIR="$OLD_AGENT"
+  . "$ROOT/install.d/66-omp.sh"
+  configure_omp_defaults
+)
+jq -e '
+  keys_unsorted == ["openai/", "openai-codex/", "gpt-6.1-sol", "anthropic/"]
+  and .["anthropic/"] == "replace"
+' "$OLD_AGENT/fake-edit-variants.json" >/dev/null || {
+  echo "FAIL: repeated setup changed user variants or provider precedence" >&2
+  exit 1
+}
 
 (
   export HOME="$TMP/home"
@@ -280,6 +319,11 @@ jq -e '.default == "openai-codex/gpt-6.1-sol"' \
 }
 [ "$(cat "$UNMANAGED_AGENT/fake-extended-context")" = "true" ] || {
   echo "FAIL: extended context was not enabled without OPENAI_API_KEY" >&2
+  exit 1
+}
+jq -e '. == {"openai/":"apply_patch","openai-codex/":"apply_patch"}' \
+  "$UNMANAGED_AGENT/fake-edit-variants.json" >/dev/null || {
+  echo "FAIL: fresh setup did not configure both OpenAI edit providers" >&2
   exit 1
 }
 

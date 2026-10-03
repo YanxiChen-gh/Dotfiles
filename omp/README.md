@@ -56,12 +56,27 @@ around them.
 
 ## Available models
 
-Omp discovers its model catalog natively. The installer sets only
+Omp discovers its model catalog natively. For model selection, the installer sets
 `modelRoles.default` and clears a previous `enabledModels` restriction; it does
 not maintain a separate model list. Codex models require `/login openai-codex`;
 OpenAI API models require `OPENAI_API_KEY`. This is startup selection, not
 request-time failover. The installer leaves `disabledProviders` untouched to
 preserve global and path-scoped preferences.
+
+## OpenAI harness defaults
+
+The installer selects `apply_patch` for every `openai/` and `openai-codex/`
+model. It prepends those provider patterns to `edit.modelVariants` because OMP
+uses the first matching substring, preserving the other stored mappings and
+the global edit mode for other providers.
+
+`providers.openai-codex.codeMode` is set to `auto`. Models advertising
+`code_mode_only` route most tool calls through Eval; other Codex models retain
+direct tools. This setting does not activate Code Mode for the `openai` API
+provider. The underlying OMP tools remain available through the Eval bridge.
+
+Run `configure_omp_defaults` from `install.d/66-omp.sh` to sync only these OMP
+defaults without rerunning the full installer. Start a new session after syncing.
 
 ## Comparison with the opencode setup
 

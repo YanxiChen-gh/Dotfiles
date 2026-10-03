@@ -108,6 +108,21 @@ configure_omp_defaults() {
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set extendedContext true >/dev/null) || return 1
 
+    edit_variants=$(cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config get edit.modelVariants 2>/dev/null) || {
+        echo "Warning: could not read omp edit variants"
+        return 1
+    }
+    updated_variants=$(printf '%s' "$edit_variants" \
+        | jq -c '{"openai/":"apply_patch","openai-codex/":"apply_patch"} + del(.["openai/"], .["openai-codex/"])') || {
+        echo "Warning: could not update omp edit variants"
+        return 1
+    }
+    (cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config set edit.modelVariants "$updated_variants" >/dev/null) || return 1
+    (cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config set providers.openai-codex.codeMode auto >/dev/null) || return 1
+
     model_roles=$(cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config get modelRoles 2>/dev/null) || {
         echo "⚠️  Warning: could not read omp model roles"
