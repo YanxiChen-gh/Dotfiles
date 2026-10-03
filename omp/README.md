@@ -119,6 +119,14 @@ details in mind when troubleshooting:
 2. Global rules are linked at `~/.omp/agent/APPEND_SYSTEM.md`.
 3. Run `herdr integration status` after Herdr upgrades and confirm `omp: current`.
 
+Herdr owns completion toasts for root OMP sessions with a Herdr pane and socket.
+The harness overrides `completion.notify` to `off` in memory so OMP's
+session-title / `Complete` toast does not duplicate Herdr's `OMP finished` toast.
+Standalone and nested OMP sessions retain their configured completion policy.
+Ask/error notifications and Slack notifications are unchanged, and the override
+does not write global or project configuration. Reload the harness or start a new
+OMP session to apply extension changes.
+
 PR-readiness handoffs follow the shared
 [verification and handoff rule](../agent-rules/verification-and-handoff.md):
 announce a successful PR push before readiness, then use the existing `babysit-pr`

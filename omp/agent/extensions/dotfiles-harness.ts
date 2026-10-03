@@ -101,6 +101,20 @@ const shellCommand = (input: Record<string, unknown>): string => {
 }
 
 export default async function dotfilesHarness(pi: ExtensionAPI) {
+  if (
+    Bun.env.HERDR_ENV === "1" &&
+    Bun.env.HERDR_SOCKET_PATH &&
+    Bun.env.HERDR_PANE_ID &&
+    Bun.env.OMPCODE !== "1"
+  ) {
+    // Herdr's lifecycle integration owns root completion toasts; keep standalone OMP unchanged.
+    // OMP supplies this module; plain Bun fixture runners cannot resolve it.
+    const { lookup } = await import("@oh-my-pi/pi-coding-agent/config/registry")
+    const completionNotify = lookup("completion.notify")
+    if (!completionNotify) throw new Error("OMP completion.notify setting is unavailable")
+    completionNotify.override(pi.pi.settings, "off")
+  }
+
   const source = await realpath(fileURLToPath(import.meta.url))
   // .../omp/agent/extensions/dotfiles-harness.ts -> extensions -> agent -> omp -> dotfiles
   const dotfiles = dirname(dirname(dirname(dirname(source))))
