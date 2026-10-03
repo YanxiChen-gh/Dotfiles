@@ -20,6 +20,8 @@ The relay trusts the remote account: while attached, a process on that account c
 
 `prefix+a` opens a repository-first task-workspace picker with a stable inventory independent of the invoking checkout. `HERDR_REPO_HOME` sets the canonical repo home; Ona and Cursor Cloud default to `/workspaces`, while other environments default to `$HOME/workspaces`. The picker lists the current repository first, then direct child Git repositories under that home, followed by direct children under optional colon-delimited `HERDR_REPO_ROOTS` migration roots. Linked and Treehouse worktrees collapse into their canonical primary repository entry. `Open local path...` accepts any existing Git checkout, while `Clone GitHub repository...` creates the canonical home if needed, clones there by default, and continues through the same checkout setup.
 
+In the option lists, **Left** (or **Alt+Left**) returns to the previous selection; at the repository list it stays there. Repository-path and GitHub-repository text fields use **Alt+Left** for back, leaving Left available for cursor movement. **Esc** cancels setup. Back navigation is available through the editor choice, before the initial-prompt screen.
+
 Fresh checkout mode keeps Treehouse as the exclusive worktree owner. Shared mode can use a selected repository's primary checkout or the current unmanaged linked checkout. A Treehouse-managed current checkout cannot back a second workspace; use `prefix+c` for another tab in its owning workspace. `prefix+shift+a` remains the no-picker shortcut for a fresh current-repository worktree with an agent and nvim.
 
 ## Herdr troubleshooting

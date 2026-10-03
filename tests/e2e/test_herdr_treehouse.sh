@@ -245,6 +245,31 @@ PY
 
 cat > "$HOME_DIR/.local/bin/fzf" <<'EOF'
 #!/bin/sh
+if [ -n "${FAKE_FZF_ACTIONS:-}" ]; then
+  count=0
+  [ ! -f "$FAKE_FZF_ACTIONS/count" ] || count=$(cat "$FAKE_FZF_ACTIONS/count")
+  count=$((count + 1))
+  printf '%s\n' "$count" > "$FAKE_FZF_ACTIONS/count"
+  IFS='|' read -r expected key selection < "$FAKE_FZF_ACTIONS/$count" || exit 1
+  case "$*" in *"$expected > "*) ;; *) exit 1 ;; esac
+  input=$(cat)
+  printf '%s\n' "$input" >> "$FAKE_FZF_INPUT_LOG"
+  [ "$key" != cancel ] || exit 1
+  case "$*" in
+    *--print-query*) printf '%s\n%s\n\n' "$selection" "$key" ;;
+    *)
+      if [ -z "$key" ]; then
+        printf '%s\n' "$input" | grep -Fx -- "$selection" >/dev/null || exit 1
+      fi
+      printf '%s\n%s\n' "$key" "$selection"
+      ;;
+  esac
+  exit 0
+fi
+case "$*" in
+  *--print-query*) ;;
+  *) printf '\n' ;;
+esac
 case "$*" in
   *"Repository > "*)
     if [ -n "${FAKE_FZF_STARTED:-}" ]; then
@@ -268,10 +293,10 @@ case "$*" in
     printf '%s\n' "$selection"
     ;;
   *"Repository path > "*)
-    printf '%s\n' "${FAKE_FZF_REPOSITORY_PATH:-}"
+    printf '%s\n\n\n' "${FAKE_FZF_REPOSITORY_PATH:-}"
     ;;
   *"GitHub repository > "*)
-    printf '%s\n' "${FAKE_FZF_GITHUB_REPOSITORY:-}"
+    printf '%s\n\n\n' "${FAKE_FZF_GITHUB_REPOSITORY:-}"
     ;;
   *"Repo home > "*)
     input=$(cat)
@@ -1157,6 +1182,72 @@ rm -f "$WORKSPACE_OPEN"
 wait_for_exit "$dirty_pid"
 assert_log "notification show Task workspace preserved --body Uncommitted changes remain at $ACQUIRED" "$HERDR_LOG"
 rm -f "$ACQUIRED/uncommitted.txt"
+
+reset_state
+actions="$TMP/back-actions"
+mkdir -p "$actions"
+count=0
+while IFS= read -r action; do
+  count=$((count + 1))
+  printf '%s\n' "$action" > "$actions/$count"
+done <<EOF
+Repository||+ Clone GitHub repository...	__clone__
+GitHub repository||VantaInc/cloned-repo
+Repo home||$CLONE_ROOT	$CLONE_ROOT
+Checkout|left|
+Repo home|left|
+GitHub repository|alt-left|
+Repository||repo [current]  $MAIN	$MAIN
+Checkout||Current checkout
+Primary pane||Shell
+Editor|left|
+Primary pane|left|
+Checkout|left|
+Repository||other  $OTHER	$OTHER
+Checkout||Primary checkout
+Primary pane||Shell
+Editor||No editor
+EOF
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$TMP" HERDR_REPO_ROOTS="$CLONE_ROOT" \
+FAKE_FZF_ACTIONS="$actions" \
+  "$LAUNCHER" --select
+[ "$(cat "$actions/count")" -eq "$count" ] || fail "back navigation skipped a selection"
+wait_for_log "workspace create --cwd $OTHER --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1" "$HERDR_LOG"
+assert_not_log "repo clone" "$GH_LOG"
+assert_not_log "treehouse get" "$TREEHOUSE_LOG"
+
+reset_state
+actions="$TMP/back-single-home-actions"
+mkdir -p "$actions"
+count=0
+while IFS= read -r action; do
+  count=$((count + 1))
+  printf '%s\n' "$action" > "$actions/$count"
+done <<EOF
+Repository|left|
+Repository||+ Open local path...	__open__
+Repository path||$OTHER
+Checkout|left|
+Repository path|alt-left|
+Repository||+ Clone GitHub repository...	__clone__
+GitHub repository||VantaInc/cloned-repo
+Checkout|left|
+GitHub repository|alt-left|
+Repository|cancel|
+EOF
+HOME="$HOME_DIR" \
+HERDR_BIN_PATH="$TMP/herdr" \
+HERDR_ACTIVE_PANE_CWD="$LINKED" \
+HERDR_REPO_HOME="$TMP" HERDR_REPO_ROOTS="" \
+FAKE_FZF_ACTIONS="$actions" \
+  "$LAUNCHER" --select
+[ "$(cat "$actions/count")" -eq "$count" ] || fail "back navigation visited an automatic repo home"
+[ ! -s "$HERDR_LOG" ] || fail "back then cancel launched a workspace"
+[ ! -s "$TREEHOUSE_LOG" ] || fail "back then cancel launched Treehouse"
+[ ! -s "$GH_LOG" ] || fail "back then cancel cloned a repository"
 
 # Cancelling the selector still creates nothing.
 reset_state

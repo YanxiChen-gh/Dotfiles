@@ -170,10 +170,20 @@ if [ "$select_setup" = false ] && [ -n "$initial_prompt_file" ]; then
 fi
 
 
+pick_option() {
+  local result
+  result=$(fzf --expect=left,alt-left --header="Left: back | Esc: cancel" "$@") \
+    || return $?
+  case "${result%%$'\n'*}" in
+    left|alt-left) return 10 ;;
+  esac
+  printf '%s\n' "${result#*$'\n'}"
+}
+
 choose() {
   prompt="$1"
   shift
-  printf '%s\n' "$@" | fzf \
+  printf '%s\n' "$@" | pick_option \
     --height=100% \
     --layout=reverse \
     --border \
@@ -182,7 +192,7 @@ choose() {
 }
 
 input_value() {
-  local prompt result
+  local prompt result query
   prompt="$1"
   result=$(printf '\n' | fzf \
     --height=100% \
@@ -191,10 +201,14 @@ input_value() {
     --no-multi \
     --disabled \
     --print-query \
-    --prompt="$prompt > ") || return 1
-  result=${result%%$'\n'*}
-  [ -n "$result" ] || return 1
-  printf '%s\n' "$result"
+    --expect=alt-left \
+    --header="Alt+Left: back | Esc: cancel" \
+    --prompt="$prompt > ") || return $?
+  query=${result%%$'\n'*}
+  result=${result#*$'\n'}
+  [ "${result%%$'\n'*}" != "alt-left" ] || return 10
+  [ -n "$query" ] || return 1
+  printf '%s\n' "$query"
 }
 
 repository_ids=()
@@ -289,7 +303,7 @@ discover_repositories() {
 
 choose_repository() {
   local selection
-  selection=$(fzf \
+  selection=$(pick_option \
     --height=100% \
     --layout=reverse \
     --border \
@@ -297,7 +311,7 @@ choose_repository() {
     --delimiter=$'\t' \
     --with-nth=1 \
     --prompt="Repository > " \
-    < <(discover_repositories)) || return 1
+    < <(discover_repositories)) || return $?
   printf '%s\n' "${selection#*$'\t'}"
 }
 
@@ -307,14 +321,14 @@ choose_repo_home() {
     printf '%s\n' "${repo_homes[0]}"
     return 0
   fi
-  selection=$(printf '%s\n' "${repo_home_options[@]}" | fzf \
+  selection=$(printf '%s\n' "${repo_home_options[@]}" | pick_option \
     --height=100% \
     --layout=reverse \
     --border \
     --no-multi \
     --delimiter=$'\t' \
     --with-nth=1 \
-    --prompt="Repo home > ") || return 1
+    --prompt="Repo home > ") || return $?
   printf '%s\n' "${selection#*$'\t'}"
 }
 
@@ -332,44 +346,92 @@ if [ "$select_setup" = true ]; then
   fi
 
 
-  repository=$(choose_repository) || exit 0
-  current_worktree=$(resolve_worktree "$src_cwd") \
-    || die "Not a git repo: $src_cwd - open a task workspace from a repo workspace."
-  current_primary=$(resolve_primary_checkout "$current_worktree") \
-    || die "could not resolve primary checkout"
-  current_repository_id=$(resolve_repository_id "$current_worktree") \
-    || die "could not resolve repository identity"
-  case "$repository" in
-    "__open__")
-      repository=$(input_value "Repository path") || exit 0
-      requested_repo_root=$(resolve_primary_checkout "$repository") \
-        || die "Not a git repo: $repository"
-      ;;
-    "__clone__")
-      clone_repository=$(input_value "GitHub repository") || exit 0
-      clone_root=$(choose_repo_home) || exit 0
-      ;;
-    *)
-      requested_repo_root=$(resolve_primary_checkout "$repository") \
-        || die "Not a git repo: $repository"
-      ;;
-  esac
-  if [ -n "$requested_repo_root" ]; then
-    selected_repository_id=$(resolve_repository_id "$requested_repo_root") \
-      || die "could not resolve selected repository identity"
-  else
-    selected_repository_id=""
-  fi
-
-  checkout_options=("Fresh Treehouse worktree" "Primary checkout")
-  if [ -n "$selected_repository_id" ] \
-    && [ "$selected_repository_id" = "$current_repository_id" ] \
-    && [ "$current_worktree" != "$current_primary" ]; then
-    checkout_options+=("Current checkout")
-  fi
-  checkout=$(choose "Checkout" "${checkout_options[@]}") || exit 0
-  primary=$(choose "Primary pane" "$agent_cmd" "Shell") || exit 0
-  editor=$(choose "Editor" "No editor" "nvim right split") || exit 0
+  step=repository
+  selection_history=()
+  while true; do
+    selection_status=0
+    next_step=""
+    case "$step" in
+      repository)
+        repository=$(choose_repository) || selection_status=$?
+        if [ "$selection_status" -eq 0 ]; then
+          requested_repo_root=""
+          clone_repository=""
+          clone_root=""
+          case "$repository" in
+            "__open__") next_step=repository_path ;;
+            "__clone__") next_step=github_repository ;;
+            *)
+              requested_repo_root=$(resolve_primary_checkout "$repository") \
+                || die "Not a git repo: $repository"
+              next_step=checkout
+              ;;
+          esac
+        fi
+        ;;
+      repository_path)
+        repository=$(input_value "Repository path") || selection_status=$?
+        if [ "$selection_status" -eq 0 ]; then
+          requested_repo_root=$(resolve_primary_checkout "$repository") \
+            || die "Not a git repo: $repository"
+          next_step=checkout
+        fi
+        ;;
+      github_repository)
+        clone_repository=$(input_value "GitHub repository") || selection_status=$?
+        if [ "${#repo_homes[@]}" -eq 1 ]; then
+          clone_root="${repo_homes[0]}"
+          next_step=checkout
+        else
+          next_step=repo_home
+        fi
+        ;;
+      repo_home)
+        clone_root=$(choose_repo_home) || selection_status=$?
+        next_step=checkout
+        ;;
+      checkout)
+        current_worktree=$(resolve_worktree "$src_cwd") \
+          || die "Not a git repo: $src_cwd - open a task workspace from a repo workspace."
+        current_primary=$(resolve_primary_checkout "$current_worktree") \
+          || die "could not resolve primary checkout"
+        current_repository_id=$(resolve_repository_id "$current_worktree") \
+          || die "could not resolve repository identity"
+        selected_repository_id=""
+        if [ -n "$requested_repo_root" ]; then
+          selected_repository_id=$(resolve_repository_id "$requested_repo_root") \
+            || die "could not resolve selected repository identity"
+        fi
+        checkout_options=("Fresh Treehouse worktree" "Primary checkout")
+        if [ -n "$selected_repository_id" ] \
+          && [ "$selected_repository_id" = "$current_repository_id" ] \
+          && [ "$current_worktree" != "$current_primary" ]; then
+          checkout_options+=("Current checkout")
+        fi
+        checkout=$(choose "Checkout" "${checkout_options[@]}") || selection_status=$?
+        next_step=primary
+        ;;
+      primary)
+        primary=$(choose "Primary pane" "$agent_cmd" "Shell") || selection_status=$?
+        next_step=editor
+        ;;
+      editor)
+        editor=$(choose "Editor" "No editor" "nvim right split") || selection_status=$?
+        ;;
+    esac
+    if [ "$selection_status" -eq 10 ]; then
+      if [ "${#selection_history[@]}" -gt 0 ]; then
+        last_step=$((${#selection_history[@]} - 1))
+        step="${selection_history[$last_step]}"
+        unset 'selection_history[last_step]'
+      fi
+      continue
+    fi
+    [ "$selection_status" -eq 0 ] || exit 0
+    [ -n "$next_step" ] || break
+    selection_history+=("$step")
+    step="$next_step"
+  done
 
   case "$checkout" in
     "Fresh Treehouse worktree") with_worktree=true ;;
