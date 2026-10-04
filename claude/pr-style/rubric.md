@@ -9,7 +9,8 @@ Historical [examples](../pr-examples.md) are manual calibration references, not 
 
 - **Authoring:** evaluate the PR description and testing section against guide sections 3 and 5.
 - **Simplify:** evaluate proposed edits against the applicable guide sections and the input.
-  Preserve compliant text, necessary rationale, real behavior protection, and verification evidence.
+  Preserve only necessary reader-facing meaning and evidence under the shared standard; removal
+  of unnecessary claims or private iteration history is not overreach.
 - **Review:** evaluate feedback against the review-voice guide. Use the PR standard to assess
   substantive style findings when the underlying patch or description is available.
 

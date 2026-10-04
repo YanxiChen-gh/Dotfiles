@@ -27,10 +27,11 @@ Leave spans without a concrete violation unchanged, including their placement an
 Focus on the description and comments; flag unit-test violations rather than rewriting tests.
 Do not refactor feature code as part of a style cleanup.
 
-Preserve required template sections and substantive claims: caller impact, compatibility,
-interfaces, behavior, permissions, deployment and rollback constraints, and verification evidence.
-Compare the rewrite with the input claim by claim and restore anything lost or materially weakened.
-If a removed comment contains useful change-context, preserve that context in the description.
+Preserve required template sections and necessary reader-facing meaning, such as caller impact,
+compatibility, permissions, deployment constraints, and verification evidence. Existing claims are
+not automatically protected: judge them against the shared standard before retaining them.
+Compare the rewrite with the input and restore necessary meaning that was lost or weakened.
+Cut private drafting history rather than relocating it to the description.
 
 ## Output and approval
 

@@ -4,9 +4,14 @@ The shared standard for authoring and reviewing feature code, unit tests, commen
 descriptions, whether or not a PR exists. Follow repository conventions and required templates;
 this guide adds personal style, not a replacement for correctness or security requirements.
 
-**Default to no.** Extra code, refactoring, tests, comments, and prose must earn their place by
-solving a concrete problem or carrying necessary information. "Good practice," completeness,
-and looking thorough are not justifications. Nothing extra is a valid outcome.
+**Default to no.** Start with the smallest solution to the approved use case. Every addition
+must earn its place: what necessary behavior or information would be lost if it were removed?
+Being defensible, already written, or potentially useful is not enough. Prefer a materially
+smaller approach when it meets the same requirements; trimming a few lines is not a substitute.
+Nothing extra is a valid outcome.
+
+Write for readers who never saw the conversation. Describe the final outcome and enduring
+rationale, not rejected proposals, user corrections, or mistakes we introduced and then undid.
 
 ## 1. Feature code
 
@@ -19,31 +24,39 @@ when the actual use case needs it. Do not clean up unrelated code merely because
 Default to no new tests unless they protect a concrete behavior or failure not already covered.
 Do not test for coverage, recheck a library or mock, or duplicate scenarios and assertions.
 No new tests can be the right answer; do not delete meaningful protection just to lower the count.
+Test the final contract, not our drafting history or the absence of a rejected, unshipped feature.
 
 ## 3. PR description
 
 Default to `TIN` when the title and diff already tell the story. Do not add a summary merely
 because a description field exists. Add prose only for necessary intent, decisions, or caller
-impact the title and code cannot explain. Stay high-level; never mechanically list files or
-changes. Preserve required template sections, but keep their content minimal.
+impact the title and code cannot explain. Accuracy alone does not earn a sentence its place.
+Stay high-level; never mechanically list files or changes. Preserve required template sections,
+but keep their content minimal.
+Do not repeat information already carried by the title, diff, or another section.
 When tightening an existing description, fix concrete violations and leave compliant prose alone.
 
 ## 4. Comments
 
 Default to no comments when the code is clear. Add one only for a necessary, non-obvious reason
-or constraint the code cannot express. Do not restate names, types, or steps. Keep lasting
-rationale in code and change narration in the PR. Length follows the explanation's need, not a quota.
+or constraint the code cannot express. Do not restate names, types, or steps. Explain the final
+behavior and enduring constraints; do not move private iteration history from comments into the PR.
+Length follows the explanation's need, not a quota.
 
 ## 5. PR testing section
 
 Default to no routine-check list. Do not mention ordinary unit tests, lint, typecheck, or CI
 checks the reviewer already expects.
-Report verification they cannot see from CI, such as local e2e, smoke tests, manual checks, or a
-focused check of permissions, deployment targeting, or a failure path. Include evidence for each
-claim: what ran and its observed result, with links or images when they help inspect the result.
-Command output is sufficient when it proves the claim; do not manufacture screenshots or results.
-Keep distinct checks and the setup needed to interpret them, rather than compressing them into
-"verified end to end." If there is no additional runtime verification, say so briefly when the
-template requires an answer. Keep internal grading and review ceremony out of the description.
+Report only verification the reviewer cannot see from CI, with what ran, its observed result, and
+evidence. A short result plus a link or attachment to the full receipt is enough; keep distinct
+checks, commands, setup, and cleanup there rather than listing every scenario in the body.
+Use links or images when helpful; command output can be sufficient. Never invent evidence or turn
+a unit test or drafting incident into a claim of manual verification. Cut private iteration history;
+do not salvage it by rephrasing it as something we verified.
+
+Name the actual test setup. Omit lists of services not exercised and limitations already clear from
+that setup. State only a specific material gap the evidence would otherwise hide. If the template
+requires an answer and no additional runtime verification exists, say so briefly. Keep internal
+grading and review ceremony out of the description.
 
 Before handoff, check the changed work against these five rules and fix concrete violations.

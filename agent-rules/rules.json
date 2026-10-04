@@ -35,7 +35,7 @@
       "targets": {
         "cursor": {
           "file": "writing-style.mdc",
-          "description": "Global output style: never use em dashes; use a plain hyphen instead.",
+          "description": "Global output style: use plain hyphens, and keep code, tests, docs, and PR text focused on the final outcome rather than private drafting history.",
           "alwaysApply": true
         }
       }
