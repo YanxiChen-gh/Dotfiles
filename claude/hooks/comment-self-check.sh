@@ -27,5 +27,5 @@ body=$(printf '%s' "$input" | jq -r '.tool_input.content // .tool_input.new_stri
 printf '%s' "$body" | grep -qE '//|/\*|^[[:space:]]*\*' || exit 0
 
 cat <<'JSON'
-{"suppressOutput":true,"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Comment self-check (current models over-comment by default): re-read the comments in the edit you just made and delete any that narrate the change ('we used to…', 'now X', 'Phase 0'), restate what the code already says, are obvious from the symbol name, or only re-verify a library/type. Keep only the non-obvious *why* (gotcha, workaround, external constraint). Same bar for tests - no coverage-only tests. Full guide: ~/dotfiles/claude/pr-authoring.md."}}
+{"suppressOutput":true,"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Comment self-check: read ~/dotfiles/claude/pr-authoring.md and apply section 4 to the comments in this edit and section 2 to any changed unit tests. Fix concrete violations before handoff; do not remove necessary explanations or protection for real behavior."}}
 JSON

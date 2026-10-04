@@ -20,7 +20,7 @@ JUDGE="$HERE/judge.md"
 CLEANER="${SIMPLIFY_PR_SKILL:-$ROOT/../skills/simplify-pr/SKILL.md}"
 RUBRIC="$ROOT/rubric.md"
 AUTHOR_GUIDE="$ROOT/../pr-authoring.md"
-AUTHOR_EXAMPLES="$ROOT/../pr-examples.md"
+REVIEW_GUIDE="$ROOT/../review-tone.md"
 ENGINE="$HERE/../../style-eval-engine.sh"
 BENCHMARK="$HERE/pr-description-benchmark.sh"
 # Corpus + results hold internal content and live in the PRIVATE data repo, not here.
@@ -87,6 +87,12 @@ Flow: $2
 rubric:
 $(cat "$RUBRIC")
 
+canonical PR standard:
+$(cat "$AUTHOR_GUIDE")
+
+review voice (only for flow review):
+$(cat "$REVIEW_GUIDE")
+
 === ARTIFACT ===
 $(cat "$1")
 
@@ -110,7 +116,7 @@ simplify_calibrate() {
   answer_key_file="$run_dir/answer-key.md"
   cp "$ex" "$answer_key_file"
   style_eval_blind_before "$answer_key_file" >"$blind_file"
-  style_eval_write_metadata "$run_dir" "$benchmark" "$answer_key_file" "$CLEANER" "$AUTHOR_GUIDE" "$AUTHOR_EXAMPLES" "$RUBRIC" "$JUDGE"
+  style_eval_write_metadata "$run_dir" "$benchmark" "$answer_key_file" "$CLEANER" "$AUTHOR_GUIDE" "$RUBRIC" "$JUDGE"
 
   if [ -n "${EVAL_CANDIDATE:-}" ]; then
     [ -f "$EVAL_CANDIDATE" ] || { echo "candidate not found: $EVAL_CANDIDATE" >&2; return 1; }
@@ -122,9 +128,6 @@ simplify_calibrate() {
 
 pr-authoring guide:
 $(cat "$AUTHOR_GUIDE")
-
-worked examples:
-$(cat "$AUTHOR_EXAMPLES")
 
 You are the cleaner under evaluation. For every numbered example below, inspect only its BEFORE
 material and propose the exact cuts or tightening you would make. Do not use tools or read files;
@@ -147,7 +150,7 @@ mean_recall and load_bearing_overreach_count. Output JSON only.
 rubric:
 $(cat "$RUBRIC")
 
-pr-authoring guide (Comments / Tests / PR Descriptions):
+canonical PR standard:
 $(cat "$AUTHOR_GUIDE")
 
 === FROZEN CLEANER OUTPUT ===
@@ -229,8 +232,6 @@ description_heldout_simplify() {
     cat "$CLEANER"
     printf '\n\npr-authoring guide:\n'
     cat "$AUTHOR_GUIDE"
-    printf '\n\nworked examples:\n'
-    cat "$AUTHOR_EXAMPLES"
     cat <<'EOF'
 
 
@@ -272,7 +273,7 @@ load_bearing_overreach entries. Output JSON only.
 rubric:
 EOF
     cat "$RUBRIC"
-    printf '\n\npr-authoring guide (Comments / Tests / PR Descriptions):\n'
+    printf '\n\ncanonical PR standard:\n'
     cat "$AUTHOR_GUIDE"
     printf '\n\n=== FROZEN CLEANER OUTPUT ===\n'
     cat "$candidate_file"
@@ -282,7 +283,7 @@ EOF
 
   style_eval_write_metadata "$run_dir" "description-heldout-$benchmark_id-v$benchmark_version-simplify" \
     "$materialized/manifest.json" "$materialized/simplify/blind-input.md" \
-    "$materialized/simplify/answer-key.md" "$CLEANER" "$AUTHOR_GUIDE" "$AUTHOR_EXAMPLES" "$RUBRIC" "$JUDGE" \
+    "$materialized/simplify/answer-key.md" "$CLEANER" "$AUTHOR_GUIDE" "$RUBRIC" "$JUDGE" \
     "$agent_prompt_file" "$judge_prompt_file"
   append_description_manifest_metadata "$run_dir/metadata.txt"
   if [ -n "${EVAL_CANDIDATE:-}" ]; then

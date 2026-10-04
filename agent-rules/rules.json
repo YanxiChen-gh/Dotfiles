@@ -15,7 +15,7 @@
       "targets": {
         "cursor": {
           "file": "pr-authoring.mdc",
-          "description": "When writing or reviewing TypeScript code, code comments, or PR descriptions, follow the user's authoring conventions. Apply when writing/refactoring code, adding comments, or drafting PR descriptions and commit summaries.",
+          "description": "Read the canonical PR style guide before authoring, editing, or reviewing code, unit tests, comments, or PR descriptions, whether or not a PR exists. Check the changed work against it before handoff.",
           "alwaysApply": false
         }
       }
@@ -25,7 +25,7 @@
       "targets": {
         "cursor": {
           "file": "pr-review-tone.mdc",
-          "description": "When writing PR reviews, code review comments, or any feedback on pull requests, follow the user's personal review tone. Apply when reviewing PRs, leaving inline comments, or approving/requesting changes.",
+          "description": "Read the review-voice guide when a PR review is requested or when drafting review feedback. This does not authorize posting.",
           "alwaysApply": false
         }
       }
@@ -136,7 +136,7 @@
       {"file": "codex/AGENTS-work.md", "scope": "work"}
     ],
     "title": "Codex Global Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "verification-and-handoff", "codex-skills"],
+    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "verification-and-handoff", "codex-skills"],
     "footer": "@RTK.md"
   },
   "claude": {
@@ -145,7 +145,7 @@
       {"file": "claude/CLAUDE-work.md", "scope": "work"}
     ],
     "title": "User-Level Claude Code Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "verification-and-handoff"],
+    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "verification-and-handoff"],
     "footer": "@RTK.md"
   },
   "opencode": {
@@ -154,7 +154,7 @@
       {"file": "opencode/AGENTS-work.md", "scope": "work"}
     ],
     "title": "OpenCode Global Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "mcp-preferences", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "verification-and-handoff"],
+    "rules": ["dotfiles-repo", "writing-style", "mcp-preferences", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "verification-and-handoff"],
     "footer": ""
   }
 }

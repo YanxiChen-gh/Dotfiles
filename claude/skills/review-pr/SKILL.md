@@ -1,15 +1,14 @@
 ---
 name: review-pr
-description: Review another person's PR against Yanxi's engineering standards and draft feedback in Yanxi's review voice. Use only when explicitly invoked (e.g. "/review-pr", "review this PR", given a PR link to review). Read-only on the author's branch - drafts comments for Yanxi to post, never posts as Yanxi.
+description: Review another person's PR using repository standards and Yanxi's canonical PR style, then draft feedback in Yanxi's review voice. Use only when explicitly invoked. Read-only on the author's branch; never posts as Yanxi.
 disable-model-invocation: true
 ---
 
 # Review PR
 
-Review someone else's PR the way Yanxi would: judge the substance against the authoring guide,
-phrase the feedback in Yanxi's review voice, and hand back draft comments. This is the reviewing
-counterpart to `simplify-pr` (which fixes up Yanxi's *own* PRs) - both read the same canonical
-guide, so the bar is identical on both sides.
+Review correctness against the repository's conventions and personal style against
+`pr-authoring.md`, the same standard used by the author and `simplify-pr`. Return draft feedback
+in Yanxi's review voice.
 
 This skill **drafts** a review. It does not post on Yanxi's behalf - leaving GitHub comments as
 though they came from Yanxi is his call, not the agent's.
@@ -33,32 +32,16 @@ Then gather what you need to judge it:
 
 Both are the single source of truth and may have changed since this skill was written:
 
-- **Substance** (what to flag): `~/dotfiles/claude/pr-authoring.md`
+- **PR style** (the five shared rules): `~/dotfiles/claude/pr-authoring.md`
 - **Voice** (how to phrase it): `~/dotfiles/claude/review-tone.md`
-- **Worked examples** (calibration for what good looks like): `~/dotfiles/claude/pr-examples.md` -
-  use these to judge whether a description is at the right altitude before flagging it as too long.
 
-(If those paths don't resolve, fall back relative to this file: `../../pr-authoring.md`,
-`../../review-tone.md`, and `../../pr-examples.md`.)
+(If those paths don't resolve, fall back relative to this file: `../../pr-authoring.md`
+and `../../review-tone.md`.)
 
-Apply the authoring guide as the review bar - the same things it tells an author to do are the
-things you check for here. **The default stance is minimal:** comments, tests, and description
-lines are additions that must earn their place, not defaults - flag anything present for its own
-sake (a comment restating the code, a coverage-theater test, a description narrating the diff) as
-removable, the way `simplify-pr` would. Then the specific areas:
-
-- **Code** - `any`/`as`/`!` escape hatches, unvalidated boundaries, throwing where a discriminated
-  result fits, auth bolted onto the caller instead of the service, premature abstraction or
-  micro-optimization, observability with no consumer, swallowed errors.
-- **Comments** - restating the *what*, change-narration, stale or AI-filler comments. Flag missing
-  *why* on genuinely non-obvious code too.
-- **Tests** - the high-sloppiness area: coverage-theater (tests of libraries, trivial mappings,
-  thin control flow), and complex/over-mocked tests that signal the code needs dependency injection.
-- **The PR description itself** - if it narrates the diff, buries the motivation, or leaves empty
-  template sections, that's reviewable. A PR is a communication tool.
-
-Then phrase every comment in Yanxi's voice per `review-tone.md`: concise, questions over commands,
-curious not prescriptive, `lgtm` lowercase, no empty praise or formal filler.
+Check the changed code, tests, comments, description, and verification evidence against all
+applicable guide rules. For a style finding, name the rule and the affected span; do not invent
+extra criteria or propose unrelated cleanup.
+Use `review-tone.md` for the wording of outward-facing feedback.
 
 ## Output
 
@@ -71,9 +54,11 @@ curious not prescriptive, `lgtm` lowercase, no empty praise or formal filler.
 Then stop. Posting is the user's decision:
 
 - Default: hand over the drafted comments for the user to post themselves.
-- Only if the user *explicitly* says to post, and the repo's own rules allow an agent to (some
-  repos - e.g. Vanta's - forbid posting review comments as a human; respect that), use
-  `gh pr review` / `gh api`. Never approve, never request-changes as a gate, never promote or merge.
+- Follow the global PR-comment confirmation rule: show the drafts and target PR, then wait for
+  explicit user confirmation before posting. A review request alone does not authorize posting.
+  Repository restrictions still apply (some repos forbid posting as a human). Only after
+  confirmation, use `gh pr review` / `gh api` for the confirmed feedback. Never approve, never
+  request-changes as a gate, never promote or merge.
 
 If the repo has its own review playbook (e.g. `.ai-rules/code-review/`), follow it for the checklist
-and read-only constraints; this skill adds Yanxi's substance bar and voice on top, it doesn't override it.
+and read-only constraints; this skill adds Yanxi's PR style and review voice, not a replacement.

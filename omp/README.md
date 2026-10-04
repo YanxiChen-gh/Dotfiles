@@ -134,6 +134,12 @@ details in mind when troubleshooting:
 2. Global rules are linked at `~/.omp/agent/APPEND_SYSTEM.md`.
 3. Run `herdr integration status` after Herdr upgrades and confirm `omp: current`.
 
+Global instructions route code, unit tests, comments, and PR descriptions to the shared
+[PR style guide](../claude/pr-authoring.md) for both authoring and review, with a check before
+handoff. The cleanup skill, evaluation harness, and comment reminder use that same standard.
+Review requests also load the separate [review voice](../claude/review-tone.md). Historical
+examples remain manual evaluation references, not few-shot inputs for the agent.
+
 Herdr owns completion toasts for root OMP sessions with a Herdr pane and socket.
 The harness overrides `completion.notify` to `off` in memory so OMP's
 session-title / `Complete` toast does not duplicate Herdr's `OMP finished` toast.

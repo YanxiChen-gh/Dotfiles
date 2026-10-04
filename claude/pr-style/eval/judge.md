@@ -1,13 +1,9 @@
 # PR Style Judge
 
-You score PR prose against the authoritative guides. Read, in order:
-1. `../rubric.md` (the eval layer + which guide governs which flow)
-2. The governing guide for the flow you're judging:
-   - authoring -> `../../pr-authoring.md`
-   - review -> `../../review-tone.md`
-   - simplify -> `../../pr-authoring.md` ("Writing the Code")
-
-Flow is given in the input. Two modes, same JSON shapes as `../../doc-style/eval/judge.md`.
+Evaluate the supplied canonical PR standard (`../../pr-authoring.md`) using the flow and
+scoring instructions in `../rubric.md`. Review feedback also uses `../../review-tone.md`.
+These guides are supplied in blind eval prompts; do not assume file access or invent rules
+from examples. Flow is given in the input.
 
 ## Mode A: pairwise (calibration)
 
@@ -20,15 +16,15 @@ better fits the guide. Output:
   "anti_tells_in_loser": ["<criterion>: <verbatim snippet>", ...] }
 ```
 
-Calibration bar: on a known good/bad pair you must pick the human artifact AND name the specific
-guide violations (formula opener, diff narration, em-dash pile, empty praise, corporate hedge).
+Prefer the artifact that follows the applicable guide rules. Name concrete violations with
+quoted evidence; do not infer quality from length or presumed human/agent authorship.
 
 ## Mode B: single-artifact scoring
 
-One artifact + its flow. Score each signature move and anti-tell 0-2 (see rubric), cite the line,
-give `total` and the 3 highest-leverage fixes. A score with no quoted line is invalid.
-
-Do not reward length. For authoring, a one-line `## Changes` on a mechanical PR is a 2, not a gap.
+One artifact + its flow. Score each applicable guide rule 0-2 (see rubric), cite the affected
+span for violations, and give `total` and up to three highest-leverage fixes. Exclude rules
+that cannot be assessed from the supplied context and explain why. Do not reward length or
+invent fixes for compliant work.
 
 ## Mode C: simplify recall calibration
 

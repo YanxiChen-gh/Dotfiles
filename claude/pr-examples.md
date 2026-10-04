@@ -1,8 +1,8 @@
 # PR Examples - calibrating altitude and voice
 
 Real merged PRs from this team, chosen to teach *calibration*: how much to write, at what altitude,
-in what voice. These pair with `pr-authoring.md` - the guide gives the principles, these show what
-they look like in practice.
+in what voice. These illustrate `pr-authoring.md`, the sole substantive style standard. Historical
+examples calibrate the level of detail; they do not introduce requirements or override the guide.
 
 **Match the altitude, not the words.** Don't copy "TIN"/"DRY" as a verbal tic; copy the *judgment* -
 how much each change earned, given what the diff already shows. The throughline across all of them:

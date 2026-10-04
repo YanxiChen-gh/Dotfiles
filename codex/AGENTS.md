@@ -15,6 +15,7 @@ Never use the em dash ("—"). Use a plain hyphen ("-") instead. This applies to
 - For requests to answer, explain, review, diagnose, or plan, inspect the relevant material and report the result. Do not implement changes unless requested.
 - For requests to change, build, or fix, make the requested in-scope local changes and run relevant non-destructive validation without asking first.
 - Ask before destructive actions, dependency changes, external writes, or material scope expansion. Commit and push only when explicitly requested.
+- Never post PR comments, inline review comments, review bodies, or thread replies without explicit confirmation from the user for the proposed content and destination. A request to review a PR is not permission to publish feedback; draft it first. This applies to every tool, posting identity, and delegated agent.
 - Human-interactive review is root-session only. Subagents must not launch Lavish, call question or approval tools, or wait for human input; they return findings, questions, and blockers directly to their parent.
 
 ## Engineering Principles
@@ -29,17 +30,17 @@ Never use the em dash ("—"). Use a plain hyphen ("-") instead. This applies to
 - Never add yourself (the AI agent) as a commit co-author. Do not append `Co-Authored-By:` trailers naming Claude, Codex, Cursor, or any agent, and do not add agent attribution to commit messages or PR descriptions unless I explicitly ask.
 - Never hand-edit `CHANGELOG.md` files or any file marked as auto-generated (generated-header banners, lockfiles, codegen output, build artifacts). Change the source and regenerate instead.
 
-## Code & PR Authoring
+## PR Style
 
-## Optimize for the reader's time. Scale detail to risk and keep one home for each fact.
+Before authoring, editing, or reviewing code, unit tests, comments, or PR descriptions, read
+`~/dotfiles/claude/pr-authoring.md` and follow all applicable rules, whether or not a PR exists.
+Before handoff, check the changed work against the guide and fix concrete violations.
+Delegated agents must follow the same standard.
 
-- Write types and seams honestly. Avoid `any`, `as` except `as const`, and `!`; validate untyped boundaries.
-- Prefer clear names and small functions. Comments earn their place only when they preserve a non-obvious why.
-- Tests defend observable behavior, boundaries, and real errors. Do not add coverage-only tests.
-- PR descriptions explain the problem, resulting behavior, decision tradeoff, and reviewer-useful evidence. Do not narrate the diff or claim checks that did not run.
-- Use plain, concrete prose. A mechanical change can be one line; a risky change earns the context a reviewer cannot infer.
+## PR Review Tone
 
-Read `~/dotfiles/claude/pr-authoring.md` only when drafting PR text, writing code comments, or deciding whether a test carries real signal.
+When a PR review is requested or when drafting review feedback, read and follow
+`~/dotfiles/claude/review-tone.md`. This also applies to delegated and automated reviews.
 
 ## Skills
 
