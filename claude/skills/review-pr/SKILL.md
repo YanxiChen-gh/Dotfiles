@@ -6,9 +6,8 @@ disable-model-invocation: true
 
 # Review PR
 
-Review correctness against the repository's conventions and personal style against
-`pr-authoring.md`, the same standard used by the author and `simplify-pr`. Return draft feedback
-in Yanxi's review voice.
+Review correctness against the repository's conventions and personal style against the two
+guides below.
 
 This skill **drafts** a review. It does not post on Yanxi's behalf - leaving GitHub comments as
 though they came from Yanxi is his call, not the agent's.
@@ -32,24 +31,20 @@ Then gather what you need to judge it:
 
 Both are the single source of truth and may have changed since this skill was written:
 
-- **PR style** (the five shared rules): `~/dotfiles/claude/pr-authoring.md`
-- **Voice** (how to phrase it): `~/dotfiles/claude/review-tone.md`
+- **PR style**: `~/dotfiles/agent-rules/guides/pr-authoring.md`
+- **Voice**: `~/dotfiles/agent-rules/guides/review-tone.md`
 
-(If those paths don't resolve, fall back relative to this file: `../../pr-authoring.md`
-and `../../review-tone.md`.)
+(If those paths don't resolve, fall back relative to this file: `../../../agent-rules/guides/pr-authoring.md`
+and `../../../agent-rules/guides/review-tone.md`.)
 
 Check the changed code, tests, comments, description, and verification evidence against all
-applicable guide rules. For a style finding, name the rule and the affected span; do not invent
-extra criteria or propose unrelated cleanup.
-Use `review-tone.md` for the wording of outward-facing feedback.
+applicable guide rules. For a style finding, name the rule and the affected span.
 
 ## Output
 
-1. A short **overall take** (1-3 sentences): is it close, or are there real concerns?
+1. An **overall take**: is it close, or are there real concerns?
 2. **Draft inline comments**, grouped by severity (blocking / nit), each as `file:line` → the
-   comment text exactly as it would be posted (already in Yanxi's voice). Keep them few and
-   high-signal - don't manufacture nits to look thorough.
-3. Don't restate the diff back to the user; only surface what's worth a comment.
+   comment text exactly as it would be posted.
 
 Then stop. Posting is the user's decision:
 

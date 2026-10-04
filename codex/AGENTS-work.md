@@ -41,20 +41,20 @@ The user grants standing approval to run `just post-pull`; this satisfies reposi
 ## PR Style
 
 Before authoring, editing, or reviewing code, unit tests, comments, or PR descriptions, read
-`~/dotfiles/claude/pr-authoring.md` and follow all applicable rules, whether or not a PR exists.
+`~/dotfiles/agent-rules/guides/pr-authoring.md` and follow all applicable rules, whether or not a PR exists.
 Before handoff, check the changed work against the guide and fix concrete violations.
 Delegated agents must follow the same standard.
 
 ## PR Review Tone
 
 When a PR review is requested or when drafting review feedback, read and follow
-`~/dotfiles/claude/review-tone.md`. This also applies to delegated and automated reviews.
+`~/dotfiles/agent-rules/guides/review-tone.md`. This also applies to delegated and automated reviews.
 
 ## Verification & PR Handoff
 
 Choose the narrowest verification that proves the changed behavior. Exercise a real runtime path when unit checks cannot establish the user-visible, integration, or operational result. Report commands, observed results, and known gaps accurately.
 
-Before opening a PR, include only verification that gives a reviewer confidence beyond routine CI. Use an independent review for high-risk, cross-domain, or behaviorally hard-to-exercise changes. The deterministic `verify-gate` hook checks that a work-repository PR includes reviewer-useful evidence.
+Use an independent review for high-risk, cross-domain, or behaviorally hard-to-exercise changes. The deterministic `verify-gate` hook checks that a work-repository PR includes reviewer-useful evidence.
 
 After a successful authorized PR push, promptly tell the user the PR URL, pushed commit, and what verification or CI/review work remains. This is a progress update, not a claim that the PR is ready.
 

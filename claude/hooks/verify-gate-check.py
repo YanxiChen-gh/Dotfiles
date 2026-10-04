@@ -46,8 +46,8 @@ Missing from the PR body:
 
 Before `gh pr create`, run the verification + independent-review workflow
 (~/dotfiles/shared-skills/full-verification-workflow), then put reviewer-useful verification
-in the body (e2e/browser/manual when the change warrants it). Keep routine CI results and
-independent grading notes out of the PR description.
+in the body (e2e/browser/manual when the change warrants it). Apply section 5 of
+~/dotfiles/agent-rules/guides/pr-authoring.md when writing the PR testing section.
 
 The evidence bar scales to the change: a docs-only PR just needs "docs only, no runtime".
 Kill switch (escape hatch): export VERIFY_GATE=off

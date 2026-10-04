@@ -1,6 +1,6 @@
 # Verification Evidence
 
-Use this as an internal checklist, not a required PR layout. Preserve the repository's PR template when one exists.
+Use this as an internal checklist, not a required PR layout.
 
 ## Required Evidence
 
@@ -13,9 +13,7 @@ Use this as an internal checklist, not a required PR layout. Preserve the reposi
 
 ## PR Description
 
-Include only evidence a reviewer cannot infer from CI, such as e2e, browser, manual, or a
-reproducible failure-path check. Omit routine unit tests, typecheck, lint, CI status, and the
-independent grading notes below.
+Read and apply `~/dotfiles/agent-rules/guides/pr-authoring.md`, especially section 5.
 
 ## Optional Compact Format
 

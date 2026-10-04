@@ -1,16 +1,14 @@
 # PR Style Evaluation
 
-The only substantive PR style standard is [pr-authoring.md](../pr-authoring.md), shared by authors,
+The only substantive PR style standard is [pr-authoring.md](../../agent-rules/guides/pr-authoring.md), shared by authors,
 reviewers, and the cleanup skill. Evaluate its applicable rules; do not maintain a second checklist
-here. [Review voice](../review-tone.md) governs outward-facing feedback, not feature-code style.
+here. [Review voice](../../agent-rules/guides/review-tone.md) governs outward-facing feedback, not feature-code style.
 Historical [examples](../pr-examples.md) are manual calibration references, not prompt inputs.
 
 ## Flows
 
 - **Authoring:** evaluate the PR description and testing section against guide sections 3 and 5.
 - **Simplify:** evaluate proposed edits against the applicable guide sections and the input.
-  Preserve only necessary reader-facing meaning and evidence under the shared standard; removal
-  of unnecessary claims or private iteration history is not overreach.
 - **Review:** evaluate feedback against the review-voice guide. Use the PR standard to assess
   substantive style findings when the underlying patch or description is available.
 

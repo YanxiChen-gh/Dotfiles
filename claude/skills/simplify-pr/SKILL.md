@@ -6,8 +6,8 @@ disable-model-invocation: true
 
 # Simplify PR
 
-Use `~/dotfiles/claude/pr-authoring.md` as the only substantive style standard. If that path does
-not resolve, read `../../pr-authoring.md` relative to this skill.
+Read and apply `~/dotfiles/agent-rules/guides/pr-authoring.md` as the only substantive style standard.
+If that path does not resolve, read `../../../agent-rules/guides/pr-authoring.md` relative to this skill.
 
 ## Resolve the target
 
@@ -23,21 +23,15 @@ against the repository's base branch.
 ## Make a surgical proposal
 
 For each proposed edit, record the exact span, the violated guide rule, and the smallest fix.
-Leave spans without a concrete violation unchanged, including their placement and formatting.
 Focus on the description and comments; flag unit-test violations rather than rewriting tests.
 Do not refactor feature code as part of a style cleanup.
 
-Preserve required template sections and necessary reader-facing meaning, such as caller impact,
-compatibility, permissions, deployment constraints, and verification evidence. Existing claims are
-not automatically protected: judge them against the shared standard before retaining them.
 Compare the rewrite with the input and restore necessary meaning that was lost or weakened.
-Cut private drafting history rather than relocating it to the description.
 
 ## Output and approval
 
 Return the rewritten description and a short edit ledger. Locate comment changes with `file:line`.
-Keep the ledger outside the description. If there are no concrete violations, say so and do not
-manufacture changes.
+Keep the ledger outside the description. If there are no concrete violations, say so.
 
 Wait for approval before changing an existing PR description or applying proposed source edits.
 On approval, use `gh pr edit <n> --body-file <file>` for the description and apply only the approved

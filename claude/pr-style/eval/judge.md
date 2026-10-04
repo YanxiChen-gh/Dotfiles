@@ -1,7 +1,7 @@
 # PR Style Judge
 
-Evaluate the supplied canonical PR standard (`../../pr-authoring.md`) using the flow and
-scoring instructions in `../rubric.md`. Review feedback also uses `../../review-tone.md`.
+Evaluate the supplied canonical PR standard (`../../../agent-rules/guides/pr-authoring.md`) using the flow and
+scoring instructions in `../rubric.md`. Review feedback also uses `../../../agent-rules/guides/review-tone.md`.
 These guides are supplied in blind eval prompts; do not assume file access or invent rules
 from examples. Flow is given in the input.
 
@@ -39,6 +39,5 @@ real AFTER separately as the answer key. Score how well the cleaner reproduced t
   "recall": 0.0-1.0, "cited_right_rule": true|false }
 ```
 
-recall = caught / (caught + missed). The bar: recall >= 0.8 with no overreach on load-bearing
-comments (a genuine non-obvious why must be KEPT). Overreach on evergreen "why" comments is worse
-than a miss - it means the cleaner would delete signal.
+recall = caught / (caught + missed). The bar: recall >= 0.8 with no overreach on explanations
+required by section 4 of the canonical guide. Such overreach is worse than a miss.

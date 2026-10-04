@@ -4,7 +4,7 @@
 # guidance alone under-corrects. Fires only on JS/TS edits that actually added comment
 # syntax, and injects a terse reminder (suppressed from the transcript).
 #
-# Personal harness lever. Full bar: ~/dotfiles/claude/pr-authoring.md.
+# Personal harness lever. Full bar: ~/dotfiles/agent-rules/guides/pr-authoring.md.
 # Kill switch:  export COMMENT_BAR_HOOK=off
 # Retirement:   model-specific - when the model stops over-commenting (verify via the
 #               agent-maturity `verbose-output` tag at a model upgrade), delete this hook
@@ -27,5 +27,5 @@ body=$(printf '%s' "$input" | jq -r '.tool_input.content // .tool_input.new_stri
 printf '%s' "$body" | grep -qE '//|/\*|^[[:space:]]*\*' || exit 0
 
 cat <<'JSON'
-{"suppressOutput":true,"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Comment self-check: read ~/dotfiles/claude/pr-authoring.md and apply section 4 to the comments in this edit and section 2 to any changed unit tests. Fix concrete violations before handoff; do not remove necessary explanations or protection for real behavior."}}
+{"suppressOutput":true,"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Comment self-check: read ~/dotfiles/agent-rules/guides/pr-authoring.md and apply section 4 to the comments in this edit and section 2 to any changed unit tests."}}
 JSON

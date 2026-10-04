@@ -6,6 +6,17 @@ Personal shell and agent configuration for Claude Code, omp, OpenCode, Codex, an
 
 `install.sh` is a thin dispatcher: it resolves its own directory, sources every function module under `install.d/*.sh`, then runs the orchestration sequence at the bottom. Each module holds the setup functions for one concern (`10-helpers`, `20-mcp`, `30-system`, `35-agent-helpers`, `36-herdr-opener`, `40-cursor`, `50-claude`, `60-codex`, `65-opencode`, `66-omp`, `70-rtk`, `80-tools`, `90-work`); definition order among modules doesn't matter since everything is sourced before the orchestration calls run. `verify-dotfiles.sh` `sh -n`s and shellchecks every module.
 
+## Shared agent style guides
+
+[PR authoring](agent-rules/guides/pr-authoring.md) is the substantive style standard for code, tests,
+comments, and PR descriptions. [Review voice](agent-rules/guides/review-tone.md) governs review feedback.
+The `agent-rules/` sources embed instructions to read these guides in Claude, Codex, and OpenCode's
+generated main prompts; OMP reuses the OpenCode prompt. Both Cursor instructions are always-on,
+with the review-voice guide read only for review feedback. Skills, hooks, and evaluation tools
+reference the same guides. Repository requirements and publishing permissions remain separate.
+
+Run `python3 agent-rules/build.py` after changing prompt sources or the manifest.
+
 ## Default shell on Ona
 
 In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells default to zsh. `install.sh` adds a runtime-gated guard to `~/.bashrc` that hands interactive bash sessions over to zsh, and best-effort `chsh`'s the login shell when run inside Ona. The guard is a no-op on a personal machine (where `IS_ON_ONA` is unset) - `chsh` alone isn't enough because Ona SSHs in via `exec -l $SHELL -i` with `$SHELL=/bin/bash` and a container's `/etc/passwd` can reset on rebuild.

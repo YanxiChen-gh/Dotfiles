@@ -37,15 +37,15 @@ If it isn't cloned, stop and tell me - there's nowhere to write.
    is not treated as a complete inventory. Each written history is complete, or the fetch fails
    before the atomic swap. Agent authorship remains `unverified` unless another source proves it.
 
-2. For each promising **cleanup commit**, pull the diff and judge it against `../../pr-authoring.md`:
+2. For each promising **cleanup commit**, pull the diff and judge it against `../../../agent-rules/guides/pr-authoring.md`:
 
        gh api repos/VantaInc/obsidian/commits/<sha> --jq '.files[]|select(.patch!=null)|"\(.filename)\n\(.patch)"'
 
-   Keep only diffs that are genuine comment/test cleanup (a real rule from the guide: restated
-   comment, non-evergreen ref, library-agreement test, single-use helper). Skip pure code refactors.
+   Keep comment/test cleanup diffs that correct a concrete violation of guide sections 2 or 4.
+   Skip pure code refactors.
 
 3. For each promising **description** PR, dump its history and pick a *consecutive* revision pair
-   where a named tell flipped (formula opener, diff narration, em-dash pileup) - not just first-vs-last:
+   that corrects a named guide violation - not just first-vs-last:
 
        ~/dotfiles/claude/pr-style/eval/extract-pr-description-history.sh <pr>
 

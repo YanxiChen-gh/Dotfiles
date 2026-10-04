@@ -4,8 +4,7 @@ Invoke on a `.md` draft before `gsync`-ing it to a Google Doc. Read-only: you re
 edit the draft. Output goes back to the author as a fix list.
 
 Read `rubric.md`, then read the draft. Score it in Mode B (see `eval/judge.md`). Then write a
-review in the author's own PR-review tone (`../review-tone.md`): direct, specific, no praise
-padding, every ask tied to a reason.
+review using [the review-voice guide](../../agent-rules/guides/review-tone.md).
 
 Format:
 

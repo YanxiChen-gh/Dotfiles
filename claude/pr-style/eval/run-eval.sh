@@ -9,8 +9,8 @@
 #   ./run-eval.sh authoring-calibrate PAIR.json  # compare an initial PR body with its last author revision
 #   ./run-eval.sh description-heldout MANIFEST --flow simplify|authoring # authoring tests AGENT_*
 #
-# The style specs are authoritative: ../pr-authoring.md and ../review-tone.md. The judge/cleaner
-# read them plus rubric.md. Calibration uses real before->after cleanup commits as the answer key.
+# The canonical guides live in agent-rules/guides/. The judge/cleaner read them plus rubric.md.
+# Calibration uses real before->after cleanup commits as the answer key.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,8 +19,8 @@ JUDGE="$HERE/judge.md"
 # The cleaner IS the real simplify-pr skill agents use - the eval validates that, not a stand-in.
 CLEANER="${SIMPLIFY_PR_SKILL:-$ROOT/../skills/simplify-pr/SKILL.md}"
 RUBRIC="$ROOT/rubric.md"
-AUTHOR_GUIDE="$ROOT/../pr-authoring.md"
-REVIEW_GUIDE="$ROOT/../review-tone.md"
+AUTHOR_GUIDE="$ROOT/../../agent-rules/guides/pr-authoring.md"
+REVIEW_GUIDE="$ROOT/../../agent-rules/guides/review-tone.md"
 ENGINE="$HERE/../../style-eval-engine.sh"
 BENCHMARK="$HERE/pr-description-benchmark.sh"
 # Corpus + results hold internal content and live in the PRIVATE data repo, not here.

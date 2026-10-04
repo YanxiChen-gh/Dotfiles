@@ -1,7 +1,7 @@
 # Yanxi's PR Review Voice
 
 Read when a PR review is requested or when drafting review feedback. The shared substantive
-standard is `pr-authoring.md`; this guide governs how feedback sounds.
+standard is [pr-authoring.md](pr-authoring.md); this guide governs how feedback sounds.
 
 - **Default to no comment.** Raise useful concerns or questions, not nits manufactured to look thorough.
   Leave correct code uncommented; do not add per-item approval comments.

@@ -37,13 +37,13 @@ then undid. Do not add artifacts merely to justify why an unshipped feature is a
 ## PR Style
 
 Before authoring, editing, or reviewing code, unit tests, comments, or PR descriptions, read
-`~/dotfiles/claude/pr-authoring.md` and follow all applicable rules, whether or not a PR exists.
+`~/dotfiles/agent-rules/guides/pr-authoring.md` and follow all applicable rules, whether or not a PR exists.
 Before handoff, check the changed work against the guide and fix concrete violations.
 Delegated agents must follow the same standard.
 
 ## PR Review Tone
 
 When a PR review is requested or when drafting review feedback, read and follow
-`~/dotfiles/claude/review-tone.md`. This also applies to delegated and automated reviews.
+`~/dotfiles/agent-rules/guides/review-tone.md`. This also applies to delegated and automated reviews.
 
 @RTK.md

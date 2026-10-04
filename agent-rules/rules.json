@@ -16,7 +16,7 @@
         "cursor": {
           "file": "pr-authoring.mdc",
           "description": "Read the canonical PR style guide before authoring, editing, or reviewing code, unit tests, comments, or PR descriptions, whether or not a PR exists. Check the changed work against it before handoff.",
-          "alwaysApply": false
+          "alwaysApply": true
         }
       }
     },
@@ -26,7 +26,7 @@
         "cursor": {
           "file": "pr-review-tone.mdc",
           "description": "Read the review-voice guide when a PR review is requested or when drafting review feedback. This does not authorize posting.",
-          "alwaysApply": false
+          "alwaysApply": true
         }
       }
     },
