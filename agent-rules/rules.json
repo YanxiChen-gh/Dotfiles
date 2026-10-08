@@ -91,8 +91,8 @@
       "targets": {
         "cursor": {
           "file": "doc-and-planning.mdc",
-          "description": "Use when a design doc, RFC, spec, runbook, playbook, visual comparison, or structured feedback surface will make a decision easier to review.",
-          "alwaysApply": false
+          "description": "Default presentation and private review layer for code, documents, plans, reports, diagrams, and other artifacts.",
+          "alwaysApply": true
         }
       }
     },
@@ -136,7 +136,7 @@
       {"file": "codex/AGENTS-work.md", "scope": "work"}
     ],
     "title": "Codex Global Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "verification-and-handoff", "codex-skills"],
+    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "doc-and-planning", "verification-and-handoff", "codex-skills"],
     "footer": "@RTK.md"
   },
   "claude": {
@@ -145,7 +145,7 @@
       {"file": "claude/CLAUDE-work.md", "scope": "work"}
     ],
     "title": "User-Level Claude Code Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "verification-and-handoff"],
+    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "doc-and-planning", "verification-and-handoff"],
     "footer": "@RTK.md"
   },
   "opencode": {
@@ -154,7 +154,7 @@
       {"file": "opencode/AGENTS-work.md", "scope": "work"}
     ],
     "title": "OpenCode Global Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "mcp-preferences", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "verification-and-handoff"],
+    "rules": ["dotfiles-repo", "writing-style", "mcp-preferences", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "doc-and-planning", "verification-and-handoff"],
     "footer": ""
   }
 }

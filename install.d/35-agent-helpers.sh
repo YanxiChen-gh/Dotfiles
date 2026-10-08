@@ -6,8 +6,16 @@ setup_agent_helpers() {
     auth_helper="$script_dir/scripts/auth-vanta-agents.py"
     auth_skill="$script_dir/shared-skills/auth-vanta-agents"
     mkdir -p "$HOME/.local/bin"
-    link_dotfiles_file "$script_dir/scripts/open-lavish.sh" "$HOME/.local/bin/open-lavish" || return 1
-    link_dotfiles_file "$script_dir/scripts/lavish-axi-safe.sh" "$HOME/.local/bin/lavish-axi-safe" || return 1
+    link_dotfiles_file "$script_dir/scripts/plannotator-safe.sh" "$HOME/.local/bin/plannotator-safe" || return 1
+    for helper in open-lavish lavish-axi-safe; do
+        target="$HOME/.local/bin/$helper"
+        if [ -L "$target" ] && [ "$(readlink "$target")" = "$script_dir/scripts/$helper.sh" ]; then
+            rm -f "$target" || return 1
+            if [ -e "$target.pre-dotfiles" ] || [ -L "$target.pre-dotfiles" ]; then
+                mv "$target.pre-dotfiles" "$target" || return 1
+            fi
+        fi
+    done
     if [ "${WORK_MACHINE:-}" = "1" ]; then
         link_dotfiles_file "$auth_helper" "$HOME/.local/bin/auth-vanta-agents" || return 1
         return 0

@@ -20,7 +20,7 @@ then undid. Do not add artifacts merely to justify why an unshipped feature is a
 - For requests to change, build, or fix, make the requested in-scope local changes and run relevant non-destructive validation without asking first.
 - Ask before destructive actions, dependency changes, external writes, or material scope expansion. Commit and push only when explicitly requested.
 - Never post PR comments, inline review comments, review bodies, or thread replies without explicit confirmation from the user for the proposed content and destination. A request to review a PR is not permission to publish feedback; draft it first. This applies to every tool, posting identity, and delegated agent.
-- Human-interactive review is root-session only. Subagents must not launch Lavish, call question or approval tools, or wait for human input; they return findings, questions, and blockers directly to their parent.
+- Human-interactive review is root-session only. Subagents must not launch Plannotator, call question or approval tools, or wait for human input; they return findings, questions, and blockers directly to their parent.
 
 ## Engineering Principles
 
@@ -45,3 +45,13 @@ Delegated agents must follow the same standard.
 
 When a PR review is requested or when drafting review feedback, read and follow
 `~/dotfiles/agent-rules/guides/review-tone.md`. This also applies to delegated and automated reviews.
+
+## Artifact Presentation & Review
+
+For a design doc, RFC, spec, runbook, or playbook, use the relevant authoring workflow and follow `~/dotfiles/claude/doc-style/rubric.md`.
+
+Use the `plannotator` skill as the default presentation and review layer for artifacts you produce or need me to inspect, including code, documents, plans, reports, diagrams, and other outputs. Choose the content, format, and presentation that best help me understand the work and give useful feedback. Reuse existing artifacts and native rendering when they fit; use richer or custom presentation when it adds value. Keep simple answers and routine status updates in chat.
+
+Automatic plan-review hooks are not installed by this setup; open presentations explicitly rather than assuming plan exit will open them. For CLI sessions, use `plannotator-safe` and an explicit free `PLANNOTATOR_PORT`. Before sharing the URL, run `~/dotfiles/scripts/expose-port.sh <port>` to verify it. Keep presentation and feedback private unless I explicitly request sharing or publication.
+
+When a review is ready, share its verified URL in chat with a brief, natural handoff: what is ready and what input would help. Receive and address feedback in the same agent session; reopen the updated artifact when another review is useful. Do not create a second question or approval surface while waiting for the review.

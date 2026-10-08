@@ -809,7 +809,7 @@ const resolveEnvironment = (value) => {
 }
 
 const subagentContext = `[subagent]
-This is a child session. Do not launch Lavish, call question or approval tools, or wait for human input. Return findings, questions, and blockers directly to the parent. The parent owns scope approval.`
+This is a child session. Do not open interactive Plannotator sessions, call question or approval tools, or wait for human input. CLI help/version/discovery are allowed. Return artifacts, findings, questions, and blockers directly to the parent. The parent owns human review and scope approval.`
 
 const checkpointToolName = "context_checkpoint"
 const canaryPreflightToolName = "canary_takeover_preflight"
@@ -1538,8 +1538,17 @@ At a safe boundary, call ${checkpointToolName} exactly once. Do not mention cont
   }
 }
 
-const invokesLavish = (command) => {
-  return command.includes("lavish-axi")
+const opensPlannotator = (command) => {
+  for (const match of command.matchAll(/\bplannotator(?:-safe(?:\.sh)?)?(?=$|[\s\x22\x27`;|&()])/g)) {
+    const prefix = command.slice(0, match.index)
+    if (!/(?:^|[;|&()\n]|\b(?:bash|sh|zsh)\s+-[a-z]*c\s+[\x22\x27])\s*(?:(?:[A-Za-z_]\w*=[^\s;|&()]+|env|command|exec|npx(?:\s+-y)?)\s+)*[\x22\x27]?(?:[^\s\x22\x27`;|&()]*\/)?$/.test(prefix)) continue
+    const args = command.slice(match.index + match[0].length).split(/[;|&\n)]/, 1)[0].replace(/[\x22\x27]/g, "").trim()
+    if (/(?:^|\s)(?:--help|-h)(?:$|\s)/.test(args) || /^(?:--version|-v)(?:\s|$)/.test(args)) continue
+    if (/^sessions(?:\s|$)/.test(args) && !/(?:^|\s)--open(?:[=\s]|$)/.test(args)) continue
+    if (/^(?:improve-context|guide\s+(?:list|export|share|unshare))(?:\s|$)/.test(args)) continue
+    return true
+  }
+  return false
 }
 
 export const DotfilesHarnessPlugin = async ({ client, directory }, options = {}) => {
@@ -1732,9 +1741,9 @@ export const DotfilesHarnessPlugin = async ({ client, directory }, options = {})
       if (isChild && tool === "question") {
         throw new Error("Subagents must return questions to their parent instead of waiting for human input.")
       }
-      if (isChild && ["bash", "shell"].includes(tool) && invokesLavish(stringArg(args, "command"))) {
+      if (isChild && ["bash", "shell"].includes(tool) && opensPlannotator(stringArg(args, "command"))) {
         throw new Error(
-          "Subagents must not launch Lavish; use native search tools for inspection or return the review artifact or blocker to the parent.",
+          "Subagents must not open interactive Plannotator sessions; return the artifact or blocker to the parent. CLI help/version/discovery are allowed.",
         )
       }
 

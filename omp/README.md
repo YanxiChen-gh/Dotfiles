@@ -107,18 +107,14 @@ required maturity scripts or shared scope and outcome skills are missing.
 The native Agent Hub owns subagent detail. Herdr remains the cross-workspace
 lifecycle view and does not duplicate omp's task list.
 
-Lavish feedback mode is `managed-async` in a human-interactive omp TUI. Run
-each safe poll as one managed async Bash job per feedback round. While a
-Lavish review is active, the harness blocks `ask` for that OMP session so the
-managed poll remains the only approval channel. Explicit end, Send & End, or
-process shutdown clears the guard; normal turn settlement does not.
+Plannotator presentation sessions run as managed async Bash jobs in the root
+interactive OMP session. Use `plannotator-safe` with an explicit free
+`PLANNOTATOR_PORT`, then verify and share the loopback URL through
+`scripts/expose-port.sh`. The waiting CLI returns feedback on stdout when the
+user submits a decision. Address it in the same conversation and start a new
+session when the revised artifact needs review; do not open a second question
+or approval surface while the presentation is pending.
 
-The opener emits a Herdr review-ready notification with the verified URL and a
-request sound. OMP also shows an in-app readiness notice. The harness reminds the
-model to share the returned URL in chat with a natural review handoff before it
-waits; it does not enforce a message template or notify on every poll. Failed
-URL verification does not announce readiness, and notification failure does not
-discard a usable URL.
 
 On work machines, `auth-vanta-agents` reports OMP Glean and `slack-vanta`
 status without reading credential payloads. Run it yourself in a private
@@ -126,9 +122,7 @@ terminal to repair missing auth; agents may run only `auth-vanta-agents --status
 
 ## Operational notes
 
-The trial exercised standard OpenAI requests, gate loading, managed Lavish jobs,
-Herdr title sync, multiline prompts, and Agent Hub behavior. Keep these lifecycle
-details in mind when troubleshooting:
+Keep these lifecycle details in mind when troubleshooting:
 
 1. Slack completion uses omp's root-only `session_stop`; task agents do not emit it.
 2. Global rules are linked at `~/.omp/agent/APPEND_SYSTEM.md`.

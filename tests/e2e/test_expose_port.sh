@@ -370,10 +370,9 @@ FAKE_CURL_CONTENT_TYPE='application/json'
 FAKE_CURL_BODY='{"error":"forbidden host"}'
 export FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY
 if IS_ON_ONA=true "$TAILSCALE_SCRIPT" 4387 /forbidden-host >"$TMP/forbidden-host.out" 2>"$TMP/forbidden-host.err"; then
-    fail "Lavish forbidden-host response should fail verification"
+    fail "HTTP 403 response should fail verification"
 fi
 unset FAKE_CURL_STATUS FAKE_CURL_CONTENT_TYPE FAKE_CURL_BODY
-grep -q 'LAVISH_AXI_ALLOWED_HOSTS' "$TMP/forbidden-host.err" || fail "forbidden-host remedy missing"
 [ ! -s "$FAKE_SERVE_STATE" ] || fail "forbidden-host verification left a newly created Serve mapping"
 
 reset_serve

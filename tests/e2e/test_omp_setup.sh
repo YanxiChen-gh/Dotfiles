@@ -363,121 +363,77 @@ if (handlers.has("turn_start")) throw new Error("scope injection still registers
 const toolCall = handlers.get("tool_call")
 if (!toolCall) throw new Error("tool_call hook is missing")
 const toolResult = handlers.get("tool_result")
-const sessionStop = handlers.get("session_stop")
-const sessionShutdown = handlers.get("session_shutdown")
-if (!toolResult || !sessionStop || !sessionShutdown) throw new Error("Lavish lifecycle hooks are missing")
+if (!toolResult) throw new Error("tool_result hook is missing")
 const blockedByHook = (value: unknown): boolean =>
   typeof value === "object" && value !== null && "block" in value && value.block === true
 const rootContext = {
   mode: "tui",
+  agent: { kind: "main" },
   sessionManager: { getSessionId: () => "root-session" },
   ui: { notify() {} },
 }
-const askBeforeOpen = await toolCall(
-  { toolName: "ask", input: {} },
-  rootContext,
-)
-if (blockedByHook(askBeforeOpen)) throw new Error("ask was blocked before a Lavish review opened")
-const blocked = await toolCall(
-  { toolName: "bash", input: { command: "open-lavish /tmp/review.html" } },
-  { mode: "print", sessionManager: { getSessionId: () => "task-session" } },
-)
-if (!blockedByHook(blocked)) throw new Error("non-UI task session may launch Lavish")
-const foregroundPoll = await toolCall(
-  { toolName: "bash", input: { command: "lavish-axi-safe poll /tmp/review.html" } },
-  { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
-)
-if (!blockedByHook(foregroundPoll)) throw new Error("foreground Lavish poll was allowed")
-const delegatedPoll = await toolCall(
-  { toolName: "hub", input: { op: "start", application: "lavish-axi-safe", args: ["poll", "/tmp/review.html"] } },
-  { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
-)
-if (!blockedByHook(delegatedPoll)) throw new Error("non-Bash Lavish poll was allowed")
-const allowed = await toolCall(
-  { toolName: "bash", input: { command: "lavish-axi-safe poll /tmp/review.html", async: true } },
-  { mode: "tui", sessionManager: { getSessionId: () => "root-session" } },
-)
-if (blockedByHook(allowed)) throw new Error("interactive root session cannot launch Lavish")
-const openInput = { command: "open-lavish /tmp/review.html" }
-const openCall = await toolCall(
-  { toolName: "bash", input: openInput },
-  rootContext,
-)
-if (blockedByHook(openCall)) throw new Error("interactive root session cannot open Lavish")
-await toolResult(
-  { toolName: "bash", input: openInput, isError: false, content: [] },
-  rootContext,
-)
-const blockedAsk = await toolCall(
-  { toolName: "ask", input: {} },
-  rootContext,
-)
-if (!blockedByHook(blockedAsk)) throw new Error("ask was allowed during an active Lavish review")
-const otherSessionAsk = await toolCall(
-  { toolName: "ask", input: {} },
-  { mode: "tui", sessionManager: { getSessionId: () => "other-session" } },
-)
-if (blockedByHook(otherSessionAsk)) throw new Error("Lavish ask guard leaked across sessions")
-
-const endInput = { command: "lavish-axi-safe end /tmp/review.html" }
-await toolResult(
-  { toolName: "bash", input: endInput, isError: false, content: [] },
-  rootContext,
-)
-const askAfterEnd = await toolCall(
-  { toolName: "ask", input: {} },
-  rootContext,
-)
-if (blockedByHook(askAfterEnd)) throw new Error("ask stayed blocked after Lavish ended")
-
-await toolResult(
-  { toolName: "bash", input: openInput, isError: true, content: [] },
-  rootContext,
-)
-const askAfterFailedOpen = await toolCall(
-  { toolName: "ask", input: {} },
-  rootContext,
-)
-if (blockedByHook(askAfterFailedOpen)) throw new Error("failed Lavish open activated the ask guard")
-
-await toolResult(
-  { toolName: "bash", input: openInput, isError: false, content: [] },
-  rootContext,
-)
-await toolResult(
-  {
+const childContext = { ...rootContext, agent: { kind: "sub", depth: 0 } }
+const headlessContext = { ...rootContext, mode: "print" }
+const opens = [
+  "plannotator",
+  "PLANNOTATOR_PORT=43123 scripts/plannotator-safe.sh annotate /tmp/review.md",
+  "plannotator-safe review --patch-file /tmp/change.patch",
+  'env PLANNOTATOR_PORT=43123 "/tmp/tools/plannotator-safe" annotate /tmp/review.md',
+  "plannotator archive",
+  "plannotator sessions --open 1",
+  "bash -lc 'plannotator annotate /tmp/review.html'",
+  "result=$(plannotator-safe.sh annotate /tmp/review.txt)",
+  "command -v plannotator && plannotator review",
+  "plannotator --help; plannotator-safe.sh review",
+]
+for (const command of opens) {
+  for (const context of [childContext, headlessContext, { ...rootContext, agent: undefined }]) {
+    const result = await toolCall({ toolName: "bash", input: { command, async: true } }, context)
+    if (!blockedByHook(result)) throw new Error("Root-only review was allowed: " + command)
+  }
+  const foreground = await toolCall({ toolName: "bash", input: { command } }, rootContext)
+  if (!blockedByHook(foreground)) throw new Error("Foreground review was allowed: " + command)
+  const allowed = await toolCall({ toolName: "bash", input: { command, async: true } }, rootContext)
+  if (blockedByHook(allowed)) throw new Error("Managed root review was blocked: " + command)
+}
+for (const toolName of ["shell", "hub"]) {
+  const result = await toolCall({
+    toolName,
+    input: { application: "plannotator-safe.sh", args: ["annotate", "/tmp/review.md"], async: true },
+  }, rootContext)
+  if (!blockedByHook(result)) throw new Error("Review was allowed outside managed Bash")
+}
+for (const command of [
+  "plannotator --help",
+  "plannotator -v",
+  "plannotator review --help",
+  "plannotator-safe.sh annotate -h",
+  '"/tmp/tools/plannotator-safe.sh" --version',
+  "command -v plannotator",
+  "which plannotator-safe.sh",
+  "type -a /tmp/tools/plannotator",
+  "plannotator sessions --json",
+  "plannotator guide list",
+  "sh -n scripts/plannotator-safe.sh",
+  "cat scripts/plannotator-safe.sh",
+  "bash -lc 'sh -n scripts/plannotator-safe.sh && cat scripts/plannotator-safe.sh'",
+]) {
+  for (const context of [childContext, headlessContext]) {
+    const result = await toolCall({ toolName: "bash", input: { command } }, context)
+    if (blockedByHook(result)) throw new Error("CLI inspection was blocked: " + command)
+  }
+}
+for (const isError of [false, true]) {
+  const result = await toolResult({
     toolName: "bash",
-    input: { command: "lavish-axi-safe poll /tmp/review.html", async: true },
-    isError: false,
-    content: [{ type: "text", text: "session:\n  status: ended" }],
-  },
-  rootContext,
-)
-const askAfterSendAndEnd = await toolCall(
-  { toolName: "ask", input: {} },
-  rootContext,
-)
-if (blockedByHook(askAfterSendAndEnd)) throw new Error("ask stayed blocked after Send & End")
-
-await toolResult(
-  { toolName: "bash", input: openInput, isError: false, content: [] },
-  rootContext,
-)
-await sessionStop(
-  { type: "session_stop", session_id: "root-session" },
-  { getContextUsage: () => undefined },
-)
-const askAfterStop = await toolCall(
-  { toolName: "ask", input: {} },
-  rootContext,
-)
-if (!blockedByHook(askAfterStop)) throw new Error("turn settlement cleared the active Lavish guard")
-await sessionShutdown({ type: "session_shutdown" }, rootContext)
-const askAfterShutdown = await toolCall(
-  { toolName: "ask", input: {} },
-  rootContext,
-)
-if (blockedByHook(askAfterShutdown)) throw new Error("ask stayed blocked after process shutdown")
+    input: { command: opens[1], async: true },
+    isError,
+    content: [{ type: "text", text: '{"feedback":"Revise the diagram"}' }],
+  }, rootContext)
+  if (result !== undefined) throw new Error("CLI feedback was rewritten")
+  const ask = await toolCall({ toolName: "ask", input: {} }, rootContext)
+  if (blockedByHook(ask)) throw new Error("Completed review left stale interaction state")
+}
 
 const sessionStart = handlers.get("session_start")
 const turnEnd = handlers.get("turn_end")

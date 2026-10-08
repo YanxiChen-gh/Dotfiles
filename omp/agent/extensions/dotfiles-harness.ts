@@ -2,7 +2,7 @@
 //
 // omp already owns compaction and session orchestration. This extension adds
 // only personal integrations: deterministic PR evidence, comment reminders,
-// Lavish lifecycle safety, and Slack attention notifications.
+// Plannotator presentation safety, and Slack attention notifications.
 //
 // It runs in a single Bun process without an extension sandbox, so hook calls
 // use the existing stdin and exit-code contract.
@@ -85,13 +85,25 @@ const createSlackSender = (home: string) => {
   }
 }
 
-const invokesLavish = (command: string) => /\b(?:lavish-axi(?:-safe)?|open-lavish)\b/.test(command)
+const opensPlannotator = (command: string): boolean => {
+  for (const match of command.matchAll(/\bplannotator(?:-safe(?:\.sh)?)?(?=$|[\s\x22\x27`;|&()])/g)) {
+    const prefix = command.slice(0, match.index)
+    if (!/(?:^|[;|&()\n]|\b(?:bash|sh|zsh)\s+-[a-z]*c\s+[\x22\x27])\s*(?:(?:[A-Za-z_]\w*=[^\s;|&()]+|env|command|exec|npx(?:\s+-y)?)\s+)*[\x22\x27]?(?:[^\s\x22\x27`;|&()]*\/)?$/.test(prefix)) continue
+    const args = command.slice(match.index + match[0].length).split(/[;|&\n)]/, 1)[0].replace(/[\x22\x27]/g, "").trim()
+    if (/(?:^|\s)(?:--help|-h)(?:$|\s)/.test(args) || /^(?:--version|-v)(?:\s|$)/.test(args)) continue
+    if (/^sessions(?:\s|$)/.test(args) && !/(?:^|\s)--open(?:[=\s]|$)/.test(args)) continue
+    if (/^(?:improve-context|guide\s+(?:list|export|share|unshare))(?:\s|$)/.test(args)) continue
+    return true
+  }
+  return false
+}
 
-const lavishPollGuidance =
-  "Lavish feedback mode is `managed-async` in an interactive omp TUI. " +
-  "Open the review with `open-lavish <file>`, then run each `lavish-axi-safe poll <file>` as one managed Bash job with `async: true`. " +
-  "Always share the URL returned by the opener in a brief user-facing message before waiting for feedback; say what is ready and what input would help. " +
-  "When feedback is delivered, process it and start the next async poll. While the review is active, never use `ask`, an approval popup, Hub, or a detached shell."
+const plannotatorGuidance =
+  "Use Plannotator as the flexible default presentation/review layer for all artifacts, choosing the native mode that fits the content. " +
+  "Only the interactive root omp session opens reviews: select an explicit free PLANNOTATOR_PORT and run plannotator-safe with the native arguments as one managed Bash job with async: true. " +
+  "The helper keeps loopback local mode, automatic browser/Glimpse opening off, and sharing disabled. Run scripts/expose-port.sh with that port and share its verified loopback URL with a brief review handoff before awaiting feedback. " +
+  "Feedback submission completes the CLI process and returns feedback on stdout; process it and reopen after revisions. There is no separate polling command. " +
+  "While awaiting review, do not use ask, approval popups, Hub, or detached shells as duplicate human-interaction surfaces."
 
 const shellCommand = (input: Record<string, unknown>): string => {
   const command = stringField(input, "command")
@@ -140,7 +152,6 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
   pi.setLabel("Dotfiles harness")
 
   const editTools = new Set(["edit", "write", "apply_patch", "str_replace_editor", "str_replace"])
-  const activeLavishSessions = new Set<string>()
   const shellTools = new Set(["bash", "shell"])
 
   const syncHerdrTitle = async (ctx: TitleSyncContext): Promise<boolean> => {
@@ -200,21 +211,13 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     const sessionId = ctx?.sessionManager?.getSessionId?.() ?? ""
     const payload = payloadFor(sessionId, input)
 
-    if (tool === "ask" && activeLavishSessions.has(sessionId)) {
-      return {
-        block: true,
-        reason:
-          "Lavish feedback mode is managed-async for this session. Use the active async Bash poll instead of `ask`.",
-      }
-    }
-
     const command = shellCommand(input)
-    if (invokesLavish(command)) {
-      if (!shellTools.has(tool) || ctx.mode !== "tui") {
-        return { block: true, reason: "Lavish is human-interactive TUI review only; use native search tools instead." }
+    if (opensPlannotator(command)) {
+      if (ctx.mode !== "tui" || ctx.agent?.kind !== "main") {
+        return { block: true, reason: "Only the interactive root session may open Plannotator; return the artifact or blocker to the parent." }
       }
-      if (/\blavish-axi(?:-safe)?\s+poll\b/.test(command) && input.async !== true) {
-        return { block: true, reason: "Run Lavish poll as one managed Bash job with async: true." }
+      if (tool !== "bash" || input.async !== true) {
+        return { block: true, reason: "Open Plannotator with plannotator-safe as one managed Bash job with async: true." }
       }
     }
 
@@ -224,34 +227,10 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     }
   })
 
-  // Track successful Lavish lifecycle commands and surface comment reminders after edits.
-  pi.on("tool_result", async (event, ctx) => {
+  // Surface comment reminders after edits.
+  pi.on("tool_result", async (event) => {
     const tool = String(event.toolName ?? "").toLowerCase()
     const input = event.input
-    const sessionId = ctx?.sessionManager?.getSessionId?.() ?? ""
-    const command = shellCommand(input)
-
-    if (!event.isError && shellTools.has(tool) && sessionId) {
-      const opened =
-        /\bopen-lavish\b/.test(command) ||
-        (/\blavish-axi(?:-safe)?\s+/.test(command) &&
-          !/\blavish-axi(?:-safe)?\s+(?:design|end|export|playbook|poll|share|stop)\b/.test(command))
-      const pollEnded =
-        /\blavish-axi(?:-safe)?\s+poll\b/.test(command) &&
-        event.content.some((item) => item.type === "text" && /\bstatus:\s*ended\b/.test(item.text))
-      if (opened) activeLavishSessions.add(sessionId)
-      if (/\blavish-axi(?:-safe)?\s+end\b/.test(command) || pollEnded) activeLavishSessions.delete(sessionId)
-      if (opened) {
-        if (ctx.mode === "tui") ctx.ui.notify("Lavish review ready - feedback is available in the review page.", "info")
-        return {
-          content: [
-            ...event.content,
-            { type: "text", text: "Share the returned review URL with the user now, with a brief handoff explaining what to review. Then use the managed async feedback poll." },
-          ],
-        }
-      }
-    }
-
     if (!editTools.has(tool)) return
     const result = await runHook(join(hooks, "comment-self-check.sh"), {
       tool_input: {
@@ -271,9 +250,9 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
     }
   })
 
-  // Add omp-specific Lavish guidance without scheduling another user turn.
+  // Add omp-specific presentation guidance without scheduling another user turn.
   pi.on("before_agent_start", async (event) => {
-    return { systemPrompt: [...event.systemPrompt, lavishPollGuidance] }
+    return { systemPrompt: [...event.systemPrompt, plannotatorGuidance] }
   })
 
   pi.on("session_start", async (_event, ctx) => {
@@ -296,10 +275,6 @@ export default async function dotfilesHarness(pi: ExtensionAPI) {
         `*Reason:* ${slackText(`Approval: ${String(event.toolName ?? "tool")}`)}`,
       ].join("\n"),
     )
-  })
-
-  pi.on("session_shutdown", () => {
-    activeLavishSessions.clear()
   })
 
   pi.on("session_stop", async (_event, ctx) => {

@@ -19,8 +19,6 @@ Assume the user's automatic SSH port forwarder mirrors new remote listeners onto
 
 The script verifies the service from the host where the agent runs. In a remote CDE it cannot verify the laptop-side forward, so describe the URL as locally verified only when the browser actually reaches it. If it does not, keep the service running and ask the user to check the automatic forwarder rather than silently changing exposure methods.
 
-For Lavish artifacts, use `open-lavish <file>` instead of opening with `npx -y lavish-axi` directly, and use `lavish-axi-safe` for later `poll` or `end` commands. These helpers keep Lavish on loopback, prevent remote browser opening, safely reuse shared state, and delegate URL resolution to `expose-port.sh`. Do not manually stop another agent's shared Lavish server.
-
 In an Ona CDE, start the Vanta web stack with `~/dotfiles/scripts/vanta-dev-start-web-ona.sh`. The wrapper waits for local nginx, keeps browser assets safe, and returns its forwarded localhost URL.
 
 Use `~/dotfiles/scripts/expose-port.sh --tailscale <local-port> [verify-path]` only when the user explicitly asks for a tailnet URL or automatic forwarding is unavailable. The fallback owns the single ACL-permitted tailnet port `8080`; it must not replace another live mapping. For public sharing, use an approved sharing mechanism rather than widening the local SSH forward.

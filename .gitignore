@@ -19,5 +19,6 @@ claude/pr-style/eval/results-*.json
 __pycache__/
 *.pyc
 
-# Lavish review artifacts (ephemeral)
+# Private presentation artifacts
 .lavish/
+.plannotator/

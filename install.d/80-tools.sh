@@ -376,15 +376,115 @@ install_agent_browser() {
     echo "✅ agent-browser $version and Chrome are ready"
 }
 
-# Install an agent skill for Claude Code and/or Cursor from a GitHub repo.
-# Usage: install_agent_skill <github_repo> <skill_name>
+# Install only the official binary; Dotfiles manages skills separately.
+install_plannotator() {
+    local installer=""
+    local status=0
+    if command -v plannotator >/dev/null 2>&1 || [ -x "$HOME/.local/bin/plannotator" ]; then
+        return 0
+    fi
+    if [ -e "$HOME/.local/bin/plannotator" ] || [ -L "$HOME/.local/bin/plannotator" ]; then
+        echo "Refusing to overwrite unmanaged file: $HOME/.local/bin/plannotator" >&2
+        return 1
+    fi
+    installer=$(mktemp) || return 1
+    curl -fsSL https://plannotator.ai/install.sh -o "$installer" &&
+        bash "$installer" --minimal || status=$?
+    rm -f "$installer"
+    [ "$status" -eq 0 ] || return "$status"
+    [ -x "$HOME/.local/bin/plannotator" ] || command -v plannotator >/dev/null 2>&1
+}
+
+install_plannotator_skill() {
+    node <<'NODE' || return 1
+const fs = require("node:fs");
+const path = require("node:path");
+const env = process.env;
+const home = env.HOME;
+const canonical = path.resolve(home, ".agents/skills/plannotator");
+const lockPath = env.XDG_STATE_HOME
+    ? path.join(env.XDG_STATE_HOME, "skills/.skill-lock.json")
+    : path.join(home, ".agents/.skill-lock.json");
+try {
+    const lock = fs.existsSync(lockPath) ? JSON.parse(fs.readFileSync(lockPath, "utf8")) : {};
+    const owned = lock.skills?.plannotator?.source === "backnotprop/plannotator";
+    const targets = [
+        canonical,
+        path.join(env.CLAUDE_CONFIG_DIR || path.join(home, ".claude"), "skills/plannotator"),
+        path.join(home, ".cursor/skills/plannotator"),
+        path.join(env.CODEX_HOME || path.join(home, ".codex"), "skills/plannotator"),
+        path.join(env.XDG_CONFIG_HOME || path.join(home, ".config"), "opencode/skills/plannotator"),
+    ];
+    for (const target of targets) {
+        let stat;
+        try { stat = fs.lstatSync(target); } catch (error) {
+            if (error.code === "ENOENT") continue;
+            throw error;
+        }
+        const managed = owned && (target === canonical
+            ? stat.isDirectory() && !stat.isSymbolicLink()
+            : stat.isSymbolicLink() && path.resolve(path.dirname(target), fs.readlinkSync(target)) === canonical);
+        if (!managed) throw new Error(`Refusing to overwrite unmanaged Plannotator skill: ${target}`);
+    }
+} catch (error) {
+    console.error(error.message);
+    process.exit(1);
+}
+NODE
+    install_agent_skill "https://github.com/backnotprop/plannotator/tree/main/apps/skills/core/plannotator" \
+        plannotator --json || return 1
+    if [ ! -f "$HOME/.agents/skills/plannotator/SKILL.md" ] || \
+            [ ! -f "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/plannotator/SKILL.md" ]; then
+        echo "Plannotator skill installation did not produce the replacement SKILL.md" >&2
+        return 1
+    fi
+}
+
+remove_lavish_skill() {
+    local lock_file="${XDG_STATE_HOME:+$XDG_STATE_HOME/skills/.skill-lock.json}"
+    local status=0
+    local target=""
+    lock_file=${lock_file:-$HOME/.agents/.skill-lock.json}
+    [ -f "$lock_file" ] || return 0
+    node - "$lock_file" <<'NODE' || status=$?
+const fs = require("node:fs");
+try {
+    const skill = JSON.parse(fs.readFileSync(process.argv[2], "utf8")).skills?.lavish;
+    process.exit(skill?.source === "kunchenguid/lavish-axi" ? 0 : 1);
+} catch (error) {
+    console.error(`Cannot read skill ownership: ${error.message}`);
+    process.exit(2);
+}
+NODE
+    case "$status" in
+        1) return 0 ;;
+        0) ;;
+        *) return "$status" ;;
+    esac
+    for target in "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/lavish" "$HOME/.cursor/skills/lavish" \
+            "${CODEX_HOME:-$HOME/.codex}/skills/lavish" \
+            "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/skills/lavish"; do
+        if [ -e "$target" ] || [ -L "$target" ]; then
+            if [ ! -L "$target" ] || \
+                    [ "$(CDPATH= cd -- "$target" 2>/dev/null && pwd -P)" != "$HOME/.agents/skills/lavish" ]; then
+                echo "Preserving unmanaged Lavish skill: $target"
+                return 0
+            fi
+        fi
+    done
+    npx skills remove lavish --agent claude-code cursor codex opencode --yes --global
+}
+
+# Install an agent skill from a GitHub repo or skill-directory URL.
+# Usage: install_agent_skill <source> <skill_name> [skills-add-options]
 install_agent_skill() {
     local repo="$1"
     local skill="$2"
+    shift 2
     echo "Installing ${skill} skill for coding agents..."
     if npx skills add "$repo" \
             --agent claude-code cursor codex opencode \
-            --skill "$skill" --yes --global 2>/dev/null; then
+            --skill "$skill" --yes --global "$@" 2>/dev/null; then
         echo "✅ ${skill} skill installed"
     else
         echo "⚠️  ${skill} skill installation failed (can retry manually)"

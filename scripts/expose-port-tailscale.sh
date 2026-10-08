@@ -152,12 +152,7 @@ else
 fi
 if [[ "$STATUS" != 2* && "$STATUS" != 3* ]]; then
     echo "[expose-port] verification FAILED (${STATUS}) for ${URL}${VERIFY_PATH}" >&2
-    if [[ "$STATUS" == 403 ]] \
-            && jq -e '.error == "forbidden host"' "$RESPONSE_BODY" >/dev/null 2>&1; then
-        echo "[expose-port] Lavish rejected the tailnet hostname; restart Lavish with ${HOST} in LAVISH_AXI_ALLOWED_HOSTS before using Tailscale exposure." >&2
-    else
-        echo "[expose-port] check the app is listening on localhost:${LOCAL_PORT} and 'tailscale serve status'" >&2
-    fi
+    echo "[expose-port] check the app is listening on localhost:${LOCAL_PORT} and 'tailscale serve status'" >&2
     cleanup_changed_mapping
     exit 1
 fi

@@ -136,9 +136,13 @@ printf '%s\n' '{"hookSpecificOutput":{"additionalContext":"Comment self-check te
 EOF
 cat >"$HARNESS_HOOKS/verify-gate-pretooluse.sh" <<'EOF'
 #!/bin/sh
-cat >/dev/null
-printf '%s\n' 'Verify gate test block' >&2
-exit 2
+payload=$(cat)
+case "$payload" in
+  *'pr create'*)
+    printf '%s\n' 'Verify gate test block' >&2
+    exit 2
+    ;;
+esac
 EOF
 
 HERDR_TITLE_LOG="$TMP/herdr-title.log"
@@ -1041,7 +1045,6 @@ await hooks["experimental.chat.system.transform"](
   { system: childSystem },
 )
 assert.doesNotMatch(childSystem.join("\n"), /scope-gate.*test prompt/)
-assert.match(childSystem.join("\n"), /Do not launch Lavish/)
 
 const checkpointModel = {
   id: "test-model",
@@ -1629,27 +1632,52 @@ await assert.rejects(
   ),
   /return questions to their parent/,
 )
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "approved-child", callID: "child-lavish-call" },
-    { args: { command: "bash -lc 'npx -y lavish-axi /tmp/review.html'" } },
-  ),
-  /must not launch Lavish/,
-)
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "approved-child", callID: "child-lavish-substitution-call" },
-    { args: { command: "result=$(npx -y lavish-axi /tmp/review.html)" } },
-  ),
-  /must not launch Lavish/,
-)
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "approved-child", callID: "child-lavish-chain-call" },
-    { args: { command: "command -v lavish-axi && lavish-axi /tmp/review.html" } },
-  ),
-  /must not launch Lavish/,
-)
+for (const command of [
+  "plannotator",
+  "plannotator annotate /tmp/review.md",
+  "PLANNOTATOR_PORT=43123 scripts/plannotator-safe.sh review",
+  'env PLANNOTATOR_PORT=43123 "/tmp/tools/plannotator-safe" annotate /tmp/review.md',
+  "bash -lc 'plannotator-safe annotate /tmp/review.html'",
+  "result=$(plannotator-safe.sh annotate /tmp/review.txt)",
+  "command -v plannotator && plannotator review",
+  "plannotator --help; plannotator-safe.sh archive",
+  "plannotator sessions --open 1",
+  "plannotator inbox --background",
+]) {
+  for (const tool of ["bash", "shell"]) {
+    await assert.rejects(
+      hooks["tool.execute.before"](
+        { tool, sessionID: "approved-child", callID: "child-review-call" },
+        { args: { command } },
+      ),
+      /interactive Plannotator/,
+    )
+  }
+  await hooks["tool.execute.before"](
+    { tool: "bash", sessionID: "test-session", callID: "root-review-call" },
+    { args: { command } },
+  )
+}
+for (const command of [
+  "plannotator --help",
+  "plannotator -v",
+  "plannotator review --help",
+  "plannotator-safe.sh annotate -h",
+  '"/tmp/tools/plannotator-safe.sh" --version',
+  "command -v plannotator",
+  "which plannotator-safe.sh",
+  "type -a /tmp/tools/plannotator",
+  "plannotator sessions --json",
+  "plannotator guide list",
+  "sh -n scripts/plannotator-safe.sh",
+  "cat scripts/plannotator-safe.sh",
+  "bash -lc 'sh -n scripts/plannotator-safe.sh && cat scripts/plannotator-safe.sh'",
+]) {
+  await hooks["tool.execute.before"](
+    { tool: "bash", sessionID: "approved-child", callID: "child-cli-inspect-call" },
+    { args: { command } },
+  )
+}
 await hooks["tool.execute.before"](
   { tool: "question", sessionID: "test-session", callID: "root-question-call" },
   { args: {} },
@@ -1663,12 +1691,13 @@ sessionRecords.set("resumed-child", {
   parentID: "approved-root",
 })
 sessionRecords.set("approved-root", { id: "approved-root" })
-const resumedChildSystem = []
-await hooks["experimental.chat.system.transform"](
-  { sessionID: "resumed-grandchild" },
-  { system: resumedChildSystem },
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "bash", sessionID: "resumed-grandchild", callID: "resumed-review-call" },
+    { args: { command: "plannotator-safe.sh annotate /tmp/review.md" } },
+  ),
+  /interactive Plannotator/,
 )
-assert.match(resumedChildSystem.join("\n"), /Do not launch Lavish/)
 await hooks["tool.execute.before"](
   { tool: "write", sessionID: "resumed-grandchild", callID: "resumed-child-write-call" },
   { args: { filePath: "src/app.js", content: "const value = true" } },
@@ -1685,12 +1714,13 @@ await hooks["tool.execute.before"](
   { args: { filePath: "src/app.js", content: "const value = true" } },
 )
 
-const unresolvedSystem = []
-await hooks["experimental.chat.system.transform"](
-  { sessionID: "unresolved-session" },
-  { system: unresolvedSystem },
+await assert.rejects(
+  hooks["tool.execute.before"](
+    { tool: "bash", sessionID: "unresolved-session", callID: "unresolved-review-call" },
+    { args: { command: "plannotator review" } },
+  ),
+  /interactive Plannotator/,
 )
-assert.match(unresolvedSystem.join("\n"), /Do not launch Lavish/)
 await assert.rejects(
   hooks["tool.execute.before"](
     { tool: "question", sessionID: "unresolved-session", callID: "unresolved-question-call" },
