@@ -128,6 +128,21 @@ Keep these lifecycle details in mind when troubleshooting:
 2. Global rules are linked at `~/.omp/agent/APPEND_SYSTEM.md`.
 3. Run `herdr integration status` after Herdr upgrades and confirm `omp: current`.
 
+The Dotfiles harness recognizes ready Plannotator servers owned by the root
+session's managed Bash jobs. When the model and foreground tools have settled
+and only dedicated review jobs remain, it reports a review blocker through
+Herdr's native integration. Herdr supplies the request notification; the
+harness does not send a second toast. Feedback, dismissal, failure, resumed
+work, and session changes release only the harness's own blocker.
+Unrelated jobs, composite shell commands, and nested sessions are not
+classified as review-only waits. CLI feedback and managed async delivery
+remain unchanged.
+
+`setup_omp_harness` in `install.d/66-omp.sh` activates only the versioned
+extension link without changing native settings or agent instructions.
+Existing OMP processes retain their loaded extension until their next
+start; Herdr does not need a restart.
+
 Global instructions route code, unit tests, comments, and PR descriptions to the shared
 [PR style guide](../agent-rules/guides/pr-authoring.md) for both authoring and review, with a check before
 handoff. The cleanup skill, evaluation harness, and comment reminder use that same standard.

@@ -143,22 +143,28 @@ configure_omp_defaults() {
     echo "   Run /login openai-codex for Codex models; set OPENAI_API_KEY for selectable OpenAI API models."
 }
 
+setup_omp_harness() {
+    omp_experiment_enabled || return 0
+
+    script_dir=$(resolve_script_dir) || return 1
+    agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
+    mkdir -p "$agent_dir/extensions" || return 1
+    link_dotfiles_file \
+        "$script_dir/omp/agent/extensions/dotfiles-harness.ts" \
+        "$agent_dir/extensions/dotfiles-harness.ts"
+}
+
 setup_omp_config() {
     omp_experiment_enabled || return 0
 
     script_dir=$(resolve_script_dir) || return 1
     source_dir="$script_dir/omp"
     agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
-    ext_dir="$agent_dir/extensions"
-
-    mkdir -p "$ext_dir"
     # omp owns credentials, model selection, and setup state. Older revisions
     # linked these mutable files into Dotfiles; remove only those exact links.
     remove_legacy_omp_link "$agent_dir/models.yml" "$source_dir/agent/models.yml"
     remove_legacy_omp_link "$agent_dir/config.yml" "$source_dir/agent/config.yml"
-    link_dotfiles_file \
-        "$source_dir/agent/extensions/dotfiles-harness.ts" \
-        "$ext_dir/dotfiles-harness.ts" || return 1
+    setup_omp_harness || return 1
 
     # Global rules: reuse the same generated aggregate opencode uses. omp appends
     # APPEND_SYSTEM.md to the system prompt.

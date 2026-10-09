@@ -327,6 +327,24 @@ jq -e '. == {"openai/":"apply_patch","openai-codex/":"apply_patch"}' \
   exit 1
 }
 
+# Targeted activation must leave native settings and agent instructions alone.
+(
+  export PI_CODING_AGENT_DIR="$TMP/harness-only"
+  mkdir -p "$PI_CODING_AGENT_DIR/extensions"
+  printf 'user settings\n' >"$PI_CODING_AGENT_DIR/config.yml"
+  printf 'user instructions\n' >"$PI_CODING_AGENT_DIR/APPEND_SYSTEM.md"
+  printf 'user extension\n' >"$PI_CODING_AGENT_DIR/extensions/dotfiles-harness.ts"
+  . "$ROOT/install.d/10-helpers.sh"
+  . "$ROOT/install.d/66-omp.sh"
+  resolve_script_dir() { printf '%s\n' "$ROOT"; }
+  setup_omp_harness
+  setup_omp_harness
+  [ "$(readlink "$PI_CODING_AGENT_DIR/extensions/dotfiles-harness.ts")" = "$ROOT/omp/agent/extensions/dotfiles-harness.ts" ]
+  [ "$(cat "$PI_CODING_AGENT_DIR/extensions/dotfiles-harness.ts.pre-dotfiles")" = 'user extension' ]
+  [ "$(cat "$PI_CODING_AGENT_DIR/config.yml")" = 'user settings' ]
+  [ "$(cat "$PI_CODING_AGENT_DIR/APPEND_SYSTEM.md")" = 'user instructions' ]
+)
+
 # Exercise the extension hooks when Bun is available.
 BUN_BIN=$(command -v bun 2>/dev/null || true)
 if [ -z "$BUN_BIN" ] && [ -x "$ORIGINAL_HOME/.bun/bin/bun" ]; then
