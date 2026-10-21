@@ -43,6 +43,8 @@ In the option lists, **Left** (or **Alt+Left**) returns to the previous selectio
 
 Fresh checkout mode keeps Treehouse as the exclusive worktree owner. Shared mode can use a selected repository's primary checkout or the current unmanaged linked checkout. A Treehouse-managed current checkout cannot back a second workspace; use `prefix+c` for another tab in its owning workspace. `prefix+shift+a` remains the no-picker shortcut for a fresh current-repository worktree with an agent and nvim.
 
+The default Agent sidebar layout gives the workspace title its own line, with the tab and agent type underneath. OpenCode retains its custom subagent layout. After syncing the config, use Herdr's `reload config` menu action to apply the layout without restarting panes.
+
 ## Herdr troubleshooting
 
 `prefix+t` (`Ctrl+G`, then `T`) asks for permission, whether to include the originating session's history, and an optional problem note. It opens a separate `troubleshoot` workspace in the existing Dotfiles checkout and uses the same OMP/OpenCode selection as `prefix+a`, without Treehouse, a new worktree, or an editor split. `prefix+a` is unchanged.

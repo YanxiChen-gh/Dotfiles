@@ -35,6 +35,9 @@ delivery = "herdr"
 [ui.sidebar.spaces]
 rows = [["state_icon", "workspace"], ["$repo", "$worktree"]]
 
+[ui.sidebar.agents]
+rows = [["state_icon", "workspace"], ["tab", "agent"]]
+
 [ui.sidebar.agents.rows_by_agent]
 opencode = [
   [
