@@ -43,6 +43,29 @@ sync_ona_env_from_ona() {
     fi
 }
 
+setup_work_buildkite_auth() {
+    if [ "${WORK_MACHINE:-}" != "1" ]; then
+        return 0
+    fi
+
+    if ! command -v bk >/dev/null 2>&1; then
+        echo "Buildkite CLI not found; install it from https://buildkite.com/docs/platform/cli/installation and rerun install.sh"
+        return 0
+    fi
+    if [ -z "${BUILDKITE_API_TOKEN:-}" ]; then
+        echo "BUILDKITE_API_TOKEN is not set; skipping Buildkite configuration"
+        return 0
+    fi
+
+    # Keep credential-related output out of installer logs.
+    if bk configure --org VantaInc --token "$BUILDKITE_API_TOKEN" --force >/dev/null 2>&1; then
+        echo "Buildkite organization set to VantaInc; keep BUILDKITE_API_TOKEN available for runtime authentication"
+    else
+        echo "Failed to configure Buildkite; rerun bk configure in a private terminal" >&2
+        return 1
+    fi
+}
+
 # Configure GitHub CLI and Git identity from the work Ona GH_TOKEN.
 setup_work_github_auth() {
     if [ "$WORK_MACHINE" != "1" ]; then

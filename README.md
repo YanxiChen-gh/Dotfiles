@@ -156,6 +156,16 @@ opens only the missing OAuth flow, supports `--profile <name>` for named OMP
 profiles, and never prints or copies credential payloads. Agents may run only
 the status command.
 
+### Buildkite CLI
+
+On work machines (`WORK_MACHINE=1`), `install.sh` configures an existing [`bk` installation](https://buildkite.com/docs/platform/cli/installation) for `VantaInc` when `BUILDKITE_API_TOKEN` is set:
+
+```sh
+bk configure --org VantaInc --token "$BUILDKITE_API_TOKEN" --force
+```
+
+Keep the token available in the environment for hosts without a credential store. Work-only agent instructions use `bk` for Buildkite pipelines, builds, job logs, and artifacts; personal instructions and setup are unchanged.
+
 ### Google Workspace CLI
 
 On work machines, `install.sh` pins and installs [`gws`](https://github.com/googleworkspace/cli). Run `gws-work-auth` once per fresh machine to authorize Docs, Sheets, Slides, and the Drive operations used for comments, permissions, and file metadata. The helper is idempotent, accepts only a valid `@vanta.com` account, and deliberately uses explicit scopes so `gws` does not add `cloud-platform` access.

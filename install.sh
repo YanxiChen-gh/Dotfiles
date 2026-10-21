@@ -69,6 +69,7 @@ setup_ona_default_shell
 if [ "$WORK_MACHINE" = "1" ]; then
     sync_ona_env_from_ona
     setup_work_github_auth
+    setup_work_buildkite_auth
 fi
 
 # Install tools from URLs

@@ -33,6 +33,8 @@ then undid. Do not add artifacts merely to justify why an unshipped feature is a
 
 The user grants standing approval to run `just post-pull`; this satisfies repository-level requirements to ask first. Run it without asking whenever dependencies, generated code, or local setup state may be stale, then retry the blocked operation.
 
+For Vanta Buildkite access, use the Buildkite CLI (`bk`) for pipelines, builds, job logs, and artifacts. Keep the token in the environment, never in source files or output. Use `bk <command> --help` for command syntax; existing approval requirements still apply to mutations.
+
 ## Engineering Principles
 
 - Weigh technical decisions on quality, simplicity, robustness, scalability, and long-term maintainability, not on how much effort they take to build. Development cost is a minor factor.
