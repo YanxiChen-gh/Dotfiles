@@ -98,7 +98,7 @@ class CompletionHandler(BaseHTTPRequestHandler):
             names = [tool["function"]["name"] for tool in body.get("tools", [])]
             name = "eval" if case.env.get("FIXTURE_PROVIDER") == "openai-codex" else "bash"
             assert name in names, f"fixture requires actual {name} tool, available: {names}"
-            arguments = lambda command: {"language": "js", "code": "display(await tool.bash(" + json.dumps({"command": command, "async": True}) + "))"} if name == "eval" else {"command": command, "async": True}
+            arguments = lambda command: {"language": "js", "code": "console.log(await tool.bash(" + json.dumps({"command": command, "async": True}) + "))"} if name == "eval" else {"command": command, "async": True}
             delta = {"role": "assistant", "tool_calls": [{"index": i, "id": f"fixture-{i}", "type": "function",
                 "function": {"name": name, "arguments": json.dumps(arguments(command))}}
                 for i, command in enumerate(case.commands)]}
