@@ -48,6 +48,10 @@ around them.
   and `openai-codex/gpt-6.1-sol` in omp 18.4.4 or newer.
   The module then runs the Herdr integration, registers RTK (best-effort),
   and syncs the Glean MCP overlay.
+  OMP 18.12.5 or newer is required for automatic collaboration and host discovery.
+  It also sets `collab.autoStart` to `control` so new OMP sessions publish
+  control hosts for the phone session hub. Keep the hub on a trusted private
+  LAN: it has no application login, and collaboration links grant control.
   `extendedContext` is a global OMP setting, not a Codex-only setting. It raises
   supported models to their provider's extended limit and may cost more.
   Codex GPT-5.6 Sol/Terra have 1M-token windows, GPT-6 Sol currently reports

@@ -230,6 +230,10 @@ if [ -n "$DOTFILES_DIR" ] && [ -d "$DOTFILES_DIR" ]; then
     export PATH="$DOTFILES_DIR:$PATH"
 fi
 
+if [ -f "$HOME/.config/herdr/launchers/session-hub-ensure.sh" ]; then
+    sh "$HOME/.config/herdr/launchers/session-hub-ensure.sh"
+fi
+
 # ------------------- Work Configuration ------------------------
 if [ "$WORK_MACHINE" = "1" ] && [ -n "$DOTFILES_DIR" ] && [ -f "$DOTFILES_DIR/shell/work.sh" ]; then
     source "$DOTFILES_DIR/shell/work.sh"

@@ -32,10 +32,51 @@ requested_repo_root=""
 requested_workspace_cwd=""
 clone_repository=""
 clone_root=""
+inventory_only=false
+result_file="${DOTFILES_HERDR_RESULT_FILE:-}"
+existing_workspace=""
+result_published=false
+
+publish_result() {
+  [ -n "$result_file" ] || return 0
+  [ "$result_published" = false ] || return 0
+  [ ! -f "$result_file" ] || return 0
+  python3 - "$result_file" "$@" <<'PY'
+import json
+import os
+import sys
+import tempfile
+
+path, status, *fields = sys.argv[1:]
+payload = {"status": status}
+if status == "ready":
+    payload["result"] = dict(zip(("workspaceId", "tabId", "paneId", "cwd"), fields))
+else:
+    payload["error"] = fields[0]
+fd, temporary = tempfile.mkstemp(prefix=".result-", dir=os.path.dirname(path))
+try:
+    with os.fdopen(fd, "w") as stream:
+        json.dump(payload, stream)
+    os.replace(temporary, path)
+finally:
+    if os.path.exists(temporary):
+        os.unlink(temporary)
+PY
+  result_published=true
+}
 
 cleanup_prompt_files() {
   if [ -n "$initial_prompt_file" ]; then rm -f "$initial_prompt_file"; fi
 }
+
+launcher_exit() {
+  local status=$?
+  cleanup_prompt_files
+  if [ "$status" -ne 0 ]; then
+    publish_result failed "Workspace setup failed; inspect the private launcher log." || true
+  fi
+}
+trap launcher_exit EXIT
 
 # Detached shells have no visible stderr, so surface failures as a herdr toast,
 # and - once the panes exist - in the panes too, so a failure never leaves them
@@ -43,12 +84,17 @@ cleanup_prompt_files() {
 toast() { "$herdr" notification show "$1" ${2:+--body "$2"} >/dev/null 2>&1 || true; }
 report() {
   [ -n "$1" ] || return 0
-  "$herdr" pane run "$1" "clear; echo '✗ new task workspace: $2'" >/dev/null 2>&1 || true
+  local quoted_error
+  printf -v quoted_error '%q' "✗ new task workspace: $2"
+  "$herdr" pane run "$1" "clear; printf '%s\n' $quoted_error" >/dev/null 2>&1 || true
 }
 die() {
+  publish_result failed "$1" || true
   report "${left:-}" "$1"
   report "${right:-}" "$1"
-  if [ -n "${task_workspace:-}" ]; then
+  if [ -n "$existing_workspace" ] && [ -n "${task_tab:-}" ]; then
+    "$herdr" tab close "$task_tab" >/dev/null 2>&1 || true
+  elif [ -n "${task_workspace:-}" ]; then
     "$herdr" workspace close "$task_workspace" >/dev/null 2>&1 || true
   fi
   toast "New task workspace failed" "$1"
@@ -121,6 +167,19 @@ treehouse_checkout_status() {
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --inventory) inventory_only=true ;;
+    --result-file)
+      [ "$#" -ge 2 ] || die "--result-file requires a path"
+      result_file="$2"
+      shift
+      ;;
+    --workspace-id)
+      [ "$#" -ge 2 ] || die "--workspace-id requires an id"
+      existing_workspace="$2"
+      with_worktree=false
+      shift
+      ;;
+    --omp) agent_cmd="omp" ;;
     --select) select_setup=true ;;
     --with-worktree | --worktree) with_worktree=true ;;
     --without-worktree | --current) with_worktree=false ;;
@@ -164,11 +223,6 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
-
-if [ "$select_setup" = false ] && [ -n "$initial_prompt_file" ]; then
-  trap cleanup_prompt_files EXIT
-fi
-
 
 pick_option() {
   local result
@@ -285,21 +339,37 @@ add_repository() {
 
 discover_repositories() {
   local repo_home candidate
+  current_repository_id=""
   if current_worktree=$(resolve_worktree "$src_cwd") \
     && current_primary=$(resolve_primary_checkout "$current_worktree") \
     && current_repository_id=$(resolve_repository_id "$current_worktree"); then
     add_repository "$current_primary"
-    for repo_home in "${repo_homes[@]}"; do
-      for candidate in "$repo_home"/*; do
-        [ -d "$candidate" ] || continue
-        add_repository "$candidate"
-      done
-    done
   fi
+  for repo_home in "${repo_homes[@]}"; do
+    for candidate in "$repo_home"/*; do
+      [ -d "$candidate" ] || continue
+      add_repository "$candidate"
+    done
+  done
   printf '%s\n' \
     "+ Open local path..."$'\t'"__open__" \
     "+ Clone GitHub repository..."$'\t'"__clone__"
 }
+
+if [ "$inventory_only" = true ]; then
+  command -v jq >/dev/null 2>&1 || die "jq not installed"
+  add_repo_home "$(default_repo_home)"
+  if [ -n "${HERDR_REPO_ROOTS:-}" ]; then
+    IFS=: read -r -a configured_roots <<< "$HERDR_REPO_ROOTS"
+    for configured_root in "${configured_roots[@]}"; do
+      add_repo_home "$configured_root"
+    done
+  fi
+  discover_repositories | jq -Rn '[inputs | split("\t") | .[1]
+    | select(. != "__open__" and . != "__clone__")
+    | {id: ., name: (split("/") | last), path: .}]'
+  exit 0
+fi
 
 choose_repository() {
   local selection
@@ -509,7 +579,18 @@ PY
   exit 0
 fi
 
+sh "$launcher_dir/session-hub-ensure.sh"
 command -v jq >/dev/null 2>&1 || die "jq not installed"
+if [ -n "$existing_workspace" ]; then
+  [ -z "$clone_repository" ] || die "Cloning is not supported for an existing workspace"
+  workspace_panes=$("$herdr" pane list --workspace "$existing_workspace") \
+    || die "Could not inspect selected workspace"
+  requested_workspace_cwd=$(printf '%s' "$workspace_panes" \
+    | jq -er '.result.panes | map(select(.cwd? | type == "string" and length > 0)) | .[0].cwd | strings') \
+    || die "Selected workspace has no available working directory"
+  requested_repo_root="$requested_workspace_cwd"
+  with_worktree=false
+fi
 if [ -n "$clone_repository" ]; then
   command -v gh >/dev/null 2>&1 || die "gh not installed"
   clone_metadata=$(gh repo view "$clone_repository" --json nameWithOwner,name 2>/dev/null) \
@@ -564,7 +645,10 @@ if [ "$with_editor" = true ]; then
   command -v nvim >/dev/null 2>&1 || die "nvim not installed"
 fi
 
-if [ "$treehouse_ready" = true ]; then
+if [ -n "$existing_workspace" ]; then
+  workspace_cwd=$(cd "$requested_workspace_cwd" && pwd -P) \
+    || die "Selected workspace directory no longer exists"
+elif [ "$treehouse_ready" = true ]; then
   workspace_cwd="${TREEHOUSE_DIR:-$PWD}"
   if [ ! -d "$workspace_cwd" ]; then die "Treehouse checkout does not exist: $workspace_cwd"; fi
 else
@@ -591,6 +675,8 @@ else
     DOTFILES_HERDR_WITH_AGENT="$with_agent" \
     DOTFILES_HERDR_WITH_EDITOR="$with_editor" \
     DOTFILES_HERDR_INITIAL_PROMPT_FILE="$initial_prompt_file" \
+    DOTFILES_HERDR_RESULT_FILE="$result_file" \
+    HERDR_AGENT_CMD="$agent_cmd" \
     SHELL="$treehouse_shell" \
       treehouse get \
       || die "Treehouse could not prepare a task checkout"
@@ -625,7 +711,8 @@ if [ "$with_agent" = true ] && [ "$agent_cmd" = "omp" ]; then
   fi
 fi
 
-current_worktree=$(resolve_worktree "$workspace_cwd") \
+if [ -z "$existing_workspace" ]; then
+  current_worktree=$(resolve_worktree "$workspace_cwd") \
   || die "could not resolve current worktree"
 primary_worktree=$(resolve_primary_checkout "$workspace_cwd") \
   || die "could not resolve primary checkout"
@@ -643,8 +730,9 @@ else
 fi
 checkout_id=$(printf '%s' "$current_worktree" | git hash-object --stdin) \
   || die "could not derive checkout identity"
+fi
 
-if [ "$treehouse_ready" = false ] && [ "$with_worktree" = false ]; then
+if [ "$treehouse_ready" = false ] && [ "$with_worktree" = false ] && [ -z "$existing_workspace" ]; then
   checkout_status=$(treehouse_checkout_status "$current_worktree") \
     || die "could not inspect Treehouse worktree ownership"
   if [ "$checkout_status" = "managed" ]; then
@@ -672,19 +760,28 @@ workspace_args=(workspace create --cwd "$workspace_cwd" --no-focus \
 if [ "$treehouse_ready" = true ]; then
   workspace_args+=(--env "TREEHOUSE_DIR=$workspace_cwd")
 fi
-workspace_json=$("$herdr" "${workspace_args[@]}") || die "herdr workspace create failed"
-task_workspace=$(printf '%s' "$workspace_json" | jq -r '.result.workspace.workspace_id')
+if [ -n "$existing_workspace" ]; then
+  workspace_json=$("$herdr" tab create --workspace "$existing_workspace" \
+    --cwd "$workspace_cwd" --no-focus --env DOTFILES_HERDR_TASK_WORKSPACE=1) \
+    || die "herdr tab create failed"
+  task_workspace="$existing_workspace"
+else
+  workspace_json=$("$herdr" "${workspace_args[@]}") || die "herdr workspace create failed"
+  task_workspace=$(printf '%s' "$workspace_json" | jq -r '.result.workspace.workspace_id')
+fi
 task_tab=$(printf '%s' "$workspace_json" | jq -r '.result.tab.tab_id')
 left=$(printf '%s' "$workspace_json" | jq -r '.result.root_pane.pane_id')
 if [ -z "$task_workspace" ] || [ "$task_workspace" = "null" ]; then die "could not read new workspace id"; fi
 if [ -z "$task_tab" ] || [ "$task_tab" = "null" ]; then die "could not read new tab id"; fi
 if [ -z "$left" ] || [ "$left" = "null" ]; then die "could not read new pane id"; fi
-"$herdr" workspace report-metadata "$task_workspace" \
+if [ -z "$existing_workspace" ]; then
+  "$herdr" workspace report-metadata "$task_workspace" \
   --source dotfiles:checkout \
   --token "repo=$repo_name" \
   --token "worktree=$worktree_name" \
   --token "checkout=$checkout_id" >/dev/null \
   || die "failed to report checkout metadata"
+fi
 "$herdr" tab rename "$task_tab" "$requested_label" >/dev/null \
   || die "failed to label task tab"
 
@@ -755,6 +852,7 @@ if [ "$with_agent" = true ]; then
 fi
 
 toast "Task workspace ready" "Setup finished without changing your current focus."
+publish_result ready "$task_workspace" "$task_tab" "$left" "$workspace_cwd"
 
 if [ "$treehouse_ready" = false ]; then
   exit 0

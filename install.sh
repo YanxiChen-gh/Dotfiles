@@ -132,6 +132,7 @@ setup_advisors
 setup_rtk
 setup_agent_maturity || exit 1
 setup_omp_integration || exit 1
+setup_session_hub || exit 1
 setup_superpowers_plugin
 setup_vanta_ai_platform_plugin || exit 1
 setup_vanta_doc_discovery_plugin

@@ -128,7 +128,7 @@ for function in install_from_apt install_python_if_missing install_node_if_missi
     setup_herdr_opener_plugin install_langsmith_cli install_gastown setup_cursor install_cursor_extensions \
     setup_langsmith_mcp setup_figma_mcp_cli remove_chrome_devtools_axi setup_claude_config \
     setup_opencode_config install_herdr_opencode_integration setup_codex_config setup_advisors \
-    setup_rtk setup_agent_maturity setup_omp_integration setup_superpowers_plugin \
+    setup_rtk setup_agent_maturity setup_omp_integration setup_session_hub setup_superpowers_plugin \
     setup_vanta_ai_platform_plugin setup_vanta_doc_discovery_plugin setup_work_tools \
     sync_cursor_mcp_from_claude sync_opencode_mcp_from_claude setup_omp_rtk setup_omp_mcp; do
     printf '%s() { :; }\n' "$function" >>"$TMP/installer/install.d/00-fixture.sh"

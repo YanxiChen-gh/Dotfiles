@@ -4,7 +4,7 @@ Personal shell and agent configuration for Claude Code, omp, OpenCode, Codex, an
 
 ## Install layout
 
-`install.sh` is a thin dispatcher: it resolves its own directory, sources every function module under `install.d/*.sh`, then runs the orchestration sequence at the bottom. Each module holds the setup functions for one concern (`10-helpers`, `20-mcp`, `30-system`, `35-agent-helpers`, `36-herdr-opener`, `40-cursor`, `50-claude`, `60-codex`, `65-opencode`, `66-omp`, `70-rtk`, `80-tools`, `90-work`); definition order among modules doesn't matter since everything is sourced before the orchestration calls run. `verify-dotfiles.sh` `sh -n`s and shellchecks every module.
+`install.sh` is a thin dispatcher: it resolves its own directory, sources every function module under `install.d/*.sh`, then runs the orchestration sequence at the bottom. Each module holds the setup functions for one concern (`10-helpers`, `20-mcp`, `30-system`, `35-agent-helpers`, `36-herdr-opener`, `40-cursor`, `50-claude`, `60-codex`, `65-opencode`, `66-omp`, `67-session-hub`, `70-rtk`, `80-tools`, `90-work`); definition order among modules doesn't matter since everything is sourced before the orchestration calls run. `verify-dotfiles.sh` `sh -n`s and shellchecks every module.
 
 ## Shared agent style guides
 
@@ -44,6 +44,20 @@ In the option lists, **Left** (or **Alt+Left**) returns to the previous selectio
 Fresh checkout mode keeps Treehouse as the exclusive worktree owner. Shared mode can use a selected repository's primary checkout or the current unmanaged linked checkout. A Treehouse-managed current checkout cannot back a second workspace; use `prefix+c` for another tab in its owning workspace. `prefix+shift+a` remains the no-picker shortcut for a fresh current-repository worktree with an agent and nvim.
 
 The default Agent sidebar layout gives the workspace title its own line, with the tab and agent type underneath. OpenCode retains its custom subagent layout. After syncing the config, use Herdr's `reload config` menu action to apply the layout without restarting panes.
+
+## Phone session hub
+
+The installer adds [omp-session-hub](https://github.com/YanxiChen-gh/omp-session-hub) after OMP. `install.d/67-session-hub.sh` pins an immutable app commit and verifies the downloaded codeload archive's SHA-256 before running its installer. The app installs dependency-free versions under `~/.local/share/omp-session-hub` and exposes `~/.local/bin/omp-session-hub`; user state is not replaced. To select another immutable version, provide both `OMP_SESSION_HUB_REVISION` (40-character commit) and `OMP_SESSION_HUB_SHA256` (matching archive checksum). `OMP_SESSION_HUB_PREFIX` changes the app prefix. `OMP_EXPERIMENT=0` skips both OMP and hub installation.
+
+On Ona or Cursor Cloud, the installer installs and ensures the loopback hub service on port **4317**, using this checkout's `herdr/session-hub-adapter.py`. The app's durable supervisor restarts failed children. Interactive zsh startup and task launches also ensure it is running after an environment restart. On macOS, the installer installs and ensures a per-user launchd gateway on port **8787**, which binds the active private LAN address and proxies only to `127.0.0.1:4317`.
+
+Forward the CDE's hub port **4317** to the Mac's local port **4317** in the IDE, then open `http://<Mac-LAN-address>:8787` on a phone connected to the same trusted LAN. This is a separate local port forward, not the remote browser-opener relay. The gateway does not discover or substitute other upstream ports. Without the forward, the dashboard reports an upstream connection failure. Set `OMP_SESSION_HUB_PORT` or `OMP_SESSION_HUB_GATEWAY_PORT` before setup to change the corresponding ports, and keep the IDE forward aligned.
+
+There is **no application login or TLS**. Every device able to reach the gateway can discover and control published OMP sessions and create workspaces. Use a trusted private LAN only; do not expose either port publicly or through an internet-sharing service. OMP collaboration links are control capabilities and must not be shared or logged.
+
+The phone and desktop share the launcher's canonical repository inventory, GitHub clone handling, and workspace creation. Fresh checkouts remain owned by Treehouse until their workspace closes, even if the HTTP request or hub exits. A new tab in an existing workspace preserves its pane working directory, including a Treehouse-owned checkout, without starting another Treehouse owner. Phone-created agent sessions always use OMP; shell-only workspaces report readiness without requiring a collaboration host. OMP setup manages `collab.autoStart=control`, so newly started sessions publish a control host.
+
+Inspect services with `omp-session-hub service status hub` in the CDE or `omp-session-hub service status gateway` on the Mac. `service ensure hub` / `service ensure gateway` recover installed services; `service stop hub` / `service stop gateway` stop them. Creation failures return a bounded diagnostic and retain a private temporary launcher log, never its contents in HTTP output. If creation times out, inspect Herdr before retrying because the detached Treehouse owner may still be provisioning the workspace.
 
 ## Herdr troubleshooting
 

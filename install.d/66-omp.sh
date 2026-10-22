@@ -33,7 +33,7 @@ install_omp() {
         esac
     fi
     if [ -x "$omp_binary" ] && omp_version_output=$("$omp_binary" --version 2>/dev/null); then
-        omp_required_version=18.4.4
+        omp_required_version=18.12.5
         omp_reported_version=${omp_version_output#omp/}
         omp_reported_version=${omp_reported_version#omp }
         if version_at_least "$omp_reported_version" "$omp_required_version"; then
@@ -41,7 +41,7 @@ install_omp() {
             return 0
         fi
 
-        echo "Updating omp to $omp_required_version or newer for Codex GPT-6.1 Sol..."
+        echo "Updating omp to $omp_required_version or newer for automatic collaboration and session discovery..."
         if "$omp_binary" update \
             && omp_version_output=$("$omp_binary" --version 2>/dev/null); then
             omp_reported_version=${omp_version_output#omp/}
@@ -51,7 +51,7 @@ install_omp() {
                 return 0
             fi
         fi
-        echo "⚠️  Warning: omp $omp_required_version or newer is required for Codex GPT-6.1 Sol"
+        echo "⚠️  Warning: omp $omp_required_version or newer is required for automatic collaboration and session discovery"
         return 1
     fi
 
@@ -107,6 +107,8 @@ configure_omp_defaults() {
         "$omp_binary" config set hideThinkingBlock true >/dev/null) || return 1
     (cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config set extendedContext true >/dev/null) || return 1
+    (cd "$HOME" && env -u PI_CONFIG_FILES \
+        "$omp_binary" config set collab.autoStart control >/dev/null) || return 1
 
     edit_variants=$(cd "$HOME" && env -u PI_CONFIG_FILES \
         "$omp_binary" config get edit.modelVariants 2>/dev/null) || {
