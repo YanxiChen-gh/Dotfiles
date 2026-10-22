@@ -66,6 +66,68 @@ status = subprocess.call([env["SHELL"]], cwd=env["TREEHOUSE_DIR"], env=env)
 sys.exit(status)
 '''
 
+CLOSE_HERDR_FIXTURE = r'''#!/usr/bin/env python3
+import json, os, pathlib, sys
+root = pathlib.Path(os.environ["FIXTURE"])
+args = sys.argv[1:]
+with (root / "herdr.jsonl").open("a") as stream:
+    stream.write(json.dumps(args) + "\n")
+path = root / "close-state.json"
+state = json.loads(path.read_text())
+snapshot = state["snapshot"]
+if args == ["api", "snapshot"]:
+    count = state["snapshot_reads"] = state.get("snapshot_reads", 0) + 1
+    snapshot.update(state.get("snapshot_changes", {}).get(str(count), {}))
+    result = {"snapshot": snapshot}
+elif len(args) == 4 and args[:3] == ["pane", "process-info", "--pane"]:
+    count = state["process_reads"] = state.get("process_reads", 0) + 1
+    state["foreground"].update(state.get("process_changes", {}).get(str(count), {}))
+    result = {"process_info": {"pane_id": args[3], "shell_pid": 100,
+                              "foreground_process_group_id": 200,
+                              "foreground_processes": state["foreground"].get(args[3], [])}}
+elif len(args) == 3 and args[:2] == ["pane", "close"]:
+    if state.get("fail_close"):
+        print("PRIVATE_CLOSE_DIAGNOSTIC", file=sys.stderr)
+        print(json.dumps({"error": {"code": "close_failed"}}))
+        sys.exit(1)
+    matches = [pane for pane in snapshot["panes"] if pane["pane_id"] == args[2]]
+    if len(matches) != 1:
+        sys.exit(1)
+    pane = matches[0]
+    snapshot["panes"].remove(pane)
+    snapshot["agents"] = [agent for agent in snapshot["agents"] if agent["pane_id"] != args[2]]
+    for tab in list(snapshot["tabs"]):
+        tab["pane_count"] = sum(row["tab_id"] == tab["tab_id"] for row in snapshot["panes"])
+        if not tab["pane_count"]:
+            snapshot["tabs"].remove(tab)
+    for workspace in list(snapshot["workspaces"]):
+        workspace["pane_count"] = sum(row["workspace_id"] == workspace["workspace_id"] for row in snapshot["panes"])
+        workspace["tab_count"] = sum(row["workspace_id"] == workspace["workspace_id"] for row in snapshot["tabs"])
+        if not workspace["pane_count"]:
+            snapshot["workspaces"].remove(workspace)
+    result = {"closed": True}
+else:
+    sys.exit(2)
+path.write_text(json.dumps(state))
+print(json.dumps({"result": result}))
+'''
+
+CLOSE_OMP_FIXTURE = r'''#!/usr/bin/env python3
+import json, os, pathlib, sys
+if sys.argv[1:] != ["collab", "list", "--json"]:
+    sys.exit(2)
+root = pathlib.Path(os.environ["FIXTURE"])
+path = root / "close-state.json"
+state = json.loads(path.read_text())
+count = state["registry_reads"] = state.get("registry_reads", 0) + 1
+if str(count) in state.get("registry_changes", {}):
+    state["hosts"] = state["registry_changes"][str(count)]
+path.write_text(json.dumps(state))
+with (root / "omp.jsonl").open("a") as stream:
+    stream.write(json.dumps({"args": sys.argv[1:], "config": os.environ.get("PI_CODING_AGENT_DIR")}) + "\n")
+print(json.dumps({"version": 1, "hosts": state["hosts"]}))
+'''
+
 
 class AdapterFixture(unittest.TestCase):
     def setUp(self):
@@ -257,6 +319,240 @@ else:
             with self.subTest(spec=spec):
                 self.assertIn("error", self.run_adapter("create", spec, success=False))
         self.assertEqual(self.calls(), [])
+
+
+class CloseAdapterFixture(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="dotfiles-hub-close-")
+        self.path = Path(self.temporary.name)
+        self.home = self.path / "home"
+        self.bin = self.home / ".local/bin"
+        self.bin.mkdir(parents=True)
+        AdapterFixture.executable(self.bin / "herdr", CLOSE_HERDR_FIXTURE)
+        AdapterFixture.executable(self.bin / "omp", CLOSE_OMP_FIXTURE)
+        self.env = {key: value for key, value in os.environ.items()
+                    if not key.startswith(("HERDR_", "DOTFILES_HERDR_", "PI_", "OMP_"))}
+        self.env.update(HOME=str(self.home), PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
+                        FIXTURE=str(self.path), HERDR_BIN_PATH=str(self.bin / "herdr"),
+                        HERDR_PANE_ID="w-keep:p-editor",
+                        PI_CODING_AGENT_DIR=str(self.path / "custom-config"))
+        self.host = {"instanceId": "fixture-host-1", "generation": 7, "pid": 321,
+                     "sessionId": "f27d93a8-7f96-4dd7-b267-0fac4131a654", "access": "control"}
+        self.history = self.path / "unrelated-file-name.jsonl"
+        self.history.write_text(json.dumps({"type": "title", "title": "Same title"}) + "\n"
+                                + json.dumps({"type": "session", "id": self.host["sessionId"]}) + "\n"
+                                + json.dumps({"type": "message", "content": "saved history"}) + "\n")
+        self.history_content = self.history.read_bytes()
+        self.state = {"hosts": [dict(self.host)], "foreground": {
+            "w-keep:p-agent": [{"pid": 321, "name": "omp", "argv": ["omp"]}],
+            "w-keep:p-sibling": [{"pid": 654, "name": "omp", "argv": ["omp"]}],
+            "w-keep:p-editor": [{"pid": 987, "name": "nvim", "argv": ["nvim"]}]}}
+        agent = self.pane("w-keep:p-agent", "term-agent", "w-keep:t-agent", self.host["sessionId"])
+        agent["agent_session"] = {"agent": "omp", "kind": "path", "source": "herdr:omp",
+                                  "value": str(self.history)}
+        sibling = self.pane("w-keep:p-sibling", "term-sibling", "w-keep:t-sibling", "sibling-session")
+        editor = self.pane("w-keep:p-editor", "term-editor", "w-keep:t-agent")
+        self.state["snapshot"] = {"panes": [agent, sibling, editor], "agents": [dict(agent), dict(sibling)],
+                                  "tabs": [], "workspaces": []}
+        self.update_topology()
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def pane(self, identifier, terminal, tab, session=None):
+        row = {"pane_id": identifier, "terminal_id": terminal, "tab_id": tab,
+               "workspace_id": "w-keep", "cwd": str(self.path), "terminal_title": "Same title"}
+        if session is not None:
+            row.update(agent="omp", agent_session={"agent": "omp", "kind": "id",
+                       "source": "herdr:omp", "value": session})
+        return row
+
+    def update_topology(self):
+        snapshot = self.state["snapshot"]
+        panes = snapshot["panes"]
+        snapshot["tabs"] = [{"tab_id": identifier, "workspace_id": "w-keep",
+                             "pane_count": sum(row["tab_id"] == identifier for row in panes)}
+                            for identifier in dict.fromkeys(row["tab_id"] for row in panes)]
+        snapshot["workspaces"] = [{"workspace_id": "w-keep", "pane_count": len(panes),
+                                   "tab_count": len(snapshot["tabs"])}]
+
+    def run_adapter(self, operation, target=None, success=True, spec=None):
+        (self.path / "close-state.json").write_text(json.dumps(self.state))
+        if spec is None:
+            spec = {"host": dict(self.host)}
+            if target is not None:
+                spec["target"] = target
+        result = subprocess.run([sys.executable, str(ADAPTER), operation], input=json.dumps(spec),
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env=self.env, cwd=str(self.path), timeout=20)
+        self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+        self.state = json.loads((self.path / "close-state.json").read_text())
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(self.history.read_bytes(), self.history_content)
+        return json.loads(result.stdout)
+
+    def calls(self):
+        path = self.path / "herdr.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    def assert_no_close(self):
+        self.assertFalse(any(call[:2] == ["pane", "close"] for call in self.calls()))
+
+    def target(self, closes_tab=False, closes_workspace=False):
+        return {"paneId": "w-keep:p-agent", "terminalId": "term-agent",
+                "tabId": "w-keep:t-agent", "workspaceId": "w-keep",
+                "closesTab": closes_tab, "closesWorkspace": closes_workspace}
+
+    def test_close_matches_metadata_header_and_foreground_pid_preserving_siblings_and_history(self):
+        preview = self.run_adapter("close-preview")
+        self.assertEqual(preview, {"target": self.target()})
+        self.assert_no_close()
+        self.assertEqual(self.run_adapter("close", preview["target"]),
+                         {"closed": True, "paneId": "w-keep:p-agent"})
+        snapshot = self.state["snapshot"]
+        self.assertEqual([pane["pane_id"] for pane in snapshot["panes"]],
+                         ["w-keep:p-sibling", "w-keep:p-editor"])
+        self.assertEqual(len(snapshot["tabs"]), 2)
+        self.assertEqual(len(snapshot["workspaces"]), 1)
+        self.assertEqual(self.calls()[-1], ["pane", "close", "w-keep:p-agent"])
+        config_calls = [json.loads(line) for line in (self.path / "omp.jsonl").read_text().splitlines()]
+        self.assertEqual(len(config_calls), 3)
+        self.assertTrue(all(call["config"] == self.env["PI_CODING_AGENT_DIR"] for call in config_calls))
+
+    def test_last_pane_impacts_are_previewed_and_left_to_native_close(self):
+        for last_workspace in (False, True):
+            with self.subTest(last_workspace=last_workspace):
+                self.state["snapshot"]["panes"] = [self.state["snapshot"]["panes"][0]]
+                self.state["snapshot"]["agents"] = [self.state["snapshot"]["agents"][0]]
+                if not last_workspace:
+                    self.state["snapshot"]["panes"].append(
+                        self.pane("w-keep:p-shell", "term-shell", "w-keep:t-shell"))
+                self.update_topology()
+                target = self.target(closes_tab=True, closes_workspace=last_workspace)
+                self.assertEqual(self.run_adapter("close-preview"), {"target": target})
+                self.run_adapter("close", target)
+                self.assertEqual(len(self.state["snapshot"]["workspaces"]), 0 if last_workspace else 1)
+                self.assertNotIn("w-keep:t-agent", [tab["tab_id"] for tab in self.state["snapshot"]["tabs"]])
+                if not last_workspace:
+                    agent = self.pane("w-keep:p-agent", "term-agent", "w-keep:t-agent", self.host["sessionId"])
+                    self.state["snapshot"]["panes"].insert(0, agent)
+                    self.state["snapshot"]["agents"] = [dict(agent)]
+        self.assertTrue(all(call[:2] in (["api", "snapshot"], ["pane", "process-info"], ["pane", "close"])
+                            for call in self.calls()))
+
+    def test_same_cwd_and_title_never_substitute_for_session_identity(self):
+        self.history.write_text(json.dumps({"type": "session", "id": "another-session"}) + "\n")
+        self.history_content = self.history.read_bytes()
+        result = self.run_adapter("close-preview", success=False)
+        self.assertEqual(result["status"], 409)
+        self.assert_no_close()
+
+    def test_duplicate_exact_session_and_foreground_pid_are_ambiguous(self):
+        duplicate = self.pane("w-keep:p-duplicate", "term-duplicate", "w-keep:t-agent", self.host["sessionId"])
+        self.state["snapshot"]["panes"].append(duplicate)
+        self.state["snapshot"]["agents"].append(dict(duplicate))
+        self.state["foreground"][duplicate["pane_id"]] = [{"pid": self.host["pid"]}]
+        self.update_topology()
+        self.assertEqual(self.run_adapter("close", self.target(), success=False)["status"], 409)
+        self.assert_no_close()
+
+    def test_retained_or_nested_nonforeground_session_is_not_closed(self):
+        self.state["foreground"]["w-keep:p-agent"] = [{"pid": 100, "name": "shell"}]
+        self.assertEqual(self.run_adapter("close-preview", success=False)["status"], 409)
+        self.assert_no_close()
+
+    def test_stale_registry_identity_view_access_and_missing_host_are_refused(self):
+        original = dict(self.host)
+        for patch, status in (({"generation": 8}, 409), ({"pid": 654}, 409),
+                              ({"sessionId": "replaced-session"}, 409), ({"access": "view"}, 403),
+                              (None, 404)):
+            with self.subTest(patch=patch):
+                self.state["hosts"] = [] if patch is None else [dict(original, **patch)]
+                self.assertEqual(self.run_adapter("close-preview", success=False)["status"], status)
+        self.assert_no_close()
+
+    def test_terminal_and_last_pane_changes_require_a_new_confirmation(self):
+        target = self.run_adapter("close-preview")["target"]
+        for mutation in ("terminal", "topology"):
+            with self.subTest(mutation=mutation):
+                if mutation == "terminal":
+                    self.state["snapshot"]["panes"][0]["terminal_id"] = "term-replaced"
+                    self.state["snapshot"]["agents"][0]["terminal_id"] = "term-replaced"
+                else:
+                    self.state["snapshot"]["panes"][0]["terminal_id"] = "term-agent"
+                    self.state["snapshot"]["agents"][0]["terminal_id"] = "term-agent"
+                    self.state["snapshot"]["panes"].pop()
+                    self.update_topology()
+                self.assertEqual(self.run_adapter("close", target, success=False)["status"], 409)
+        self.assert_no_close()
+
+    def test_final_recheck_rejects_generation_process_and_topology_races(self):
+        for race in ("generation", "process", "topology"):
+            with self.subTest(race=race):
+                self.state.pop("registry_reads", None)
+                self.state.pop("snapshot_reads", None)
+                self.state.pop("process_reads", None)
+                self.state.pop("registry_changes", None)
+                self.state.pop("process_changes", None)
+                self.state.pop("snapshot_changes", None)
+                self.state["hosts"] = [dict(self.host)]
+                self.state["foreground"]["w-keep:p-agent"] = [{"pid": self.host["pid"]}]
+                if race == "generation":
+                    self.state["registry_changes"] = {"2": [dict(self.host, generation=8)]}
+                elif race == "process":
+                    self.state["process_changes"] = {"2": {"w-keep:p-agent": [{"pid": 999}]}}
+                else:
+                    panes = self.state["snapshot"]["panes"][:-1]
+                    tabs = [dict(tab, pane_count=1) for tab in self.state["snapshot"]["tabs"]]
+                    self.state["snapshot_changes"] = {"2": {"panes": panes, "tabs": tabs,
+                        "workspaces": [{"workspace_id": "w-keep", "pane_count": 2, "tab_count": 2}]}}
+                self.assertEqual(self.run_adapter("close", self.target(), success=False)["status"], 409)
+        self.assert_no_close()
+
+    def test_missing_unknown_or_malformed_adapter_targets_are_invalid(self):
+        for spec in ({"host": self.host}, {"host": self.host, "target": {}},
+                     {"host": self.host, "target": dict(self.target(), unknown=True)},
+                     {"host": self.host, "target": dict(self.target(), closesTab=0)},
+                     {"host": self.host, "target": dict(self.target(), paneId="--current")},
+                     {"host": self.host, "target": self.target(), "confirmed": True},
+                     {"host": dict(self.host, pid=True), "target": self.target()}):
+            with self.subTest(spec=spec):
+                self.assertEqual(self.run_adapter("close", spec=spec, success=False)["status"], 400)
+        self.assertEqual(self.calls(), [])
+
+    def test_confirmation_cannot_select_a_sibling_or_unknown_pane(self):
+        for pane in ("w-keep:p-sibling", "w-unknown:p1"):
+            with self.subTest(pane=pane):
+                target = dict(self.target(), paneId=pane)
+                self.assertEqual(self.run_adapter("close", target, success=False)["status"], 409)
+        self.assert_no_close()
+
+    def test_metadata_must_be_a_bounded_regular_file_header_not_transcript_content(self):
+        for content in (
+                json.dumps({"type": "message", "content": "not metadata"}) + "\n"
+                + json.dumps({"type": "session", "id": self.host["sessionId"]}) + "\n",
+                json.dumps({"type": "title", "title": "x" * 16384}) + "\n"
+                + json.dumps({"type": "session", "id": self.host["sessionId"]}) + "\n"):
+            with self.subTest(content=content[:80]):
+                self.history.write_text(content)
+                self.history_content = self.history.read_bytes()
+                self.assertEqual(self.run_adapter("close-preview", success=False)["status"], 409)
+        self.state["snapshot"]["agents"][0]["agent_session"]["value"] = str(self.path)
+        self.assertEqual(self.run_adapter("close-preview", success=False)["status"], 409)
+        self.assert_no_close()
+
+    def test_unsupported_metadata_refuses_closing(self):
+        self.state["snapshot"]["agents"][0]["agent_session"]["kind"] = "unknown"
+        self.assertEqual(self.run_adapter("close-preview", success=False)["status"], 409)
+        self.assert_no_close()
+
+    def test_native_failure_does_not_retry_or_broaden_target(self):
+        self.state["fail_close"] = True
+        result = self.run_adapter("close", self.target(), success=False)
+        self.assertEqual(result["status"], 502)
+        self.assertNotIn("PRIVATE_CLOSE_DIAGNOSTIC", result["error"])
+        self.assertEqual(sum(call[:2] == ["pane", "close"] for call in self.calls()), 1)
+        self.assertEqual(len(self.state["snapshot"]["panes"]), 3)
 
 
 class InstallerFixture(unittest.TestCase):
