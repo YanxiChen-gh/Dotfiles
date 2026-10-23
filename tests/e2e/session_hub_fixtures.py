@@ -419,6 +419,27 @@ class CloseAdapterFixture(unittest.TestCase):
         self.assertEqual(len(config_calls), 3)
         self.assertTrue(all(call["config"] == self.env["PI_CODING_AGENT_DIR"] for call in config_calls))
 
+    def test_empty_session_closes_from_native_resume_identity_without_creating_history(self):
+        reference = self.path / ("2026-01-01T00-00-00-000Z_" + self.host["sessionId"] + ".jsonl")
+        for row in (self.state["snapshot"]["panes"][0], self.state["snapshot"]["agents"][0]):
+            row["agent_session"]["value"] = str(reference)
+        preview = self.run_adapter("close-preview")
+        self.assertEqual(self.run_adapter("close", preview["target"]),
+                         {"closed": True, "paneId": "w-keep:p-agent"})
+        self.assertEqual([row["pane_id"] for row in self.state["snapshot"]["panes"]],
+                         ["w-keep:p-sibling", "w-keep:p-editor"])
+        self.assertFalse(reference.exists())
+
+    def test_missing_stale_or_unrecognized_resume_identity_cannot_close_by_pid_alone(self):
+        for name in ("session.jsonl", "2026-01-01T00-00-00-000Z_00000000-0000-0000-0000-000000000000.jsonl"):
+            with self.subTest(name=name):
+                reference = self.path / name
+                for row in (self.state["snapshot"]["panes"][0], self.state["snapshot"]["agents"][0]):
+                    row["agent_session"]["value"] = str(reference)
+                self.assertEqual(self.run_adapter("close", self.target(), success=False)["status"], 409)
+                self.assertFalse(reference.exists())
+        self.assert_no_close()
+
     def test_last_pane_impacts_are_previewed_and_left_to_native_close(self):
         for last_workspace in (False, True):
             with self.subTest(last_workspace=last_workspace):

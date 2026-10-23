@@ -16,6 +16,10 @@ MAX_INPUT = 65536
 HOST_FIELDS = {"instanceId", "generation", "pid", "sessionId", "access"}
 TARGET_FIELDS = {"paneId", "terminalId", "tabId", "workspaceId", "closesTab", "closesWorkspace"}
 HOST_ID = re.compile(r"^[a-z0-9-]{8,64}$")
+NATIVE_SESSION_REFERENCE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_"
+    r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$"
+)
 
 
 class CloseError(ValueError):
@@ -248,6 +252,10 @@ def metadata_session_id(agent):
                     return identifier if isinstance(identifier, str) and identifier else None
                 if index != 0 or entry.get("type") != "title":
                     return None
+    except FileNotFoundError:
+        # OMP publishes this canonical resume reference before an empty session is persisted.
+        match = NATIVE_SESSION_REFERENCE.fullmatch(Path(value).name)
+        return match.group(1) if match else None
     except (OSError, ValueError):
         return None
     return None
