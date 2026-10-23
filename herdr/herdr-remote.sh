@@ -25,7 +25,7 @@ case "$target" in
     ""|-*) usage ;;
 esac
 
-for command_name in herdr lsof python3 ssh; do
+for command_name in herdr python3 ssh; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
         echo "herdr-remote: $command_name is required" >&2
         exit 1
@@ -39,16 +39,21 @@ if [ ! -f "$relay_script" ]; then
     exit 1
 fi
 relay_port=$(python3 "$relay_script" --print-port)
-opener_socket=${OPENER_SOCKET_PATH:-$HOME/.opener.sock}
-if [ ! -S "$opener_socket" ]; then
-    echo "herdr-remote: opener is not listening at $opener_socket" >&2
-    echo "Start it with: brew services start opener" >&2
-    exit 1
-fi
-if ! lsof -t "$opener_socket" >/dev/null 2>&1; then
-    echo "herdr-remote: no opener process owns $opener_socket" >&2
-    echo "Restart it with: brew services restart opener" >&2
-    exit 1
+split_view=false
+if [ "$(uname -s)" = "Darwin" ]; then
+    backend="$HOME/.local/libexec/dotfiles/herdr-split-view"
+    if [ ! -x "$backend" ]; then
+        echo "herdr-remote: native Split View helper is missing; rerun setup_herdr_opener_client from Dotfiles" >&2
+        exit 1
+    fi
+    split_view=true
+else
+    backend=${OPENER_SOCKET_PATH:-$HOME/.opener.sock}
+    if [ ! -S "$backend" ] || ! lsof -t "$backend" >/dev/null 2>&1; then
+        echo "herdr-remote: opener is not listening at $backend" >&2
+        echo "Start opener before attaching." >&2
+        exit 1
+    fi
 fi
 
 state_dir=$(mktemp -d "${TMPDIR:-/tmp}/herdr-opener.XXXXXX")
@@ -70,7 +75,11 @@ trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
-python3 "$relay_script" --proxy "$proxy_socket" "$opener_socket" &
+if [ "$split_view" = true ]; then
+    python3 "$relay_script" --proxy "$proxy_socket" "$backend" --split-view &
+else
+    python3 "$relay_script" --proxy "$proxy_socket" "$backend" &
+fi
 proxy_pid=$!
 for _ in $(seq 1 100); do
     if [ -S "$proxy_socket" ]; then

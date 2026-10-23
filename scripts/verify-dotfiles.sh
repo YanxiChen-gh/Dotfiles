@@ -112,6 +112,15 @@ for f in scripts/auth-vanta-agents.py scripts/configure_vanta_snowflake.py scrip
     fi
 done
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    printf '\n== swiftc (native Herdr opener) ==\n'
+    if command -v swiftc >/dev/null 2>&1 && swiftc -warnings-as-errors -typecheck herdr/split-view.swift; then
+        pass "swiftc herdr/split-view.swift"
+    else
+        fail "swiftc herdr/split-view.swift (requires Apple's Command Line Tools)"
+    fi
+fi
+
 printf '\n== agent-rules generator (no drift) ==\n'
 if [ -f agent-rules/build.py ]; then
     if out=$(python3 agent-rules/build.py --check 2>&1); then

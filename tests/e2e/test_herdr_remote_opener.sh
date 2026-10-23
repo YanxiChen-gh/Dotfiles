@@ -17,17 +17,6 @@ assert_log() {
 }
 
 mkdir -p "$TMP/bin" "$TMP/home"
-python3 - "$ROOT/herdr/remote-opener/herdr-plugin.toml" <<'PY'
-import sys
-import tomllib
-
-with open(sys.argv[1], "rb") as manifest_file:
-    manifest = tomllib.load(manifest_file)
-assert manifest["id"] == "dotfiles.remote-opener"
-assert manifest["actions"][0]["command"] == ["python3", "open_url.py"]
-assert manifest["link_handlers"][0]["action"] == "open"
-PY
-
 
 RELAY_READY="$TMP/relay-ready"
 RELAY_PAYLOAD="$TMP/relay-payload"
@@ -135,6 +124,57 @@ wait "$PROXY_PID" 2>/dev/null || true
 PROXY_PID=""
 [ "$(cat "$PROXY_PAYLOAD")" = "$url" ] || fail "proxy changed the validated URL"
 
+cat >"$TMP/bin/native-opener" <<'EOF'
+#!/usr/bin/env python3
+import os
+import sys
+import time
+time.sleep(2.2)
+if sys.argv[1].endswith("#permission-denied"):
+    print("Allow WezTerm in Privacy & Security > Accessibility", file=sys.stderr)
+    raise SystemExit(1)
+with open(os.environ["NATIVE_PAYLOAD"], "w", encoding="utf-8") as output:
+    output.write(sys.argv[1])
+EOF
+chmod +x "$TMP/bin/native-opener"
+NATIVE_PAYLOAD="$TMP/native-payload"
+export NATIVE_PAYLOAD
+rm -f "$PROXY_SOCKET"
+python3 "$ROOT/herdr/remote-opener/open_url.py" --proxy "$PROXY_SOCKET" "$TMP/bin/native-opener" --split-view &
+PROXY_PID=$!
+for _ in $(seq 1 100); do
+    [ -S "$PROXY_SOCKET" ] && break
+    sleep 0.01
+done
+python3 - "$PROXY_SOCKET" "$url" <<'PY'
+import os
+import socket
+import stat
+import sys
+from pathlib import Path
+
+path, url = sys.argv[1:]
+assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+def request(value):
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(10)
+        connection.connect(path)
+        connection.sendall(value.encode() + b"\n")
+        connection.shutdown(socket.SHUT_WR)
+        return connection.recv(65536)
+
+literal_url = url + "';$(touch%20not-a-command)"
+assert request(literal_url) == b""
+assert Path(os.environ["NATIVE_PAYLOAD"]).read_text() == literal_url
+assert b"Accessibility" in request(url + "#permission-denied")
+assert b"only absolute HTTP(S)" in request("file:///tmp/private")
+assert Path(os.environ["NATIVE_PAYLOAD"]).read_text() == literal_url
+PY
+kill "$PROXY_PID"
+wait "$PROXY_PID" 2>/dev/null || true
+PROXY_PID=""
+
 SOCKET_PATH="$TMP/opener.sock"
 SOCKET_READY="$TMP/socket-ready"
 python3 - "$SOCKET_PATH" "$SOCKET_READY" <<'PY' &
@@ -186,7 +226,11 @@ cat >"$TMP/bin/ss" <<'EOF'
 #!/bin/sh
 exit 0
 EOF
-chmod +x "$TMP/bin/ssh" "$TMP/bin/herdr" "$TMP/bin/lsof" "$TMP/bin/ss"
+cat >"$TMP/bin/uname" <<'EOF'
+#!/bin/sh
+printf '%s\n' "${FAKE_UNAME:-Linux}"
+EOF
+chmod +x "$TMP/bin/ssh" "$TMP/bin/herdr" "$TMP/bin/lsof" "$TMP/bin/ss" "$TMP/bin/uname"
 ln -s "$ROOT/herdr/herdr-remote.sh" "$TMP/bin/herdr-remote"
 
 PATH="$TMP/bin:$PATH"
@@ -258,14 +302,22 @@ kill "$SERVER_PID"
 wait "$SERVER_PID" 2>/dev/null || true
 SERVER_PID=""
 
-INSTALL_LOG="$TMP/install.log"
-cat >"$TMP/bin/brew" <<'EOF'
+cat >"$TMP/bin/swiftc" <<'EOF'
 #!/bin/sh
-printf 'brew %s\n' "$*" >>"$FAKE_INSTALL_LOG"
+set -eu
+[ "${FAKE_COMPILE_FAIL:-0}" != "1" ] || exit 1
+while [ "$#" -gt 0 ]; do
+    if [ "$1" = "-o" ]; then
+        shift
+        cp /usr/bin/true "$1"
+        chmod +x "$1"
+        exit
+    fi
+    shift
+done
+exit 1
 EOF
-chmod +x "$TMP/bin/brew"
-FAKE_INSTALL_LOG="$INSTALL_LOG"
-export FAKE_INSTALL_LOG
+chmod +x "$TMP/bin/swiftc"
 
 # shellcheck source=../../install.d/10-helpers.sh
 . "$ROOT/install.d/10-helpers.sh"
@@ -275,24 +327,26 @@ resolve_script_dir() {
     printf '%s\n' "$ROOT"
 }
 
-: >"$INSTALL_LOG"
 OS=macos setup_herdr_opener_client >/dev/null
 [ "$(readlink "$HOME/.local/bin/herdr-remote")" = "$ROOT/herdr/herdr-remote.sh" ] \
     || fail "installer did not expose herdr-remote"
-assert_log "brew install superbrothers/opener/opener" "$INSTALL_LOG"
-assert_log "brew services start opener" "$INSTALL_LOG"
-
-cat >"$TMP/bin/opener" <<'EOF'
-#!/bin/sh
-exit 0
-EOF
-chmod +x "$TMP/bin/opener"
-: >"$INSTALL_LOG"
-OS=macos setup_herdr_opener_client >/dev/null
-if grep -F "brew install" "$INSTALL_LOG" >/dev/null; then
-    fail "idempotent client setup reinstalled opener"
+[ -x "$HOME/.local/libexec/dotfiles/herdr-split-view" ] || fail "native helper was not installed"
+cp "$HOME/.local/libexec/dotfiles/herdr-split-view" "$TMP/installed-helper"
+if FAKE_COMPILE_FAIL=1 OS=macos setup_herdr_opener_client >/dev/null; then
+    fail "failed compilation was hidden"
 fi
-assert_log "brew services start opener" "$INSTALL_LOG"
+cmp "$TMP/installed-helper" "$HOME/.local/libexec/dotfiles/herdr-split-view" \
+    || fail "failed compilation replaced the installed helper"
+: >"$SSH_LOG"
+: >"$HERDR_LOG"
+FAKE_UNAME=Darwin FAKE_LSOF_FAIL=1 herdr-remote workbox
+assert_log "--remote workbox" "$HERDR_LOG"
+rm "$HOME/.local/libexec/dotfiles/herdr-split-view"
+: >"$SSH_LOG"
+if FAKE_UNAME=Darwin herdr-remote workbox >/dev/null 2>&1; then
+    fail "wrapper started without its native helper"
+fi
+[ ! -s "$SSH_LOG" ] || fail "SSH started without its native helper"
 : >"$HERDR_LOG"
 IS_ON_ONA= HERDR_REMOTE_OPENER_SERVER= OS=linux setup_herdr_opener_plugin >/dev/null
 [ ! -s "$HERDR_LOG" ] || fail "plugin was linked outside a remote opener server"

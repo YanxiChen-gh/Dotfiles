@@ -2,6 +2,7 @@
 
 import os
 import socket
+import subprocess
 import sys
 from urllib.parse import urlsplit
 
@@ -9,6 +10,7 @@ RELAY_HOST = "127.0.0.1"
 RELAY_PORT = int(os.environ.get("HERDR_REMOTE_OPENER_TEST_PORT", "43199"))
 MAX_REQUEST_BYTES = 64 * 1024
 CONNECTION_TIMEOUT_SECONDS = 2
+OPEN_TIMEOUT_SECONDS = 90
 
 
 def validated_url(value: str) -> str:
@@ -22,6 +24,7 @@ def validated_url(value: str) -> str:
 
 def send_url(url: str) -> None:
     with socket.create_connection((RELAY_HOST, RELAY_PORT), timeout=2) as relay:
+        relay.settimeout(OPEN_TIMEOUT_SECONDS)
         relay.sendall(url.encode("utf-8") + b"\n")
         relay.shutdown(socket.SHUT_WR)
         response = bytearray()
@@ -52,22 +55,29 @@ def send_error(connection: socket.socket, error: Exception) -> None:
         pass
 
 
-def proxy_connection(connection: socket.socket, opener_socket: str) -> None:
+def proxy_connection(connection: socket.socket, backend: str, split_view: bool = False) -> None:
     try:
         connection.settimeout(CONNECTION_TIMEOUT_SECONDS)
         url = read_request(connection)
+        if split_view:
+            result = subprocess.run(
+                [backend, url], capture_output=True, text=True, timeout=75, check=False
+            )
+            if result.returncode:
+                raise ValueError(result.stderr.strip() or "native Split View opener failed")
+            return
         with socket.socket(socket.AF_UNIX) as opener:
             opener.settimeout(CONNECTION_TIMEOUT_SECONDS)
-            opener.connect(opener_socket)
+            opener.connect(backend)
             opener.sendall(url.encode("utf-8") + b"\n")
             opener.shutdown(socket.SHUT_WR)
             while response := opener.recv(4096):
                 connection.sendall(response)
-    except (OSError, UnicodeError, ValueError) as error:
+    except (OSError, UnicodeError, ValueError, subprocess.TimeoutExpired) as error:
         send_error(connection, error)
 
 
-def run_proxy(proxy_socket: str, opener_socket: str) -> None:
+def run_proxy(proxy_socket: str, backend: str, split_view: bool = False) -> None:
     with socket.socket(socket.AF_UNIX) as proxy:
         proxy.bind(proxy_socket)
         os.chmod(proxy_socket, 0o600)
@@ -75,16 +85,19 @@ def run_proxy(proxy_socket: str, opener_socket: str) -> None:
         while True:
             connection, _ = proxy.accept()
             with connection:
-                proxy_connection(connection, opener_socket)
+                proxy_connection(connection, backend, split_view)
 
 
 def main() -> int:
     if sys.argv[1:] == ["--print-port"]:
         print(RELAY_PORT)
         return 0
-    if len(sys.argv) == 4 and sys.argv[1] == "--proxy":
+    if len(sys.argv) in {4, 5} and sys.argv[1] == "--proxy":
+        if len(sys.argv) == 5 and sys.argv[4] != "--split-view":
+            print("remote opener proxy: unknown backend mode", file=sys.stderr)
+            return 1
         try:
-            run_proxy(sys.argv[2], sys.argv[3])
+            run_proxy(sys.argv[2], sys.argv[3], len(sys.argv) == 5)
         except OSError as error:
             print(f"remote opener proxy: {error}", file=sys.stderr)
             return 1

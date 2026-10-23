@@ -31,9 +31,38 @@ In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells def
 
 ## Herdr remote browser opening
 
-Herdr 0.8.0 resolves Ctrl-clicked pane URLs on its server, so `herdr --remote` otherwise launches the browser on the remote machine. The installer starts [opener](https://github.com/superbrothers/opener) on macOS and links a URL relay plugin inside Ona. Use `herdr-remote <ssh-target>` instead of `herdr --remote <ssh-target>` to create a fail-closed, loopback-only SSH relay for that session. Herdr still resolves the complete URL across wrapped lines; the viewing Mac opens the resulting HTTP(S) URL.
+Herdr resolves Ctrl-clicked pane URLs on its server, so `herdr --remote` otherwise launches the browser on the remote machine. Use `herdr-remote <ssh-target>` instead to create a fail-closed, loopback-only SSH relay. On macOS, a link pairs the originating full-screen **WezTerm** window on the left with a dedicated **Google Chrome** window on the right in native macOS Split View. Subsequent links open tabs in that window without rebuilding the layout. Closing that browser restores the terminal's full width; the next link creates a new partner. Normal browser windows, the browser profile, system URL handlers, and local Herdr sessions are unchanged.
 
-The relay trusts the remote account: while attached, a process on that account can request that the Mac open an HTTP(S) URL. The remote host must provide `ss`; the wrapper refuses to start Herdr unless it confirms that the forwarded port is bound only to `127.0.0.1`. One relay can own a remote target at a time, and local Herdr sessions are unchanged.
+The macOS installer compiles `herdr/split-view.swift` with Apple's Command Line Tools and installs `~/.local/libexec/dotfiles/herdr-split-view`. No window manager or persistent automation service is required. Existing `opener` services are not stopped or reconfigured; this macOS workflow no longer uses them. To install only this integration from the checkout:
+
+```sh
+(
+    DOTFILES_SOURCE=$(pwd -P)
+    resolve_script_dir() { printf '%s\n' "$DOTFILES_SOURCE"; }
+    . ./install.d/10-helpers.sh
+    . ./install.d/36-herdr-opener.sh
+    OS=macos setup_herdr_opener_client
+)
+```
+
+Keep Google Chrome as the default HTTP(S) browser and start from an unpaired native full-screen WezTerm window. Allow the launching terminal **WezTerm** under **System Settings > Privacy & Security > Accessibility**, and allow it to control **Google Chrome** under **Automation** when macOS prompts. Accessibility supplies the focused terminal identity and Mission Control controls; Automation creates and navigates only the dedicated Chrome window. Screen Recording is not required. Do not interact with Mission Control or switch windows during pairing. The operation refuses ambiguous terminal Spaces, another existing terminal partner, or missing permissions rather than accepting a picker or substituting desktop tiling. Errors return to Herdr's plugin action.
+
+The helper captures the focused terminal and its display before activating Chrome, then uses native Mission Control drag-and-drop to join that terminal's full-screen Space. Read-only SkyLight queries match native Space membership to window IDs, including when several terminals have duplicate or changing titles. Native tile membership and visible left/right geometry are checked before success is returned. Window identifiers are stored privately in `~/.local/state/herdr-split-view/windows.json`; URLs are not stored there. The association lasts for the terminal and Chrome processes; restarting either may create a new dedicated browser window.
+
+macOS has no public Split View automation API. This implementation depends on private, read-only SkyLight metadata and Mission Control's Accessibility hierarchy, so OS changes can require an update. It does not use private APIs to move windows, disable SIP, or bypass permissions. The UI expects English `Mission Control`, `Spaces Bar`, and `WezTerm & Google Chrome` labels. It respects macOS's native divider ratio rather than forcing equal widths. Multiple terminal windows on one display are supported; multi-display operation requires separate hardware verification.
+
+Update the remote checkout's `herdr/remote-opener/open_url.py` as well as the Mac wrapper when deploying this change. Native transitions exceed the old two-second reply timeout; the updated plugin allows 90 seconds while keeping connection and malformed-request timeouts short. Preserve any remote uncommitted work when transferring the patch. An already-running Mac relay keeps its previous backend until its `herdr-remote` client reconnects. Reconnect only the client; remote agents and the Herdr server do not need restarting. For an already-installed plugin linked to the updated checkout, each click launches the Python script again. If the plugin has not been linked, run the existing targeted setup on the Linux host:
+
+```sh
+(
+    DOTFILES_SOURCE=$(pwd -P)
+    resolve_script_dir() { printf '%s\n' "$DOTFILES_SOURCE"; }
+    . ./install.d/36-herdr-opener.sh
+    OS=linux HERDR_REMOTE_OPENER_SERVER=1 setup_herdr_opener_plugin
+)
+```
+
+The relay trusts the remote account: while attached, a process on that account can request an HTTP(S) URL. The Mac validates it again and passes it as a process argument, never as executable source. Query strings, percent encoding, and fragments are forwarded unchanged. The remote host must provide `ss`; the wrapper refuses to start Herdr unless it confirms that the forwarded port is bound only to `127.0.0.1`. One relay can own a remote target at a time. The non-macOS wrapper retains its existing Unix-socket opener backend.
 
 ## Herdr task workspaces
 

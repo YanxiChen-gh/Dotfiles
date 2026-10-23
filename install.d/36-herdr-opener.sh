@@ -12,20 +12,21 @@ setup_herdr_opener_client() {
         "$script_dir/herdr/herdr-remote.sh" \
         "$HOME/.local/bin/herdr-remote" || return 1
 
-    if ! command -v brew >/dev/null 2>&1; then
-        echo "⚠️  Homebrew is required for remote Herdr browser opening."
-        echo "   Install opener manually: brew install superbrothers/opener/opener"
+    if ! command -v swiftc >/dev/null 2>&1; then
+        echo "⚠️  Apple's Command Line Tools are required to build the native Split View helper."
+        echo "   Install them with xcode-select --install, then rerun setup."
         return 1
     fi
-    if ! command -v opener >/dev/null 2>&1; then
-        brew install superbrothers/opener/opener || return 1
-    fi
-    if brew services start opener; then
-        echo "✅ Local opener service is running"
-    else
-        echo "⚠️  Could not start opener; retry with: brew services start opener"
+    helper_dir="$HOME/.local/libexec/dotfiles"
+    mkdir -p "$helper_dir"
+    helper_tmp=$(mktemp "$helper_dir/herdr-split-view.XXXXXX") || return 1
+    if ! swiftc "$script_dir/herdr/split-view.swift" -o "$helper_tmp"; then
+        rm -f "$helper_tmp"
         return 1
     fi
+    mv -f "$helper_tmp" "$helper_dir/herdr-split-view"
+    echo "✅ Installed native Herdr Split View opener (WezTerm + Google Chrome)"
+    echo "   Allow WezTerm Accessibility and Google Chrome Automation when macOS asks."
 }
 
 setup_herdr_opener_plugin() {
