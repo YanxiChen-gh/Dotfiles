@@ -2,11 +2,11 @@
 # Sourced by ../install.sh: function definitions only.
 
 session_hub_revision() {
-    printf '%s\n' "${OMP_SESSION_HUB_REVISION:-e970bc9eff22ba5cb97eaa1f7fe75ebc34e3c179}"
+    printf '%s\n' "${OMP_SESSION_HUB_REVISION:-943cad03b3bf553a64cc5746a5bfd33607088dd1}"
 }
 
 session_hub_archive_sha256() {
-    printf '%s\n' "${OMP_SESSION_HUB_SHA256:-744cf70de30480225b98ec4b08c1e370ba7aa7a7a48220fe9347fbbf33f4ab06}"
+    printf '%s\n' "${OMP_SESSION_HUB_SHA256:-4814be6908a2deccd567539c48f0ab3ce07d17004a9ba58822bfe6dfeaa2e7bf}"
 }
 
 setup_session_hub() {

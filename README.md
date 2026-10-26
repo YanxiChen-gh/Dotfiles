@@ -80,6 +80,8 @@ The installer adds [omp-session-hub](https://github.com/YanxiChen-gh/omp-session
 
 On Ona or Cursor Cloud, the installer installs and ensures the loopback hub service on port **4317**, using this checkout's `herdr/session-hub-adapter.py`. The app's durable supervisor restarts failed children. Interactive zsh startup and task launches also ensure it is running after an environment restart. On macOS, the installer installs and ensures a per-user launchd gateway on port **8787**, which binds the active private LAN address and proxies only to `127.0.0.1:4317`.
 
+The dashboard sorts sessions by **Input required**, **Working**, **Idle**, then **Activity unknown**, with amber input-required accents, blue working accents, and text labels. Idle means no turn is running, not that the task is finished; OMP's registry does not publish task completion.
+
 Forward the CDE's hub port **4317** to the Mac's local port **4317** in the IDE, then open `http://<Mac-LAN-address>:8787` on a phone connected to the same trusted LAN. This is a separate local port forward, not the remote browser-opener relay. The gateway does not discover or substitute other upstream ports. Without the forward, the dashboard reports an upstream connection failure. Set `OMP_SESSION_HUB_PORT` or `OMP_SESSION_HUB_GATEWAY_PORT` before setup to change the corresponding ports, and keep the IDE forward aligned.
 
 There is **no application login or TLS**. Every device able to reach the gateway can discover and control published OMP sessions and create workspaces. Use a trusted private LAN only; do not expose either port publicly or through an internet-sharing service. OMP collaboration links are control capabilities and must not be shared or logged.
