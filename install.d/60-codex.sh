@@ -7,16 +7,10 @@ setup_codex_config() {
     codex_dir="$HOME/.codex"
     mkdir -p "$codex_dir"
 
-    codex_python=python3
-    if ! "$codex_python" -c 'import tomllib' >/dev/null 2>&1; then
-        codex_python=/opt/homebrew/bin/python3
-        if ! "$codex_python" -c 'import tomllib' >/dev/null 2>&1; then
-            echo "⚠️  Python 3.11+ is required to configure Codex defaults" >&2
-            return 1
-        fi
-    fi
-    "$codex_python" "$script_dir/scripts/configure_codex.py" || return 1
-    echo "✅ Codex model, reasoning, and Auto-review defaults configured"
+    codex_config_dir="${CODEX_HOME:-$codex_dir}"
+    mkdir -p "$codex_config_dir"
+    link_dotfiles_file "$script_dir/codex/config.toml" "$codex_config_dir/config.toml" || return 1
+    echo "✅ Codex config.toml linked"
 
     codex_instructions="$script_dir/codex/AGENTS.md"
     instruction_scope="personal"
