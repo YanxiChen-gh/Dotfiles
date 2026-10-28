@@ -1,3 +1,7 @@
+if [ -r /etc/profile.d/ona-secrets.sh ]; then
+    source /etc/profile.d/ona-secrets.sh
+fi
+
 # Source work Ona environment for non-interactive zsh shells.
 # The marker check keeps this scoped to generated Cursor Cloud env files.
 if [ -f "$HOME/.ona_env" ] && command grep -q "Synced from Ona environment .* for Cursor Cloud" "$HOME/.ona_env" 2>/dev/null; then
