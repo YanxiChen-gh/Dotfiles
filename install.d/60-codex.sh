@@ -31,6 +31,24 @@ setup_codex_config() {
         echo "✅ Codex RTK.md linked"
     fi
 
+    if [ -d "$script_dir/codex/skills" ]; then
+        agent_skills_dir="$HOME/.agents/skills"
+        mkdir -p "$agent_skills_dir"
+        for skill_dir in "$script_dir/codex/skills"/*/; do
+            [ -f "$skill_dir/SKILL.md" ] || continue
+            target="$agent_skills_dir/$(basename "$skill_dir")"
+            if [ -e "$target" ] || [ -L "$target" ]; then
+                if [ -L "$target" ] && [ "$(readlink "$target")" = "$skill_dir" ]; then
+                    continue
+                fi
+                echo "⚠️  Preserving unmanaged Codex skill: $target"
+                continue
+            fi
+            ln -s "$skill_dir" "$target"
+        done
+        echo "✅ Codex skills linked"
+    fi
+
     # Shared skills (work scope only): use Codex's documented user-level Agent Skills path.
     if [ "$WORK_MACHINE" = "1" ] && [ -d "$script_dir/shared-skills" ]; then
         agent_skills_dir="$HOME/.agents/skills"

@@ -206,6 +206,10 @@ The installer links the transport at `~/.local/bin/slack-webhook-post.sh` but ne
 
 Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. The Obsidian AI Platform plugin uses the same shared path for OpenCode, omp, and Codex while Claude Code loads the plugin natively and Cursor receives its generated workspace copies. Managed AI Platform links follow the active Obsidian checkout; unrelated existing skills are preserved. Claude Code, Codex, OpenCode, omp, and Cursor discover their applicable paths natively. Cursor-only meta-skills stay under `cursor/skills/`.
 
+### Codex session control
+
+The installer links `codex/skills/` into `~/.agents/skills` on personal and work machines, preserving existing unmanaged skills. Invoke `$codex-session-control` in a Mac Codex conversation with desktop app tools to launch, inspect, follow up on, or open tasks in saved local and SSH projects. The skill guides existing capabilities; it does not configure remote connections or add tools to cloud conversations. Codex detects skill changes automatically; restart it if the skill does not appear.
+
 ### Work agent authentication
 
 On work machines, run `auth-vanta-agents --status` to check the OMP Glean MCP

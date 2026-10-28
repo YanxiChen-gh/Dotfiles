@@ -56,7 +56,12 @@ assert_scope_links() {
 
     setup_claude_config >/dev/null
     setup_codex_config >/dev/null
+    setup_codex_config >/dev/null
     setup_opencode_config >/dev/null
+
+    skill="$HOME/.agents/skills/codex-session-control"
+    [ "$(readlink "$skill")" = "$ROOT/codex/skills/codex-session-control/" ] || fail "Codex did not link its session-control skill in $scope scope"
+    [ -f "$skill/SKILL.md" ] || fail "Codex skill link is unreadable"
 
     [ "$(readlink "$HOME/.claude/CLAUDE.md")" = "$ROOT/claude/CLAUDE$suffix.md" ] || fail "Claude did not select $scope rules"
     [ "$(readlink "$HOME/.codex/AGENTS.md")" = "$ROOT/codex/AGENTS$suffix.md" ] || fail "Codex did not select $scope rules"
@@ -147,7 +152,10 @@ for agent in claude codex; do
     else
         mkdir -p "$HOME/.codex"
         printf 'unmanaged instructions\n' >"$HOME/.codex/AGENTS.md"
+        mkdir -p "$HOME/.agents/skills/codex-session-control"
+        printf 'custom skill\n' >"$HOME/.agents/skills/codex-session-control/SKILL.md"
         setup_codex_config >/dev/null
+        [ "$(cat "$HOME/.agents/skills/codex-session-control/SKILL.md")" = "custom skill" ] || fail "Codex changed an unmanaged skill"
         target="$HOME/.codex/AGENTS.md"
     fi
     [ "$(cat "$target.pre-dotfiles")" = "unmanaged instructions" ] || fail "$agent did not preserve unmanaged instructions"
