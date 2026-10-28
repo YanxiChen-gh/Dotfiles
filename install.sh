@@ -64,7 +64,7 @@ setup_herdr_config
 setup_treehouse_config
 setup_wezterm_config
 setup_herdr_opener_client
-setup_ona_default_shell
+setup_ona_default_shell || exit 1
 
 if [ "$WORK_MACHINE" = "1" ]; then
     sync_ona_env_from_ona

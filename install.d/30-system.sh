@@ -195,55 +195,37 @@ setup_wezterm_config() {
     echo "✅ Linked WezTerm config: $target_config -> $source_config"
 }
 
-# Default the interactive shell to zsh in Vanta's Ona remote dev env.
-#
-# Ona CDEs SSH in via `exec -l $SHELL -i` with $SHELL=/bin/bash, and a
-# container's /etc/passwd can reset on rebuild, so `chsh` alone isn't reliable.
-# We add an idempotent, runtime-gated guard to ~/.bashrc that hands interactive
-# bash sessions over to zsh whenever IS_ON_ONA is set (harmless on a personal
-# machine, where the variable is absent), and best-effort `chsh` when this
-# installer is itself running inside Ona.
+# Set the Ona account's login shell without replacing shells running commands.
 setup_ona_default_shell() {
     bashrc="$HOME/.bashrc"
     marker="# >>> dotfiles: default to zsh on Ona >>>"
-
-    if [ ! -f "$bashrc" ] || ! grep -qF "$marker" "$bashrc"; then
-        cat >> "$bashrc" <<'EOF'
-
-# >>> dotfiles: default to zsh on Ona >>>
-# In Vanta's Ona CDE, hand interactive bash sessions over to zsh.
-case "$-" in
-    *i*)
-        if [ -n "$IS_ON_ONA" ] && [ -z "$ZSH_VERSION" ]; then
-            _zsh=$(command -v zsh 2>/dev/null)
-            if [ -n "$_zsh" ]; then
-                export SHELL="$_zsh"
-                exec "$_zsh" -l
-            fi
-            unset _zsh
+    if [ -f "$bashrc" ] && grep -qF "$marker" "$bashrc"; then
+        bashrc_tmp=$(mktemp) || return 1
+        if ! awk '
+            $0 == "# >>> dotfiles: default to zsh on Ona >>>" { skip = 1; next }
+            $0 == "# <<< dotfiles: default to zsh on Ona <<<" { skip = 0; next }
+            !skip { print }
+            END { if (skip) exit 1 }
+        ' "$bashrc" > "$bashrc_tmp" || ! cat "$bashrc_tmp" > "$bashrc"; then
+            rm -f "$bashrc_tmp"
+            return 1
         fi
-        ;;
-esac
-# <<< dotfiles: default to zsh on Ona <<<
-EOF
-        echo "✅ Added zsh-on-Ona guard to $bashrc"
+        rm -f "$bashrc_tmp"
+        echo "✅ Removed the automatic Bash-to-Zsh switch from $bashrc"
     fi
 
-    # When installing inside Ona, ensure zsh exists and set it as the login shell.
-    if [ -n "$IS_ON_ONA" ]; then
-        if ! command -v zsh >/dev/null 2>&1 && [ "$OS" = "linux" ]; then
-            install_from_apt "zsh"
-        fi
-        zsh_path=$(command -v zsh 2>/dev/null)
-        if [ -n "$zsh_path" ] && [ "$(basename "${SHELL:-}")" != "zsh" ]; then
-            # IMPORTANT: chsh prompts for a PAM password; without </dev/null it blocks
-            # forever during non-interactive provisioning (postCreate hang). Fail fast
-            # instead - the ~/.bashrc guard above already hands interactive shells to zsh.
-            if chsh -s "$zsh_path" </dev/null 2>/dev/null; then
-                echo "✅ Login shell set to $zsh_path"
-            else
-                echo "ℹ️  Could not chsh to zsh; ~/.bashrc will exec zsh on login instead."
-            fi
-        fi
+    [ -n "${IS_ON_ONA:-}" ] || return 0
+    if ! command -v zsh >/dev/null 2>&1 && [ "$OS" = "linux" ]; then
+        install_from_apt "zsh"
+    fi
+    zsh_path=$(command -v zsh 2>/dev/null) || return 1
+    shell_user=$(id -un) || return 1
+    shell_account=$(getent passwd "$shell_user") || return 1
+    [ "${shell_account##*:}" != "$zsh_path" ] || return 0
+    if sudo -n chsh "$shell_user" --shell "$zsh_path" </dev/null; then
+        echo "✅ Login shell set to $zsh_path"
+    else
+        echo "Could not set the Ona login shell to $zsh_path." >&2
+        return 1
     fi
 }
