@@ -99,8 +99,7 @@ const opensPlannotator = (command: string): boolean => {
 }
 
 const plannotatorGuidance =
-  "Use Plannotator as the flexible default presentation/review layer for all artifacts, choosing the native mode that fits the content. " +
-  "Only the interactive root omp session opens reviews: select an explicit free PLANNOTATOR_PORT and run plannotator-safe with the native arguments as one managed Bash job with async: true. " +
+  "When using Plannotator, only the interactive root omp session opens reviews: select an explicit free PLANNOTATOR_PORT and run plannotator-safe with the native arguments as one managed Bash job with async: true. " +
   "The helper keeps loopback local mode, automatic browser/Glimpse opening off, and sharing disabled. Run scripts/expose-port.sh with that port and share its verified loopback URL with a brief review handoff before awaiting feedback. " +
   "Feedback submission completes the CLI process and returns feedback on stdout; process it and reopen after revisions. There is no separate polling command. " +
   "While awaiting review, do not use ask, approval popups, Hub, or detached shells as duplicate human-interaction surfaces."

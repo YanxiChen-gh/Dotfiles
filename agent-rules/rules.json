@@ -91,7 +91,7 @@
       "targets": {
         "cursor": {
           "file": "doc-and-planning.mdc",
-          "description": "Default presentation and private review layer for code, documents, plans, reports, diagrams, and other artifacts.",
+          "description": "Authoring workflow and style guidance for design docs, RFCs, specs, runbooks, and playbooks.",
           "alwaysApply": true
         }
       }

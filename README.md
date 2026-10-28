@@ -17,9 +17,7 @@ reference the same guides. Repository requirements and publishing permissions re
 
 Run `python3 agent-rules/build.py` after changing prompt sources or the manifest.
 
-## Artifact presentation and review
-
-[Plannotator](https://github.com/backnotprop/plannotator) is the default private presentation layer for code, documents, plans, reports, diagrams, and other agent artifacts. The shared [presentation guidance](agent-rules/doc-and-planning.md) leaves format and presentation decisions to the agent: reuse existing artifacts and native rendering when useful, and choose richer or custom presentation when it adds value. Simple answers and routine status updates stay in chat. The rule reaches Claude, Codex, OpenCode, OMP, and both Cursor scopes.
+## Plannotator
 
 The installer adds the Plannotator binary without upstream hooks or optional runtimes, and installs its general `plannotator` skill. Launch through `plannotator-safe` with an explicit free `PLANNOTATOR_PORT`; the helper keeps the server on loopback, suppresses browser opening, and disables hosted sharing. Verify the URL with `scripts/expose-port.sh <port>` before handing it to the user. OMP runs the waiting CLI as a managed async Bash job. Its final stdout returns the decision and feedback to the originating session; another review starts a new session.
 
