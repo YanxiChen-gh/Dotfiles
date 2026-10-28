@@ -1,11 +1,22 @@
 # shellcheck shell=sh
 # Sourced by ../install.sh - function definitions only.
 
-# Symlink Codex global instructions, RTK reference, and shared skills.
+# Configure Codex defaults, global instructions, RTK reference, and shared skills.
 setup_codex_config() {
     script_dir=$(resolve_script_dir) || return 1
     codex_dir="$HOME/.codex"
     mkdir -p "$codex_dir"
+
+    codex_python=python3
+    if ! "$codex_python" -c 'import tomllib' >/dev/null 2>&1; then
+        codex_python=/opt/homebrew/bin/python3
+        if ! "$codex_python" -c 'import tomllib' >/dev/null 2>&1; then
+            echo "⚠️  Python 3.11+ is required to configure Codex defaults" >&2
+            return 1
+        fi
+    fi
+    "$codex_python" "$script_dir/scripts/configure_codex.py" || return 1
+    echo "✅ Codex model, reasoning, and Auto-review defaults configured"
 
     codex_instructions="$script_dir/codex/AGENTS.md"
     instruction_scope="personal"

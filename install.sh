@@ -128,7 +128,7 @@ install_agent_skill "ogulcancelik/herdr" "herdr"
 setup_claude_config
 setup_opencode_config
 install_herdr_opencode_integration
-setup_codex_config
+setup_codex_config || exit 1
 setup_advisors
 setup_rtk
 setup_agent_maturity || exit 1
