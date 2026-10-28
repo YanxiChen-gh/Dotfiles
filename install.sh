@@ -78,6 +78,7 @@ install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_opencode
 install_agent_browser || exit 1
 install_plannotator || exit 1
+install_orca || exit 1
 install_from_url "herdr" "herdr" "https://herdr.dev/install.sh"
 setup_herdr_opener_plugin
 install_from_url "treehouse" "treehouse" "https://kunchenguid.github.io/treehouse/install.sh"

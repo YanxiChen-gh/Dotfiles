@@ -25,6 +25,14 @@ The installer adds the Plannotator binary without upstream hooks or optional run
 
 Temporary presentation files can live under the ignored `.plannotator/` directory. Existing `.lavish/` artifacts remain ignored to keep private material out of commits. Plannotator stores preferences and document history under its own data directory; browser onboarding choices persist across ports on the same hostname, but are not a server-side skip-onboarding setting.
 
+## Orca agent control
+
+`install.sh` reuses a working `orca` or `orca-ide` CLI, including the CLI supplied by a managed remote Orca runtime, and exposes it as `~/.local/bin/orca`. On Linux hosts without one, it downloads the official stable AppImage and extracts it under `~/.local/share/orca`, without FUSE or root access. On other platforms, install Orca and register its CLI in Settings > General > Orca CLI first.
+
+Each installer run installs or refreshes the bundled `orca-cli`, `orchestration`, and `orca-per-workspace-env` skills for Claude, Codex, Cursor, OpenCode, and OMP. The shared copies live under `~/.agents/skills`; Orca preserves modified or unrelated skills and reports skipped placements. Guides stay matched to the installed CLI through `orca skills get <name>`. This uses Orca's [headless skill installer](https://www.onorca.dev/docs/cli/skills).
+
+Check `orca --version`, `orca skills installed`, and `orca status --json`. Skills can install without a running runtime; controlling workspaces and agents requires a reachable Orca runtime. On a fresh CDE, connect or start Orca separately using its [remote server setup](https://www.onorca.dev/docs/remote-servers). Credentials, pairing links, and running services are managed outside Dotfiles. New agent sessions discover the installed skills.
+
 ## Default shell on Ona
 
 In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells default to zsh. `install.sh` adds a runtime-gated guard to `~/.bashrc` that hands interactive bash sessions over to zsh, and best-effort `chsh`'s the login shell when run inside Ona. The guard is a no-op on a personal machine (where `IS_ON_ONA` is unset) - `chsh` alone isn't enough because Ona SSHs in via `exec -l $SHELL -i` with `$SHELL=/bin/bash` and a container's `/etc/passwd` can reset on rebuild.

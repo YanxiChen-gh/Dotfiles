@@ -124,7 +124,7 @@ EOF
 for function in install_from_apt install_python_if_missing install_node_if_missing install_typescript_language_service \
     create_symlinks setup_agent_helpers install_neovim setup_nvim_config setup_cloudev_tasks \
     setup_herdr_config setup_treehouse_config setup_wezterm_config setup_herdr_opener_client \
-    setup_ona_default_shell setup_work_machine install_from_url install_opencode install_agent_browser \
+    setup_ona_default_shell setup_work_machine install_from_url install_opencode install_agent_browser install_orca \
     setup_herdr_opener_plugin install_langsmith_cli install_gastown setup_cursor install_cursor_extensions \
     setup_langsmith_mcp setup_figma_mcp_cli remove_chrome_devtools_axi setup_claude_config \
     setup_opencode_config install_herdr_opencode_integration setup_codex_config setup_advisors \
