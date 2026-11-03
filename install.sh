@@ -71,6 +71,7 @@ if [ "$WORK_MACHINE" = "1" ]; then
     setup_work_github_auth
     setup_work_buildkite_auth
 fi
+setup_ona_repositories || exit 1
 
 # Install tools from URLs
 install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"

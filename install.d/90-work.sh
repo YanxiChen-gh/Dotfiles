@@ -79,3 +79,31 @@ setup_work_github_auth() {
     fi
 }
 
+setup_ona_repositories() (
+    [ "${IS_ON_ONA:-}" = "true" ] || return 0
+
+    repos_dir=${ONA_REPOSITORIES_DIR:-/workspaces}
+    mkdir -p "$repos_dir" || return 1
+    for repository in YanxiChen-gh/Dotfiles VantaInc/langsmith_custom_apps; do
+        target="$repos_dir/${repository##*/}"
+        if [ -e "$target" ] || [ -L "$target" ]; then
+            if [ ! -e "$target/.git" ]; then
+                echo "Repository destination is not a Git checkout: $target" >&2
+                return 1
+            fi
+            origin=$(git -C "$target" remote get-url origin) || return 1
+            case "$origin" in
+                "https://github.com/$repository"|"https://github.com/$repository.git"|"git@github.com:$repository.git")
+                    echo "Keeping existing checkout: $target"
+                    ;;
+                *)
+                    echo "Repository destination has an unexpected origin: $target" >&2
+                    return 1
+                    ;;
+            esac
+        else
+            gh repo clone "https://github.com/$repository.git" "$target" || return 1
+        fi
+    done
+)
+

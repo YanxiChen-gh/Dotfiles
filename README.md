@@ -31,6 +31,10 @@ Each installer run installs or refreshes the bundled `orca-cli`, `orchestration`
 
 Check `orca --version`, `orca skills installed`, and `orca status --json`. Skills can install without a running runtime; controlling workspaces and agents requires a reachable Orca runtime. On a fresh CDE, connect or start Orca separately using its [remote server setup](https://www.onorca.dev/docs/remote-servers). Credentials, pairing links, and running services are managed outside Dotfiles. New agent sessions discover the installed skills.
 
+## Repositories on Ona
+
+On Ona (`IS_ON_ONA=true`), `install.sh` clones `YanxiChen-gh/Dotfiles` into `/workspaces/Dotfiles` and `VantaInc/langsmith_custom_apps` into `/workspaces/langsmith_custom_apps` after the work GitHub authentication step. Existing checkouts are preserved without pulling; conflicting destinations or clone failures stop installation. Set `ONA_REPOSITORIES_DIR` to use another parent directory.
+
 ## Default shell on Ona
 
 In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells default to zsh. `install.sh` adds a runtime-gated guard to `~/.bashrc` that hands interactive bash sessions over to zsh, and best-effort `chsh`'s the login shell when run inside Ona. The guard is a no-op on a personal machine (where `IS_ON_ONA` is unset) - `chsh` alone isn't enough because Ona SSHs in via `exec -l $SHELL -i` with `$SHELL=/bin/bash` and a container's `/etc/passwd` can reset on rebuild.
