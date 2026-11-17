@@ -1,10 +1,14 @@
 import json
+import io
 import os
 from pathlib import Path
 import subprocess
+import runpy
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
+from urllib.error import HTTPError
 
 
 HELPER = Path(__file__).resolve().parents[2] / "shared-skills/workline/scripts/api.py"
@@ -105,6 +109,35 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
                 self.environment["FAKE_SCOPE"] = scope
                 result = self.call(*args, payload={"action": "queue"})
                 self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_ona_session_queues_without_a_local_workline_key(self):
+        helper = runpy.run_path(str(HELPER))
+        request = helper["request"]
+        fake_token = "fake.header.signature"
+        transport = Mock(side_effect=[{"scope": "queue"}, {"version": 2}])
+        with patch.dict(os.environ, {}, clear=True), \
+                patch.dict(request.__globals__, {"ona_token": lambda: fake_token, "ona_request": transport}), \
+                patch("sys.stdin", io.StringIO('{"action":"queue","version":1,"expected_heads":{}}')):
+            result = request("/api/work/example/commands", "test-queue-key")
+        self.assertEqual(result, {"version": 2})
+        self.assertEqual(transport.call_args_list[0].args, (fake_token, "/api/me"))
+        self.assertEqual(transport.call_args_list[1].args, (
+            fake_token, "/api/work/example/commands", "test-queue-key",
+            {"action": "queue", "version": 1, "expected_heads": {}},
+        ))
+
+    def test_ona_session_can_use_existing_vercel_access_for_another_project(self):
+        helper = runpy.run_path(str(HELPER))
+        request = helper["request"]
+        unauthorized = HTTPError("https://workline-bice.vercel.app/api/me", 403, "Forbidden", None, None)
+        fallback = Mock(return_value={"scope": "queue"})
+        with patch.dict(os.environ, {}, clear=True), patch.dict(request.__globals__, {
+            "ona_token": lambda: "fake.header.signature",
+            "ona_request": Mock(side_effect=unauthorized),
+            "configured_request": fallback,
+        }):
+            self.assertEqual(request("/api/me", None), {"scope": "queue"})
+        fallback.assert_called_once_with("/api/me", None, None, ona="fake.header.signature")
 
 
 if __name__ == "__main__":

@@ -6,9 +6,12 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.error import HTTPError
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 ORIGIN = "https://workline-bice.vercel.app"
@@ -21,14 +24,86 @@ def private_text(path):
     return source.read_text().strip()
 
 
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, new_url):
+        return None
+
+
+def ona_token():
+    cli = shutil.which("gitpod") or shutil.which("ona")
+    if cli is None:
+        return None
+    try:
+        result = subprocess.run(
+            [cli, "--context", "environment", "idp", "token", "--audience", ORIGIN],
+            capture_output=True, text=True, timeout=15, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    token = result.stdout.strip()
+    if result.returncode == 0 and re.fullmatch(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}", token):
+        return token
+    return None
+
+
+def ona_request(token, path, key=None, payload=None):
+    headers = {
+        "Authorization": f"Bearer ona_{token}",
+        "x-vercel-trusted-oidc-idp-token": token,
+        "Content-Type": "application/json",
+    }
+    if key:
+        headers["Idempotency-Key"] = key
+    body = json.dumps(payload).encode() if key else None
+    request = Request(ORIGIN + path, data=body, headers=headers)
+    with build_opener(NoRedirect()).open(request, timeout=60) as response:
+        return json.load(response)
+
+
+def ona_via_vercel(token, path, key=None, payload=None):
+    return configured_request(path, key, payload, ona=token)
+
+
 def request(path, key):
+    payload = json.load(sys.stdin) if key else None
+    action = payload.get("action") if key and path.endswith("/commands") else None
+    if key and path.endswith("/commands") and action not in ("progress", "associate", "session", "queue"):
+        raise ValueError("Use the owner browser for author-intent commands")
+
+    token = ona_token() if "WORKLINE_CONFIG" not in os.environ else None
+    if token:
+        transport = ona_request
+        try:
+            identity = ona_request(token, "/api/me")
+        except HTTPError as error:
+            if error.code not in (302, 401, 403):
+                raise ValueError(f"Workline HTTP {error.code}") from None
+            transport = ona_via_vercel
+            try:
+                identity = transport(token, "/api/me")
+            except (OSError, ValueError):
+                identity = None
+        if identity is not None:
+            if path == "/api/me" and not key:
+                return identity
+            try:
+                return transport(token, path, key, payload)
+            except HTTPError as error:
+                raise ValueError(f"Workline HTTP {error.code}") from None
+    return configured_request(path, key, payload, action)
+
+
+def configured_request(path, key, payload, action=None, ona=None):
     config_path = Path(
         os.environ.get("WORKLINE_CONFIG", "~/.config/workline/config.json")
     ).expanduser()
-    config = json.loads(private_text(config_path))
-    token = private_text(config["credential_file"])
-    if re.fullmatch(r"wk_[A-Za-z0-9_-]+", token) is None:
-        raise ValueError("Configure an owner-issued Workline credential")
+    config = {} if ona and not config_path.is_file() else json.loads(private_text(config_path))
+    if ona:
+        token = f"ona_{ona}"
+    else:
+        token = private_text(config["credential_file"])
+        if re.fullmatch(r"wk_[A-Za-z0-9_-]+", token) is None:
+            raise ValueError("Configure an owner-issued Workline credential")
     command = config.get("vercel_command", ["vercel"])
     if not isinstance(command, list) or not command or not all(
         isinstance(part, str) and part for part in command
@@ -56,20 +131,15 @@ def request(path, key):
             "--write-out", "%{http_code}",
         ]
         if key:
-            payload = json.load(sys.stdin)
-            if path.endswith("/commands"):
-                action = payload.get("action")
-                if action == "queue":
-                    if request("/api/me", None).get("scope") not in ("queue", "controller"):
-                        raise ValueError("Configure a coding-session credential or use the item's controller credential")
-                elif action not in ("progress", "associate", "session"):
-                    raise ValueError("Use the owner browser for author-intent commands")
+            if action == "queue" and configured_request("/api/me", None, None).get("scope") not in ("queue", "controller"):
+                raise ValueError("Configure a coding-session credential or use the item's controller credential")
             body = root / "body"
             body.write_text(json.dumps(payload))
             body.chmod(0o600)
             argv += ["--request", "POST", "--data-binary", f"@{body}"]
         result = subprocess.run(
-            argv, cwd=config_path.parent, env=environment, capture_output=True,
+            argv, cwd=config_path.parent if config_path.parent.is_dir() else root,
+            env=environment, capture_output=True,
             text=True, timeout=60, check=False,
         )
         if result.returncode:
