@@ -71,6 +71,10 @@ assert_scope_links() {
 assert_scope_links personal 0 ""
 assert_scope_links work 1 "-work"
 
+[ -f "$TMP/work/home/.agents/skills/workline/SKILL.md" ] || fail "work setup omitted Workline"
+[ -f "$TMP/work/home/.agents/skills/workline/scripts/api.py" ] || fail "Workline helper is unreadable"
+[ ! -e "$TMP/personal/home/.agents/skills/workline" ] || fail "personal setup included Workline"
+
 work_opencode_skill="$TMP/work/home/.config/opencode/skills/vanta-doc-discovery/SKILL.md"
 [ -L "$work_opencode_skill" ] || fail "OpenCode did not link the work-only Doc Discovery adapter"
 [ "$(readlink "$work_opencode_skill")" = "$ROOT/opencode/skills/vanta-doc-discovery/SKILL.md" ] || fail "OpenCode linked the wrong Doc Discovery adapter"
