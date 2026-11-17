@@ -220,6 +220,8 @@ The Codex sidebar organizer runs each pass in a fresh chat and archives that run
 
 Every run also reads [the shared requested-work and closure guide](codex/chat-organizer-pr-associations.md): track PRs that belong to the requested outcome, and retain contextual citations or upstream dependencies with separate provenance. A completed scoping answer does not inherit unrequested implementation work from a referenced PR. Delivered proposals can still await review; Done requires contextual evidence that the work item is closed.
 
+[Run scope](codex/chat-organizer-run-scopes.md) keeps lifecycle passes focused on affected eligible chats and their tracked work. Scheduled or explicit full refreshes also reconcile quiet chats and PRs, with affected chats first. `begin` returns the authoritative scope; overlapping full requests survive pending launches, active runs and failures. Event passes do not advance full-scan checkpoints.
+
 After creating the native launcher and policy, install its local hooks explicitly on the Mac:
 
 ```sh
@@ -230,7 +232,7 @@ Review new or changed local hook definitions with `/hooks`. The four async handl
 
 Inspect runtime state with `python3 codex/chat-organizer.py status`. Keep the heartbeat for missed signals, quiet PRs and remote-host scans. Existing loaded sessions may need their next normal reload to discover hooks; CLI 0.165.0 cannot guarantee waking an unloaded launcher. Run `python3 codex/chat-organizer.py uninstall` to disable only the local event handlers, including already-loaded copies; the schedule, ledger and unrelated hooks are preserved.
 
-Remote hosts enroll automatically through fresh native saved-project discovery in the launcher. Enable the reviewed implementation once on the Mac, then pass each actual `list_projects` result to the enrollment helper before ordinary launch preparation:
+Remote hosts enroll automatically through fresh native saved-project discovery in full-scope launches. Enable the reviewed implementation once on the Mac, then pass each actual `list_projects` result to the enrollment helper after launching/binding the worker or recording deferred full intent:
 
 ```sh
 python3 codex/chat-organizer-enroll.py enable
@@ -239,7 +241,7 @@ python3 codex/chat-organizer-enroll.py run < fresh-native-projects.json
 
 Enrollment resolves only an unambiguous declared SSH route, verifies the pinned helper source and exact four handler definitions, then uses the native `/hooks` approval operation for those server-reported fingerprints. It preserves unrelated trust/configuration and disabled-host overrides. Unknown or modified code/definitions are deferred for review. A private per-host Mac LaunchAgent streams only host/thread/turn/event metadata over authenticated SSH stdio; prompts, transcripts and credentials never enter the payload. The Mac acknowledges events after durable ingestion, so disconnects retain pending metadata safely.
 
-Ona bootstrap stages the helper before app-managed Codex is available. Enrollment completes after the normal SSH/app connection and a compatible native Codex API (0.169.0 or newer) are ready; it never installs another CLI or repairs PATH/auth. The existing Ona importer checks every 60 seconds. First enrollment waits for the next organizer discovery pass, at most its normal 30-minute cadence after import/readiness or an earlier ordinary trigger. Subsequent lifecycle signals stream immediately. Saved hosts with ambiguous routes or unavailable prerequisites remain on the scheduled fallback, and already-loaded sessions may need their next normal load. No per-CDE hook toggle is required for the same reviewed implementation.
+Ona bootstrap stages the helper before app-managed Codex is available. Enrollment completes after the normal SSH/app connection and a compatible native Codex API (0.169.0 or newer) are ready; it never installs another CLI or repairs PATH/auth. The existing Ona importer checks every 60 seconds. First enrollment waits for the next full organizer discovery pass, at most its normal 30-minute cadence after import/readiness or an earlier explicit full refresh. Subsequent lifecycle signals stream immediately. Saved hosts with ambiguous routes or unavailable prerequisites remain on the scheduled fallback, and already-loaded sessions may need their next normal load. No per-CDE hook toggle is required for the same reviewed implementation.
 
 Inspect `enrollment-status.json` and per-host `remote-*.json` beside the Mac config, or use the remote helper's `status` for its pending count. Run `python3 codex/chat-organizer-enroll.py disable` to stop future automatic enrollment. To disable one enrolled host, run the Mac remote helper's `uninstall-relay --config <Mac-config.json> --host-id <host-id>`, then the remote helper's `uninstall`. The disabled-host override is preserved; pending metadata, local behavior, the 30-minute fallback and other hooks/connections remain intact.
 

@@ -47,7 +47,7 @@ def load_state(config_path):
     state = read_json(config_path.with_name("events.json"), {})
     for key, value in {"seen": [], "pending": {}, "notified": False,
                        "activeRun": None, "launch": None, "runs": {},
-                       "directories": {}, "sweepPending": False}.items():
+                       "directories": {}, "sweepPending": False, "eventRevision": 0}.items():
         state.setdefault(key, value)
     return state
 
@@ -131,7 +131,7 @@ def notify(config_path, config, state):
     # scheduled launcher recover uncertain delivery without duplicate retries.
     state["notified"] = True
     save_state(config_path, state)
-    prompt = ("Ordinary organizer launch request. Launch one fresh organizer run by following "
+    prompt = ("Ordinary event organizer launch request. Use prepare --trigger event to drain pending intent, following "
               + str(Path(config["policy"]).with_name("dispatcher.md"))
               + ". Do not organize in this launcher or send anything into the discussion.")
     code = deliver(config, prompt)
@@ -156,6 +156,7 @@ def register(state, run_id, token):
         state["launch"]["threadId"] = run_id
     return state["runs"].setdefault(run_id, {
         "token": token, "status": "starting", "createdAt": time.time(),
+        "scope": state["launch"].get("scope", "full") if state["launch"] else "full",
     })
 
 
@@ -197,11 +198,31 @@ def record_event(config, state, host, session, turn, name, source):
     if key in state["seen"]:
         return
     state["seen"] = (state["seen"] + [key])[-2048:]
+    state["eventRevision"] += 1
     state["pending"][host + ":" + session + ":" + name] = {
         "hostId": host, "threadId": session, "turnId": turn,
         "event": name, "receivedAt": time.time(),
     }
     return True
+
+
+def affected_chats(config, state, events):
+    chats = {}
+    for event in sorted(events, key=lambda e: e.get("receivedAt", 0)):
+        host, thread = event["hostId"], event["threadId"]
+        if thread in config["excludedThreadIds"] or (host == "local" and thread in state["runs"]):
+            continue
+        chats.setdefault((host, thread), {"hostId": host, "threadId": thread})
+    return list(chats.values())
+
+
+def restore_work(state, record):
+    for event in record.get("events", []):
+        key = event["hostId"] + ":" + event["threadId"] + ":" + event["event"]
+        if event.get("receivedAt", 0) > state["pending"].get(key, {}).get("receivedAt", -1):
+            state["pending"][key] = event
+    if record.get("scope", "full") == "full":
+        state["sweepPending"] = True
 
 
 def receive(args):
@@ -248,6 +269,7 @@ def coordinate(args):
         state = load_state(args.config)
         print(json.dumps({"activeRun": state["activeRun"], "launch": state["launch"],
                           "pendingCount": len(state["pending"]), "runCount": len(state["runs"]),
+                          "fullSweepPending": state["sweepPending"],
                           "lastDelivery": state.get("lastDelivery"), "lastFailure": state.get("lastFailure")}))
         return
     with locked(args.config):
@@ -258,21 +280,33 @@ def coordinate(args):
             raise ValueError("Protected chat cannot become an organizer run")
         result = {}
         if args.action == "prepare":
-            if state["activeRun"]:
+            if args.trigger == "full":
                 state["sweepPending"] = True
-                result = {"launch": False, "activeRun": state["activeRun"]}
+            if state["activeRun"]:
+                result = {"launch": False, "activeRun": state["activeRun"], "fullSweepPending": state["sweepPending"]}
             elif state["launch"]:
+                if state["sweepPending"]:
+                    state["launch"]["scope"] = "full"
+                    state["sweepPending"] = False
                 result = {"launch": False, "reservation": state["launch"]}
+            elif not state["pending"] and not state["sweepPending"]:
+                state["notified"] = False
+                result = {"launch": False, "reason": "no-pending-work"}
             else:
                 token = str(uuid.uuid4())
                 directory = RUN_PREFIX + token
                 state["directories"][directory] = None
-                state["launch"] = {"token": token, "createdAt": time.time()}
+                scope = "full" if state["sweepPending"] else "events"
+                state["launch"] = {"token": token, "createdAt": time.time(), "scope": scope,
+                                   "eventRevision": state["eventRevision"]}
+                state["sweepPending"] = False
                 state["notified"] = False
-                result = {"launch": True, "token": token, "directoryName": directory,
+                result = {"launch": True, "token": token, "directoryName": directory, "scope": scope,
                           "prompt": "You are the fresh classification worker for Yanxi's authorized Codex organizer. Read managed conversation evidence and make justified ledger/sidebar updates within the full canonical policy at "
                           + config["policy"] + ". Your launch token is " + token
                           + ". Read the shared requested-work and closure guide at " + str(Path(__file__).with_name("chat-organizer-pr-associations.md").resolve())
+                          + ". Follow the run-scope contract at " + str(Path(__file__).with_name("chat-organizer-run-scopes.md").resolve())
+                          + ". The reservation scope hint is " + scope + "; begin returns the authoritative scope and affectedChats, including any scheduled overlap"
                           + ". Register and acquire the shared writer before reading work chats or changing the ledger/sidebar. Persist the outcome, release the writer, then archive only this run with the supported app tool. Do not send anything into the discussion."}
         elif args.action == "bind":
             register(state, run_id, args.token)
@@ -282,20 +316,25 @@ def coordinate(args):
             if state["activeRun"] not in (None, run_id):
                 raise ValueError("Another organizer owns the writer")
             if record["status"] == "running":
-                result = {"acquired": True, "events": record["events"]}
+                result = {"acquired": True, "events": record["events"], "scope": record.get("scope", "full"),
+                          "affectedChats": record.get("affectedChats", affected_chats(config, state, record["events"]))}
             else:
                 if record["status"] != "starting" or not state["launch"] or state["launch"]["token"] != args.token:
                     raise ValueError("Only a fresh reserved run can acquire the writer")
                 pending = list(state["pending"].values())
+                scope = "full" if state["sweepPending"] else state["launch"].get("scope", "full")
+                selected = affected_chats(config, state, pending)
                 state.update(activeRun=run_id, launch=None, pending={}, notified=False, sweepPending=False)
-                record.update(status="running", events=pending, startedAt=time.time())
-                result = {"acquired": True, "events": pending}
+                record.update(status="running", events=pending, scope=scope, affectedChats=selected, startedAt=time.time())
+                result = {"acquired": True, "events": pending, "scope": scope, "affectedChats": selected}
         elif args.action == "finish":
             if state["activeRun"] != run_id:
                 raise ValueError("Only the current writer can finish")
             state["runs"][run_id].update(status=args.outcome, message=args.message, finishedAt=time.time())
+            followup = bool(state["pending"] or state["sweepPending"])
             state["activeRun"] = None
             if args.outcome == "error":
+                restore_work(state, state["runs"][run_id])
                 state["lastFailure"] = {"runId": run_id, "message": args.message, "acknowledged": False}
             save_state(args.config, state)
             if args.outcome == "error":
@@ -303,7 +342,7 @@ def coordinate(args):
                     "Report the unacknowledged organizer failure using helper status and the error-report protocol in "
                     + str(Path(config["policy"]).with_name("dispatcher.md"))
                     + ". This is a status-only report for this one message: acknowledge the failure and finish the report without launching a pass or sending anything into the discussion. Later ordinary lifecycle or scheduled launch requests remain authorized under the normal protocol.")
-            if state["pending"] or state["sweepPending"]:
+            if followup:
                 notify(args.config, config, state)
             result = {"finished": run_id, "archiveRequired": True}
         elif args.action == "ack-error":
@@ -317,22 +356,28 @@ def coordinate(args):
             if state["directories"][RUN_PREFIX + args.token] is not None:
                 raise ValueError("A chat exists; inspect its state instead of cancelling")
             state["launchError"] = {"token": args.token, "message": args.message, "at": time.time()}
+            followup = state["eventRevision"] > state["launch"].get("eventRevision", 0)
+            if state["launch"].get("scope", "full") == "full":
+                state["sweepPending"] = True
             state["launch"] = None
             state["notified"] = False
             save_state(args.config, state)
-            if state["pending"] or state["sweepPending"]:
+            if followup:
                 notify(args.config, config, state)
             result = {"cancelled": args.token}
         elif args.action == "recover":
             owns_launch = state["launch"] and state["launch"].get("threadId") == run_id
             if state["activeRun"] != run_id and not owns_launch:
                 raise ValueError("The recorded owner changed")
-            state["runs"][run_id].update(status="error", message=args.message, finishedAt=time.time())
+            scope = state["launch"].get("scope", "full") if owns_launch else state["runs"][run_id].get("scope", "full")
+            state["runs"][run_id].update(status="error", scope=scope, message=args.message, finishedAt=time.time())
             if owns_launch:
+                restore_work(state, state["launch"])
                 state["launch"] = None
             if state["activeRun"] == run_id:
+                restore_work(state, state["runs"][run_id])
                 state["activeRun"] = None
-            state.update(notified=False, sweepPending=True)
+            state["notified"] = False
             result = {"recovered": run_id}
         if args.action == "prepare" and not state.get("lastFailure", {}).get("acknowledged", True):
             result["lastFailure"] = state["lastFailure"]
@@ -356,6 +401,7 @@ def main():
     parser.add_argument("--token")
     parser.add_argument("--outcome", choices=("success", "error"), default="success")
     parser.add_argument("--message", default="")
+    parser.add_argument("--trigger", choices=("event", "full"), default="full")
     args = parser.parse_args()
     args.config = args.config.expanduser().resolve()
     if args.action == "install" and not all((args.dispatcher, args.discussion, args.ledger, args.policy)):
