@@ -28,7 +28,7 @@ def request(path, key):
     config = json.loads(private_text(config_path))
     token = private_text(config["credential_file"])
     if re.fullmatch(r"wk_[A-Za-z0-9_-]+", token) is None:
-        raise ValueError("Configure an owner-issued Workline reporter credential")
+        raise ValueError("Configure an owner-issued Workline credential")
     command = config.get("vercel_command", ["vercel"])
     if not isinstance(command, list) or not command or not all(
         isinstance(part, str) and part for part in command
@@ -57,10 +57,13 @@ def request(path, key):
         ]
         if key:
             payload = json.load(sys.stdin)
-            if path.endswith("/commands") and payload.get("action") not in (
-                "progress", "associate", "session"
-            ):
-                raise ValueError("Use the owner browser for author-intent commands")
+            if path.endswith("/commands"):
+                action = payload.get("action")
+                if action == "queue":
+                    if request("/api/me", None).get("scope") != "controller":
+                        raise ValueError("Queue in the owner browser or use the item's controller credential")
+                elif action not in ("progress", "associate", "session"):
+                    raise ValueError("Use the owner browser for author-intent commands")
             body = root / "body"
             body.write_text(json.dumps(payload))
             body.chmod(0o600)
