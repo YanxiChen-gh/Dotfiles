@@ -15,6 +15,8 @@ class Workline(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+        self.checkout = self.root / "checkout"
+        self.checkout.mkdir()
         self.token = self.root / "reporter.key"
         self.vercel = self.root / "vercel.key"
         self.config = self.root / "config.json"
@@ -23,6 +25,7 @@ class Workline(unittest.TestCase):
         self.vercel.write_text("test_vercel_private")
         self.fake.write_text('''
 import json, os, pathlib, sys
+assert pathlib.Path.cwd() == pathlib.Path(__file__).resolve().parent
 args = sys.argv[1:]
 headers = pathlib.Path(args[args.index("--header") + 1][1:])
 assert headers.stat().st_mode & 0o077 == 0
@@ -59,7 +62,7 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
         return subprocess.run(
             [sys.executable, str(HELPER), *args],
             input=json.dumps(payload) if payload is not None else "",
-            env=self.environment, cwd=self.root, capture_output=True, text=True, check=False,
+            env=self.environment, cwd=self.checkout, capture_output=True, text=True, check=False,
         )
 
     def test_read_and_idempotent_progress(self):

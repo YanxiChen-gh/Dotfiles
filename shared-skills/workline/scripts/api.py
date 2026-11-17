@@ -22,9 +22,9 @@ def private_text(path):
 
 
 def request(path, key):
-    config_path = os.environ.get(
-        "WORKLINE_CONFIG", "~/.config/workline/config.json"
-    )
+    config_path = Path(
+        os.environ.get("WORKLINE_CONFIG", "~/.config/workline/config.json")
+    ).expanduser()
     config = json.loads(private_text(config_path))
     token = private_text(config["credential_file"])
     if re.fullmatch(r"wk_[A-Za-z0-9_-]+", token) is None:
@@ -66,8 +66,8 @@ def request(path, key):
             body.chmod(0o600)
             argv += ["--request", "POST", "--data-binary", f"@{body}"]
         result = subprocess.run(
-            argv, env=environment, capture_output=True, text=True, timeout=60,
-            check=False,
+            argv, cwd=config_path.parent, env=environment, capture_output=True,
+            text=True, timeout=60, check=False,
         )
         if result.returncode:
             raise ValueError("Vercel request failed; check this host's Vercel access")
