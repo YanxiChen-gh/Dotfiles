@@ -216,6 +216,18 @@ The installer symlinks [`codex/config.toml`](codex/config.toml) to `${CODEX_HOME
 
 The installer links `codex/skills/` into `~/.agents/skills` on personal and work machines, preserving existing unmanaged skills. Invoke `$codex-session-control` in a Mac Codex conversation with desktop app tools to launch, inspect, follow up on, or open tasks in saved local and SSH projects. The skill guides existing capabilities; it does not configure remote connections or add tools to cloud conversations. Codex detects skill changes automatically; restart it if the skill does not appear.
 
+The Codex sidebar organizer runs each pass in a fresh chat and archives that run after persisting its result. One internal launch-only chat receives both the 30-minute heartbeat and local lifecycle signals, then uses native `create_thread`; it never classifies work itself. The discussion stays outside background execution. The canonical policy and launcher protocol live in `~/.codex/chat-organizer/`, alongside the private event/run registry; the classification ledger stays at its configured persistent path.
+
+After creating the native launcher and policy, install its local hooks explicitly on the Mac:
+
+```sh
+python3 codex/chat-organizer.py install --dispatcher <launcher-uuid> --discussion <discussion-uuid> --ledger <ledger.json> --policy <policy.md> --exclude <internal-chat-uuid>
+```
+
+Review new or changed hook definitions with `/hooks`. The four async handlers coalesce session starts, user prompts, turn completion and permission requests into one launcher wakeup. A reserved directory identifies each temporary run before its first lifecycle event. The shared writer permits one classification pass; events and scheduled requests during that pass produce one follow-up. Each run calls `begin`, persists its audit, calls `finish`, then uses native `set_thread_archived` on itself as its final action. Errors are recorded before archive and reported in the internal launcher without an immediate retry. Unknown launch outcomes and live writers are never replaced on a timer.
+
+Inspect runtime state with `python3 codex/chat-organizer.py status`. Keep the heartbeat for missed signals, quiet PRs and remote-host scans. Existing loaded sessions may need their next normal reload to discover hooks; CLI 0.165.0 cannot guarantee waking an unloaded launcher. Remote event hooks remain unenabled without a supported remote-to-Mac relay. Run `python3 codex/chat-organizer.py uninstall` to disable only these event handlers, including already-loaded copies; the schedule, ledger and unrelated hooks are preserved.
+
 ### Work agent authentication
 
 On work machines, run `auth-vanta-agents --status` to check the OMP Glean MCP
