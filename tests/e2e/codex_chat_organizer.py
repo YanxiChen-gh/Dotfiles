@@ -1,13 +1,16 @@
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
+import select
 import sys
 import tempfile
 import unittest
 import uuid
 
 SCRIPT = Path(__file__).resolve().parents[2] / "codex/chat-organizer.py"
+REMOTE_SCRIPT = SCRIPT.with_name("chat-organizer-remote.py")
 
 
 class OrganizerTest(unittest.TestCase):
@@ -166,6 +169,113 @@ class OrganizerTest(unittest.TestCase):
         self.assertIn("status-only report", queued[0][-1])
         self.run_script("ack-error", "--run-id", run_id)
         self.assertTrue(json.loads(self.run_script("status").stdout)["lastFailure"]["acknowledged"])
+
+    def allow_remote(self, host):
+        config = json.loads(self.config.read_text())
+        config.setdefault("remoteHosts", {})[host] = {"enabled": True}
+        self.config.write_text(json.dumps(config))
+
+    def wire_event(self, host, session=None, **fields):
+        payload = dict(hostId=host, threadId=session or str(uuid.uuid4()),
+                       turnId=str(uuid.uuid4()), event="Stop", source="")
+        payload.update(fields)
+        key = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        return dict(payload, id=key)
+
+    def test_remote_identity_is_pinned_and_only_metadata_is_accepted(self):
+        self.install()
+        self.allow_remote("remote-a")
+        event = self.wire_event("remote-b")
+        rejected = self.run_script("receive", "--host-id", "remote-a", event={"events": [event]}, check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+        event = self.wire_event("remote-a", prompt="must not be transported")
+        rejected = self.run_script("receive", "--host-id", "remote-a", event={"events": [event]}, check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertFalse(self.log.exists())
+
+    def test_remote_namespaces_and_pending_followups_use_the_same_writer(self):
+        self.install()
+        self.allow_remote("remote-a")
+        self.allow_remote("remote-b")
+        prepared = json.loads(self.run_script("prepare").stdout)
+        run_id = str(uuid.uuid4())
+        self.start(prepared, run_id)
+        session = str(uuid.uuid4())
+        batches = [(host, {"events": [self.wire_event(host, session)]}) for host in ("remote-a", "remote-b")]
+        for host, batch in batches:
+            first = self.run_script("receive", "--host-id", host, event=batch)
+            again = self.run_script("receive", "--host-id", host, event=batch)
+            self.assertEqual(json.loads(first.stdout), json.loads(again.stdout))
+        self.assertFalse(self.log.exists())
+        pending = json.loads(self.events.read_text())["pending"]
+        self.assertEqual({e["hostId"] for e in pending.values()}, {"remote-a", "remote-b"})
+        self.run_script("finish", "--run-id", run_id)
+        self.assertEqual(len(self.log.read_text().splitlines()), 1)
+
+    def test_remote_spool_retries_without_ack_and_drops_prompt_content(self):
+        self.install()
+        self.allow_remote("remote-a")
+        remote_config = self.home / "remote/.codex/chat-organizer/remote-config.json"
+        remote_config.parent.mkdir(parents=True)
+        remote_hooks = remote_config.parent.parent / "hooks.json"
+        original_hooks = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "existing-remote-hook"}]}]}}
+        remote_hooks.write_text(json.dumps(original_hooks))
+        def remote(action, event=None):
+            return subprocess.run([sys.executable, str(REMOTE_SCRIPT), action,
+                                   "--config", str(remote_config), "--host-id", "remote-a"],
+                                  input=json.dumps(event) if event else None,
+                                  text=True, capture_output=True, check=True)
+        remote("install")
+        native = self.event()
+        native.update(prompt="private prompt", transcript_path="private transcript", credentials="private token")
+        remote("signal", native)
+        spool = remote_config.with_name("remote-events.json")
+        first_pending = json.loads(spool.read_text())["pending"]
+        self.assertNotIn("private", json.dumps(first_pending))
+        def read_line(process):
+            self.assertTrue(select.select([process.stdout], [], [], 5)[0], "stream did not produce a line")
+            return json.loads(process.stdout.readline())
+        for acknowledge in (False, True):
+            process = subprocess.Popen([sys.executable, str(REMOTE_SCRIPT), "stream",
+                                        "--config", str(remote_config)], stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
+            try:
+                self.assertEqual(read_line(process), {"ready": "remote-a", "protocol": 1})
+                batch = read_line(process)
+                self.assertEqual({e["id"] for e in batch["events"]}, set(first_pending))
+                if acknowledge:
+                    received = self.run_script("receive", "--host-id", "remote-a", event=batch)
+                    process.stdin.write(received.stdout.encode())
+                    process.stdin.flush()
+                process.stdin.close()
+                self.assertEqual(process.wait(timeout=5), 0)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+                if not process.stdin.closed:
+                    process.stdin.close()
+                process.stdout.close()
+            self.assertEqual(bool(json.loads(spool.read_text())["pending"]), not acknowledge)
+        remote("signal", native)
+        self.assertFalse(json.loads(spool.read_text())["pending"])
+        remote("uninstall")
+        self.assertEqual(json.loads(remote_hooks.read_text())["hooks"]["Stop"], original_hooks["hooks"]["Stop"])
+        remote("signal", self.event())
+        self.assertFalse(json.loads(spool.read_text())["pending"])
+
+    def test_cancelled_launch_releases_pending_remote_work(self):
+        self.install()
+        self.allow_remote("remote-a")
+        prepared = json.loads(self.run_script("prepare").stdout)
+        batch = {"events": [self.wire_event("remote-a")]}
+        self.run_script("receive", "--host-id", "remote-a", event=batch)
+        self.assertFalse(self.log.exists())
+        self.run_script("cancel", "--token", prepared["token"], "--message", "Launch failed before chat creation")
+        self.assertEqual(len(self.log.read_text().splitlines()), 1)
+        status = json.loads(self.run_script("status").stdout)
+        self.assertIsNone(status["launch"])
+        self.assertEqual(status["pendingCount"], 1)
 
 
 if __name__ == "__main__":

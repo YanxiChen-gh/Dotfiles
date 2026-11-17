@@ -50,4 +50,11 @@ setup_codex_config >/dev/null
 [ "$(readlink "$CODEX_HOME/config.toml")" = "$source_config" ] || fail "CODEX_HOME config was not linked"
 [ "$(cat "$config")" = "new host settings" ] || fail "CODEX_HOME changed the default config"
 
+cp "$ROOT/codex/chat-organizer-remote.py" "$TMP/repo/codex/chat-organizer-remote.py"
+IS_ON_ONA=true
+setup_codex_config >/dev/null
+[ -f "$CODEX_HOME/chat-organizer/remote.py" ] || fail "CDE bootstrap did not stage the organizer helper"
+[ -f "$CODEX_HOME/chat-organizer/bootstrap.json" ] || fail "CDE bootstrap did not record pending enrollment"
+[ ! -e "$CODEX_HOME/hooks.json" ] || fail "bootstrap installed hooks before saved-host enrollment"
+
 printf 'Codex config symlinking and backup preservation passed.\n'

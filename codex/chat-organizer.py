@@ -4,6 +4,7 @@
 import argparse
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -130,7 +131,7 @@ def notify(config_path, config, state):
     # scheduled launcher recover uncertain delivery without duplicate retries.
     state["notified"] = True
     save_state(config_path, state)
-    prompt = ("Launch one fresh organizer run by following "
+    prompt = ("Ordinary organizer launch request. Launch one fresh organizer run by following "
               + str(Path(config["policy"]).with_name("dispatcher.md"))
               + ". Do not organize in this launcher or send anything into the discussion.")
     code = deliver(config, prompt)
@@ -176,25 +177,70 @@ def signal(args):
             register(state, session, directory[len(RUN_PREFIX):])
             save_state(args.config, state)
             return
-        if session in state["runs"] or name not in EVENTS:
-            return
-        if name == "SessionStart" and event.get("source") not in ("startup", "resume", "fork", "clear"):
-            return
         turn = str(event.get("turn_id", ""))
         if len(turn) > 100:
             raise ValueError("Invalid turn id")
-        key = ":".join((session, turn, name, str(event.get("source", ""))))
-        if key in state["seen"]:
+        if not record_event(config, state, config["hostId"], session, turn, name, event.get("source", "")):
             return
-        state["seen"] = (state["seen"] + [key])[-2048:]
-        state["pending"][session + ":" + name] = {
-            "hostId": config["hostId"], "threadId": session,
-            "turnId": turn, "event": name, "receivedAt": time.time(),
-        }
         save_state(args.config, state)
-        if not state["activeRun"] and not state["launch"]:
+        if state["pending"] and not state["activeRun"] and not state["launch"]:
             notify(args.config, config, state)
         save_state(args.config, state)
+
+
+def record_event(config, state, host, session, turn, name, source):
+    if session in config["excludedThreadIds"] or (host == "local" and session in state["runs"]) or name not in EVENTS:
+        return
+    if name == "SessionStart" and source not in ("startup", "resume", "fork", "clear"):
+        return
+    key = ":".join((host, session, turn, name, source))
+    if key in state["seen"]:
+        return
+    state["seen"] = (state["seen"] + [key])[-2048:]
+    state["pending"][host + ":" + session + ":" + name] = {
+        "hostId": host, "threadId": session, "turnId": turn,
+        "event": name, "receivedAt": time.time(),
+    }
+    return True
+
+
+def receive(args):
+    raw = sys.stdin.buffer.read(65537)
+    if len(raw) > 65536:
+        raise ValueError("Remote event batch is too large")
+    batch = json.loads(raw)
+    if not isinstance(batch, dict) or set(batch) != {"events"} or not isinstance(batch["events"], list) or not 1 <= len(batch["events"]) <= 128:
+        raise ValueError("Invalid remote event batch")
+    validated = []
+    for item in batch["events"]:
+        if not isinstance(item, dict) or set(item) != {"id", "hostId", "threadId", "turnId", "event", "source"}:
+            raise ValueError("Only lifecycle identity metadata is accepted")
+        payload = {k: v for k, v in item.items() if k != "id"}
+        if not all(isinstance(value, str) for value in payload.values()):
+            raise ValueError("Remote lifecycle identities must be strings")
+        if payload["hostId"] != args.host_id or args.host_id == "local":
+            raise ValueError("Remote source host does not match its SSH route")
+        session = str(uuid.UUID(payload["threadId"]))
+        turn, name, source = payload["turnId"], payload["event"], payload["source"]
+        if name not in EVENTS or source not in ("", "startup", "resume", "fork", "clear") or not isinstance(turn, str) or len(turn) > 100 or any(ord(c) < 32 for c in turn):
+            raise ValueError("Invalid remote lifecycle identity")
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if item["id"] != digest:
+            raise ValueError("Remote event identity hash does not match")
+        validated.append((digest, session, turn, name, source))
+    with locked(args.config):
+        config = read_json(args.config)
+        if not config.get("remoteHosts", {}).get(args.host_id, {}).get("enabled"):
+            raise ValueError("Remote source host is not enabled")
+        state = load_state(args.config)
+        added = False
+        for _, session, turn, name, source in validated:
+            added = record_event(config, state, args.host_id, session, turn, name, source) or added
+        save_state(args.config, state)
+        if added and state["pending"] and not state["activeRun"] and not state["launch"]:
+            notify(args.config, config, state)
+        save_state(args.config, state)
+    print(json.dumps({"ack": [item[0] for item in validated]}))
 
 
 def coordinate(args):
@@ -224,8 +270,9 @@ def coordinate(args):
                 state["launch"] = {"token": token, "createdAt": time.time()}
                 state["notified"] = False
                 result = {"launch": True, "token": token, "directoryName": directory,
-                          "prompt": "This is a temporary organizer run authorized by Yanxi. Read and execute the full canonical policy at "
+                          "prompt": "You are the fresh classification worker for Yanxi's authorized Codex organizer. Read managed conversation evidence and make justified ledger/sidebar updates within the full canonical policy at "
                           + config["policy"] + ". Your launch token is " + token
+                          + ". Read the shared PR-association rule at " + str(Path(__file__).with_name("chat-organizer-pr-associations.md").resolve())
                           + ". Register and acquire the shared writer before reading work chats or changing the ledger/sidebar. Persist the outcome, release the writer, then archive only this run with the supported app tool. Do not send anything into the discussion."}
         elif args.action == "bind":
             register(state, run_id, args.token)
@@ -255,7 +302,7 @@ def coordinate(args):
                 state["lastFailure"]["deliveryReturnCode"] = deliver(config,
                     "Report the unacknowledged organizer failure using helper status and the error-report protocol in "
                     + str(Path(config["policy"]).with_name("dispatcher.md"))
-                    + ". This is a status-only report: do not launch a pass for this message or send anything into the discussion.")
+                    + ". This is a status-only report for this one message: acknowledge the failure and finish the report without launching a pass or sending anything into the discussion. Later ordinary lifecycle or scheduled launch requests remain authorized under the normal protocol.")
             if state["pending"] or state["sweepPending"]:
                 notify(args.config, config, state)
             result = {"finished": run_id, "archiveRequired": True}
@@ -272,6 +319,9 @@ def coordinate(args):
             state["launchError"] = {"token": args.token, "message": args.message, "at": time.time()}
             state["launch"] = None
             state["notified"] = False
+            save_state(args.config, state)
+            if state["pending"] or state["sweepPending"]:
+                notify(args.config, config, state)
             result = {"cancelled": args.token}
         elif args.action == "recover":
             owns_launch = state["launch"] and state["launch"].get("threadId") == run_id
@@ -293,7 +343,7 @@ def coordinate(args):
 def main():
     home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("install", "uninstall", "signal", "prepare", "bind", "begin", "finish", "cancel", "recover", "ack-error", "status"))
+    parser.add_argument("action", choices=("install", "uninstall", "signal", "receive", "prepare", "bind", "begin", "finish", "cancel", "recover", "ack-error", "status"))
     parser.add_argument("--config", type=Path, default=home / "chat-organizer/config.json")
     parser.add_argument("--dispatcher")
     parser.add_argument("--discussion")
@@ -301,6 +351,7 @@ def main():
     parser.add_argument("--policy", type=Path)
     parser.add_argument("--exclude", action="append", default=[])
     parser.add_argument("--codex", default="codex")
+    parser.add_argument("--host-id")
     parser.add_argument("--run-id")
     parser.add_argument("--token")
     parser.add_argument("--outcome", choices=("success", "error"), default="success")
@@ -313,11 +364,15 @@ def main():
         parser.error("this action requires --run-id")
     if args.action in ("bind", "begin", "cancel") and not args.token:
         parser.error("this action requires --token")
+    if args.action == "receive" and not args.host_id:
+        parser.error("receive requires --host-id")
     try:
         if args.action in ("install", "uninstall"):
             install(args)
         elif args.action == "signal":
             signal(args)
+        elif args.action == "receive":
+            receive(args)
         else:
             coordinate(args)
     except (OSError, ValueError, KeyError, TypeError) as error:

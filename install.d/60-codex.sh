@@ -12,6 +12,11 @@ setup_codex_config() {
     link_dotfiles_file "$script_dir/codex/config.toml" "$codex_config_dir/config.toml" || return 1
     echo "✅ Codex config.toml linked"
 
+    if [ -n "${IS_ON_ONA:-}" ] && [ -f "$script_dir/codex/chat-organizer-remote.py" ]; then
+        python3 "$script_dir/codex/chat-organizer-remote.py" stage \
+            --config "$codex_config_dir/chat-organizer/remote-config.json" || return 1
+    fi
+
     codex_instructions="$script_dir/codex/AGENTS.md"
     instruction_scope="personal"
     if [ "${WORK_MACHINE:-}" = "1" ]; then

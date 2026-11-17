@@ -216,7 +216,9 @@ The installer symlinks [`codex/config.toml`](codex/config.toml) to `${CODEX_HOME
 
 The installer links `codex/skills/` into `~/.agents/skills` on personal and work machines, preserving existing unmanaged skills. Invoke `$codex-session-control` in a Mac Codex conversation with desktop app tools to launch, inspect, follow up on, or open tasks in saved local and SSH projects. The skill guides existing capabilities; it does not configure remote connections or add tools to cloud conversations. Codex detects skill changes automatically; restart it if the skill does not appear.
 
-The Codex sidebar organizer runs each pass in a fresh chat and archives that run after persisting its result. One internal launch-only chat receives both the 30-minute heartbeat and local lifecycle signals, then uses native `create_thread`; it never classifies work itself. The discussion stays outside background execution. The canonical policy and launcher protocol live in `~/.codex/chat-organizer/`, alongside the private event/run registry; the classification ledger stays at its configured persistent path.
+The Codex sidebar organizer runs each pass in a fresh chat and archives that run after persisting its result. One internal launch-only chat receives the 30-minute heartbeat and local/remote lifecycle signals, then uses native `create_thread`; it never classifies work itself. The discussion stays outside background execution. The canonical policy and launcher protocol live in `~/.codex/chat-organizer/`, alongside the private event/run registry; the classification ledger stays at its configured persistent path.
+
+Every run also reads [the shared PR-association rule](codex/chat-organizer-pr-associations.md): track PRs that belong to the requested outcome, and retain contextual citations or upstream dependencies with separate provenance. A completed scoping answer does not inherit unrequested implementation work from a referenced PR.
 
 After creating the native launcher and policy, install its local hooks explicitly on the Mac:
 
@@ -224,9 +226,22 @@ After creating the native launcher and policy, install its local hooks explicitl
 python3 codex/chat-organizer.py install --dispatcher <launcher-uuid> --discussion <discussion-uuid> --ledger <ledger.json> --policy <policy.md> --exclude <internal-chat-uuid>
 ```
 
-Review new or changed hook definitions with `/hooks`. The four async handlers coalesce session starts, user prompts, turn completion and permission requests into one launcher wakeup. A reserved directory identifies each temporary run before its first lifecycle event. The shared writer permits one classification pass; events and scheduled requests during that pass produce one follow-up. Each run calls `begin`, persists its audit, calls `finish`, then uses native `set_thread_archived` on itself as its final action. Errors are recorded before archive and reported in the internal launcher without an immediate retry. Unknown launch outcomes and live writers are never replaced on a timer.
+Review new or changed local hook definitions with `/hooks`. The four async handlers coalesce session starts, user prompts, turn completion and permission requests into one launcher wakeup. A reserved directory identifies each temporary run before its first lifecycle event. The shared writer permits one classification pass; events and scheduled requests during that pass produce one follow-up. Each run calls `begin`, persists its audit, calls `finish`, then uses native `set_thread_archived` on itself as its final action. Errors are recorded before archive and reported in the internal launcher without an immediate retry. Unknown launch outcomes and live writers are never replaced on a timer.
 
-Inspect runtime state with `python3 codex/chat-organizer.py status`. Keep the heartbeat for missed signals, quiet PRs and remote-host scans. Existing loaded sessions may need their next normal reload to discover hooks; CLI 0.165.0 cannot guarantee waking an unloaded launcher. Remote event hooks remain unenabled without a supported remote-to-Mac relay. Run `python3 codex/chat-organizer.py uninstall` to disable only these event handlers, including already-loaded copies; the schedule, ledger and unrelated hooks are preserved.
+Inspect runtime state with `python3 codex/chat-organizer.py status`. Keep the heartbeat for missed signals, quiet PRs and remote-host scans. Existing loaded sessions may need their next normal reload to discover hooks; CLI 0.165.0 cannot guarantee waking an unloaded launcher. Run `python3 codex/chat-organizer.py uninstall` to disable only the local event handlers, including already-loaded copies; the schedule, ledger and unrelated hooks are preserved.
+
+Remote hosts enroll automatically through fresh native saved-project discovery in the launcher. Enable the reviewed implementation once on the Mac, then pass each actual `list_projects` result to the enrollment helper before ordinary launch preparation:
+
+```sh
+python3 codex/chat-organizer-enroll.py enable
+python3 codex/chat-organizer-enroll.py run < fresh-native-projects.json
+```
+
+Enrollment resolves only an unambiguous declared SSH route, verifies the pinned helper source and exact four handler definitions, then uses the native `/hooks` approval operation for those server-reported fingerprints. It preserves unrelated trust/configuration and disabled-host overrides. Unknown or modified code/definitions are deferred for review. A private per-host Mac LaunchAgent streams only host/thread/turn/event metadata over authenticated SSH stdio; prompts, transcripts and credentials never enter the payload. The Mac acknowledges events after durable ingestion, so disconnects retain pending metadata safely.
+
+Ona bootstrap stages the helper before app-managed Codex is available. Enrollment completes after the normal SSH/app connection and a compatible native Codex API (0.169.0 or newer) are ready; it never installs another CLI or repairs PATH/auth. The existing Ona importer checks every 60 seconds. First enrollment waits for the next organizer discovery pass, at most its normal 30-minute cadence after import/readiness or an earlier ordinary trigger. Subsequent lifecycle signals stream immediately. Saved hosts with ambiguous routes or unavailable prerequisites remain on the scheduled fallback, and already-loaded sessions may need their next normal load. No per-CDE hook toggle is required for the same reviewed implementation.
+
+Inspect `enrollment-status.json` and per-host `remote-*.json` beside the Mac config, or use the remote helper's `status` for its pending count. Run `python3 codex/chat-organizer-enroll.py disable` to stop future automatic enrollment. To disable one enrolled host, run the Mac remote helper's `uninstall-relay --config <Mac-config.json> --host-id <host-id>`, then the remote helper's `uninstall`. The disabled-host override is preserved; pending metadata, local behavior, the 30-minute fallback and other hooks/connections remain intact.
 
 ### Work agent authentication
 

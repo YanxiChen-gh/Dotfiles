@@ -107,7 +107,7 @@ else
 fi
 
 printf '\n== python3 -m py_compile ==\n'
-for f in scripts/auth-vanta-agents.py scripts/configure_vanta_snowflake.py scripts/ensure_omp_mcp.py scripts/find-loopback-browser-asset.py scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py herdr/troubleshoot-context.py herdr/remote-opener/open_url.py herdr/session-hub-adapter.py codex/chat-organizer.py tests/e2e/codex_chat_organizer.py tests/e2e/session_hub_fixtures.py; do
+for f in scripts/auth-vanta-agents.py scripts/configure_vanta_snowflake.py scripts/ensure_omp_mcp.py scripts/find-loopback-browser-asset.py scripts/sync_cursor_mcp_from_claude.py scripts/sync_opencode_mcp_from_claude.py agent-rules/build.py herdr/prompt-input.py herdr/troubleshoot-context.py herdr/remote-opener/open_url.py herdr/session-hub-adapter.py codex/chat-organizer.py codex/chat-organizer-remote.py codex/chat-organizer-enroll.py tests/e2e/codex_chat_organizer.py tests/e2e/organizer_enrollment.py tests/e2e/session_hub_fixtures.py; do
     if [ -f "$f" ]; then
         if ! python3 -m py_compile "$f"; then
             fail "py_compile $f"
