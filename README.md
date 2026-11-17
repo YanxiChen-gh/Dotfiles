@@ -218,7 +218,7 @@ The installer links `codex/skills/` into `~/.agents/skills` on personal and work
 
 The Codex sidebar organizer runs each pass in a fresh chat and archives that run after persisting its result. One internal launch-only chat receives the 30-minute heartbeat and local/remote lifecycle signals, then uses native `create_thread`; it never classifies work itself. The discussion stays outside background execution. The canonical policy and launcher protocol live in `~/.codex/chat-organizer/`, alongside the private event/run registry; the classification ledger stays at its configured persistent path.
 
-Every run also reads [the shared PR-association rule](codex/chat-organizer-pr-associations.md): track PRs that belong to the requested outcome, and retain contextual citations or upstream dependencies with separate provenance. A completed scoping answer does not inherit unrequested implementation work from a referenced PR.
+Every run also reads [the shared requested-work and closure guide](codex/chat-organizer-pr-associations.md): track PRs that belong to the requested outcome, and retain contextual citations or upstream dependencies with separate provenance. A completed scoping answer does not inherit unrequested implementation work from a referenced PR. Delivered proposals can still await review; Done requires contextual evidence that the work item is closed.
 
 After creating the native launcher and policy, install its local hooks explicitly on the Mac:
 

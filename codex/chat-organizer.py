@@ -272,7 +272,7 @@ def coordinate(args):
                 result = {"launch": True, "token": token, "directoryName": directory,
                           "prompt": "You are the fresh classification worker for Yanxi's authorized Codex organizer. Read managed conversation evidence and make justified ledger/sidebar updates within the full canonical policy at "
                           + config["policy"] + ". Your launch token is " + token
-                          + ". Read the shared PR-association rule at " + str(Path(__file__).with_name("chat-organizer-pr-associations.md").resolve())
+                          + ". Read the shared requested-work and closure guide at " + str(Path(__file__).with_name("chat-organizer-pr-associations.md").resolve())
                           + ". Register and acquire the shared writer before reading work chats or changing the ledger/sidebar. Persist the outcome, release the writer, then archive only this run with the supported app tool. Do not send anything into the discussion."}
         elif args.action == "bind":
             register(state, run_id, args.token)
