@@ -60,8 +60,8 @@ def request(path, key):
             if path.endswith("/commands"):
                 action = payload.get("action")
                 if action == "queue":
-                    if request("/api/me", None).get("scope") != "controller":
-                        raise ValueError("Queue in the owner browser or use the item's controller credential")
+                    if request("/api/me", None).get("scope") not in ("queue", "controller"):
+                        raise ValueError("Configure a coding-session credential or use the item's controller credential")
                 elif action not in ("progress", "associate", "session"):
                     raise ValueError("Use the owner browser for author-intent commands")
             body = root / "body"
