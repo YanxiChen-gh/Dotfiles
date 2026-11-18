@@ -2,6 +2,8 @@
 """Call Workline through this host's authenticated Vercel CLI."""
 
 import argparse
+from contextlib import contextmanager
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -10,12 +12,50 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from time import monotonic
 from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from uuid import uuid4
 
 
 ORIGIN = "https://workline-bice.vercel.app"
 QUEUE_COMMANDS = ("queue", "complete", "abandon", "reopen")
+REQUEST_ID = str(uuid4())
+REQUEST_ID_HEADER = "x-workline-request-id"
+
+
+@contextmanager
+def trace(event, path, key, **fields):
+    route = re.sub(r"^/api/work/(?!stack$)[a-zA-Z0-9-]+", "/api/work/:id", path)
+    started = monotonic()
+    outcome = "ok"
+    try:
+        yield fields
+    except HTTPError as error:
+        fields["status"] = error.code
+        outcome = "http-error"
+        raise
+    except (TimeoutError, subprocess.TimeoutExpired):
+        outcome = "timeout"
+        raise
+    except Exception:
+        outcome = "error"
+        raise
+    finally:
+        record = {
+            "event": f"workline.client.{event}",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "requestId": REQUEST_ID,
+            "method": "POST" if key else "GET",
+            "route": route,
+            "outcome": outcome,
+            "durationMs": round((monotonic() - started) * 1000),
+            **fields,
+        }
+        try:
+            print(json.dumps(record), file=sys.stderr, flush=True)
+        except OSError:
+            pass
 
 
 def private_text(path):
@@ -52,13 +92,16 @@ def ona_request(token, path, key=None, payload=None):
         "Authorization": f"Bearer ona_{token}",
         "x-vercel-trusted-oidc-idp-token": token,
         "Content-Type": "application/json",
+        REQUEST_ID_HEADER: REQUEST_ID,
     }
     if key:
         headers["Idempotency-Key"] = key
     body = json.dumps(payload).encode() if key else None
     request = Request(ORIGIN + path, data=body, headers=headers)
-    with build_opener(NoRedirect()).open(request, timeout=60) as response:
-        return json.load(response)
+    with trace("request", path, key, transport="ona-direct") as fields:
+        with build_opener(NoRedirect()).open(request, timeout=60) as response:
+            fields["status"] = response.status
+            return json.load(response)
 
 
 def ona_via_vercel(token, path, key=None, payload=None):
@@ -126,6 +169,7 @@ def configured_request(path, key, payload, action=None, ona=None):
         headers = root / "headers"
         headers.write_text(
             f"Authorization: Bearer {token}\nContent-Type: application/json\n"
+            f"{REQUEST_ID_HEADER}: {REQUEST_ID}\n"
             + (f"Idempotency-Key: {key}\n" if key else "")
         )
         headers.chmod(0o600)
@@ -142,20 +186,23 @@ def configured_request(path, key, payload, action=None, ona=None):
             body.write_text(json.dumps(payload))
             body.chmod(0o600)
             argv += ["--request", "POST", "--data-binary", f"@{body}"]
-        result = subprocess.run(
-            argv, cwd=config_path.parent if config_path.parent.is_dir() else root,
-            env=environment, capture_output=True,
-            text=True, timeout=60, check=False,
-        )
-        if result.returncode:
-            raise ValueError("Vercel request failed; check this host's Vercel access")
-        match = re.search(r"(\d{3})\s*$", result.stdout)
-        if match is None:
-            raise ValueError("Vercel did not return an HTTP status")
-        status = int(match[1])
-        if not 200 <= status < 300:
-            raise ValueError(f"Workline HTTP {status}; refresh context or renew access")
-        return json.loads(output.read_text())
+        with trace("request", path, key, transport="ona-vercel" if ona else "vercel") as fields:
+            result = subprocess.run(
+                argv, cwd=config_path.parent if config_path.parent.is_dir() else root,
+                env=environment, capture_output=True,
+                text=True, timeout=60, check=False,
+            )
+            fields["exitCode"] = result.returncode
+            if result.returncode:
+                raise ValueError("Vercel request failed; check this host's Vercel access")
+            match = re.search(r"(\d{3})\s*$", result.stdout)
+            if match is None:
+                raise ValueError("Vercel did not return an HTTP status")
+            status = int(match[1])
+            fields["status"] = status
+            if not 200 <= status < 300:
+                raise ValueError(f"Workline HTTP {status}; refresh context or renew access")
+            return json.loads(output.read_text())
 
 
 def main():
@@ -172,7 +219,8 @@ def main():
     if args.key is not None and re.fullmatch(r"[a-zA-Z0-9:_-]{8,100}", args.key) is None:
         parser.error("Use an 8-100 character operation key (letters, digits, : _ -)")
     try:
-        print(json.dumps(request(args.path, args.key), indent=2))
+        with trace("invocation", args.path, args.key):
+            print(json.dumps(request(args.path, args.key), indent=2))
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         # Paths, CLI output, and server error bodies can contain private material.
         if type(error) is ValueError and not isinstance(error, json.JSONDecodeError):

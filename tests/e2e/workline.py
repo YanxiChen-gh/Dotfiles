@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
+from uuid import UUID
 
 
 HELPER = Path(__file__).resolve().parents[2] / "shared-skills/workline/scripts/api.py"
@@ -51,7 +52,10 @@ if "--data-binary" in args:
 if os.environ.get("FAKE_FAILURE"):
     print("wk_test_reporter test_vercel_private", file=sys.stderr)
     sys.exit(1)
-pathlib.Path(args[args.index("--output") + 1]).write_text(json.dumps({"scope": os.environ.get("FAKE_SCOPE", "reporter")}))
+response = {"scope": os.environ.get("FAKE_SCOPE", "reporter")}
+if os.environ.get("FAKE_ECHO_REQUEST_ID"):
+    response["requestId"] = next(line.split(": ", 1)[1] for line in headers.read_text().splitlines() if line.startswith("x-workline-request-id: "))
+pathlib.Path(args[args.index("--output") + 1]).write_text(json.dumps(response))
 print(os.environ.get("FAKE_STATUS", "200"), end="")
 ''')
         self.config.write_text(json.dumps({
@@ -85,6 +89,23 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
         result = self.call("/api/work/example/commands", "--key", "session-123",
                            payload={"action": "queue"})
         self.assertNotEqual(result.returncode, 0)
+
+    def test_logs_request_id_and_route_without_private_values(self):
+        self.environment["FAKE_ECHO_REQUEST_ID"] = "1"
+        result = self.call("/api/work/private-item/commands", "--key", "session-123",
+                           payload={"action": "progress", "data": {"message": "private progress"}})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        request_id = json.loads(result.stdout)["requestId"]
+        self.assertEqual(UUID(request_id).version, 4)
+        events = [json.loads(line) for line in result.stderr.splitlines()]
+        self.assertEqual([event["event"] for event in events],
+                         ["workline.client.request", "workline.client.invocation"])
+        for event in events:
+            self.assertEqual(event["requestId"], request_id)
+            self.assertEqual(event["route"], "/api/work/:id/commands")
+        self.assertEqual(events[0]["status"], 200)
+        for value in ("private-item", "session-123", "private progress", "wk_test_reporter"):
+            self.assertNotIn(value, result.stderr)
 
     def test_access_failures_do_not_leak_credentials(self):
         self.environment["FAKE_FAILURE"] = "1"

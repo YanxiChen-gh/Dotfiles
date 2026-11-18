@@ -15,6 +15,8 @@ python3 <skill-directory>/scripts/api.py /api/work --key STABLE_OPERATION_KEY < 
 python3 <skill-directory>/scripts/api.py /api/work/WORK_ID/commands --key STABLE_OPERATION_KEY < command.json
 ```
 
+The helper writes JSON results to stdout and `workline.client.*` diagnostic events to stderr. Search Vercel Runtime Logs for the event's `requestId` to find the matching Workline API calls. If an attempt never reaches Workline, use the local transport, status, and exit code. Keep diagnostic captures private.
+
 Registration JSON is `{"title":"...","purpose":"..."}` with optional `pr: {"repository":"OWNER/REPO","number":123}` and `session`. Retrieve the item before a command. Command JSON is `{"action":"progress","version":CURRENT_VERSION,"expected_heads":HEADS,"data":{"message":"..."}}`; optional `data.blocker` reports a blocker. Build `HEADS` from every current PR using `"OWNER/REPO#NUMBER": head`, preserving null values. Other reporter actions are `associate` with `{repository,number}` and `session` with the complete session object.
 
 Session fields: `id`, `hostId`, `host`, `environment` (`local`, `ssh`, `cloud`, or `unknown`), `status`, `reported_at` (Unix seconds; divide native millisecond timestamps by 1000), `title`, `archived`, `project` (string or null), and `hostAliases` (array). Use the actual native session and host identities, not a fabricated substitute.
