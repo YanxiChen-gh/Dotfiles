@@ -110,20 +110,26 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
                 result = self.call(*args, payload={"action": "queue"})
                 self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_ona_session_queues_without_a_local_workline_key(self):
+    def test_ona_session_queues_an_explicit_merge_target_without_a_local_workline_key(self):
         helper = runpy.run_path(str(HELPER))
         request = helper["request"]
         fake_token = "fake.header.signature"
         transport = Mock(side_effect=[{"scope": "queue"}, {"version": 2}])
+        payload = {
+            "action": "queue",
+            "version": 1,
+            "expected_heads": {"vantainc/obsidian#21": None, "vantainc/obsidian#22": None},
+            "data": {"merge_when_ready": True, "merge_pr": "vantainc/obsidian#22"},
+        }
         with patch.dict(os.environ, {}, clear=True), \
                 patch.dict(request.__globals__, {"ona_token": lambda: fake_token, "ona_request": transport}), \
-                patch("sys.stdin", io.StringIO('{"action":"queue","version":1,"expected_heads":{}}')):
+                patch("sys.stdin", io.StringIO(json.dumps(payload))):
             result = request("/api/work/example/commands", "test-queue-key")
         self.assertEqual(result, {"version": 2})
         self.assertEqual(transport.call_args_list[0].args, (fake_token, "/api/me"))
         self.assertEqual(transport.call_args_list[1].args, (
             fake_token, "/api/work/example/commands", "test-queue-key",
-            {"action": "queue", "version": 1, "expected_heads": {}},
+            payload,
         ))
 
     def test_ona_session_can_use_existing_vercel_access_for_another_project(self):
