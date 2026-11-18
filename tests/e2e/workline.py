@@ -126,6 +126,19 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
             {"action": "queue", "version": 1, "expected_heads": {}},
         ))
 
+    def test_ona_session_can_submit_a_stack_with_a_direct_capability(self):
+        helper = runpy.run_path(str(HELPER))
+        request = helper["request"]
+        token = "fake.header.signature"
+        payload = {"layers": [{"number": 1}, {"number": 2}]}
+        receipt = {"queued": [{"id": "a"}, {"id": "b"}]}
+        transport = Mock(side_effect=[{"can_queue_stack": True}, receipt])
+        with patch.dict(os.environ, {}, clear=True), \
+                patch.dict(request.__globals__, {"ona_token": lambda: token, "ona_request": transport}), \
+                patch("sys.stdin", io.StringIO(json.dumps(payload))):
+            self.assertEqual(request("/api/work/stack", "test-stack-key"), receipt)
+        transport.assert_called_with(token, "/api/work/stack", "test-stack-key", payload)
+
     def test_ona_session_can_use_existing_vercel_access_for_another_project(self):
         helper = runpy.run_path(str(HELPER))
         request = helper["request"]

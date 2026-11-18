@@ -86,10 +86,14 @@ def request(path, key):
         if identity is not None:
             if path == "/api/me" and not key:
                 return identity
+            if path == "/api/work/stack" and identity.get("can_queue_stack") is not True:
+                raise ValueError("This Ona session cannot queue an Obsidian stack")
             try:
                 return transport(token, path, key, payload)
             except HTTPError as error:
                 raise ValueError(f"Workline HTTP {error.code}") from None
+    if path == "/api/work/stack":
+        raise ValueError("Queue an Obsidian stack from a trusted Ona session")
     return configured_request(path, key, payload, action)
 
 
@@ -159,7 +163,7 @@ def main():
     parser.add_argument("--key", help="Stable idempotency key; POST JSON from stdin")
     args = parser.parse_args()
     pattern = (
-        r"/api/work(?:/[a-zA-Z0-9-]+/commands)?"
+        r"/api/work(?:/stack|/[a-zA-Z0-9-]+/commands)?"
         if args.key is not None else r"/api/(?:me|work(?:/[a-zA-Z0-9-]+)?|sessions)"
     )
     if re.fullmatch(pattern, args.path) is None:
