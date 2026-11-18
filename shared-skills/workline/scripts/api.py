@@ -15,6 +15,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 ORIGIN = "https://workline-bice.vercel.app"
+QUEUE_COMMANDS = ("queue", "complete", "abandon", "reopen")
 
 
 def private_text(path):
@@ -67,7 +68,7 @@ def ona_via_vercel(token, path, key=None, payload=None):
 def request(path, key):
     payload = json.load(sys.stdin) if key else None
     action = payload.get("action") if key and path.endswith("/commands") else None
-    if key and path.endswith("/commands") and action not in ("progress", "associate", "session", "queue"):
+    if key and path.endswith("/commands") and action not in ("progress", "associate", "session", *QUEUE_COMMANDS):
         raise ValueError("Use the owner browser for author-intent commands")
 
     token = ona_token() if "WORKLINE_CONFIG" not in os.environ else None
@@ -135,7 +136,7 @@ def configured_request(path, key, payload, action=None, ona=None):
             "--write-out", "%{http_code}",
         ]
         if key:
-            if action == "queue" and configured_request("/api/me", None, None).get("scope") not in ("queue", "controller"):
+            if action in QUEUE_COMMANDS and configured_request("/api/me", None, None).get("scope") not in ("queue", "controller"):
                 raise ValueError("Configure a coding-session credential or use the item's controller credential")
             body = root / "body"
             body.write_text(json.dumps(payload))

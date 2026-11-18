@@ -47,7 +47,7 @@ if "--data-binary" in args:
     body = pathlib.Path(args[args.index("--data-binary") + 1][1:])
     assert body.stat().st_mode & 0o077 == 0
     action = json.loads(body.read_text())["action"]
-    assert action == "progress" or (action == "queue" and os.environ.get("FAKE_SCOPE") in ("queue", "controller"))
+    assert action == "progress" or (action in ("queue", "complete", "abandon", "reopen") and os.environ.get("FAKE_SCOPE") in ("queue", "controller"))
 if os.environ.get("FAKE_FAILURE"):
     print("wk_test_reporter test_vercel_private", file=sys.stderr)
     sys.exit(1)
@@ -109,6 +109,17 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
                 self.environment["FAKE_SCOPE"] = scope
                 result = self.call(*args, payload={"action": "queue"})
                 self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_closed_work_commands_require_the_same_owner_grant_as_queue(self):
+        args = ("/api/work/example/commands", "--key", "session-123")
+        for action in ("complete", "abandon", "reopen"):
+            with self.subTest(action=action):
+                self.environment["FAKE_SCOPE"] = "reporter"
+                denied = self.call(*args, payload={"action": action})
+                self.assertIn("coding-session credential", denied.stderr)
+                self.environment["FAKE_SCOPE"] = "queue"
+                allowed = self.call(*args, payload={"action": action})
+                self.assertEqual(allowed.returncode, 0, allowed.stderr)
 
     def test_ona_session_queues_without_a_local_workline_key(self):
         helper = runpy.run_path(str(HELPER))
