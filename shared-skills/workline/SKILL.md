@@ -1,6 +1,6 @@
 ---
 name: workline
-description: Retrieve shared PR/session context, report engineering work, and queue Obsidian drafts with merge prerequisites in Workline.
+description: Retrieve shared PR/session context, report work, and queue Obsidian drafts with prerequisites and lifecycle notes in Workline.
 ---
 
 Workline is at https://workline-bice.vercel.app. Use the bundled `scripts/api.py` with Python 3 from any working directory. It reads `~/.config/workline/config.json` (override with `WORKLINE_CONFIG`) and launches Vercel from the config file's directory. Keep the config outside project checkouts so Vercel launchers such as `pnpm dlx` use host settings. If access is missing or expired, explain the gap once and continue the user's task.
@@ -50,6 +50,10 @@ Put each requirement in the affected PR's `dependencies` array in the same reque
 For a required condition the runner cannot verify, such as a fresh-session check, or a prerequisite whose identity is still uncertain, add `{"kind":"prerequisite","scope":"activation","label":"<specific evidence still needed>","satisfied":false}`. Do the verification or resolve the ambiguity from available sources when possible. Keep the hold until the required evidence is verified or the owner confirms it. To update a queued gate, resubmit the explicit `dependencies` with current versions and omit `merge_when_ready` to preserve intent. Carry forward the other saved explicit gates and omit the generated review gate for `inferred_parent`. When adding a hold or changing an existing PR to review only, check GitHub for active auto-merge or merge-queue enrollment. Stop any active GitHub submission with the owner's authorization before reporting the merge as held.
 
 Read the item back and report each selected PR's status, merge choice, and pending gates in `review_queue`. A numeric `merge_opted_in_at` means merge when ready, `null` means review only, and an absent field falls back to the item's legacy `merge_when_ready` target if present. Workline releases each draft when its review gates and required CI clear. GitHub enforces approvals, CI, and its merge queue. With reporter access, direct the owner to the account menu to create a coding-session credential for this host.
+
+Use the PR's `notes` field in `queue-reviews` to save lifecycle context and preferences for the Ona repair agent. Edit notes on an existing queue entry with `action: "review-notes"` and `data: {"review_pr":"vantainc/obsidian#NUMBER","notes":"..."}`. An empty string clears the notes. Translate actionable preferences into the existing review, prerequisite, merge, or comment settings when the author authorizes them.
+
+To schedule a review comment, confirm the exact message and destination PR with the author, then pass the confirmed text as `review_comment` on that PR in `queue-reviews`. The worker posts once after the PR is open for review and its configured review and activation gates are clear. Omit `review_comment` to preserve the action or send `null` to cancel it before delivery starts. Read back `review_queue[PR].review_comment` to confirm the approved text and check `posted_id` for delivery. Notes alone supply context to Ona.
 
 When the owner explicitly asks to mark a Workline item done, abandon it, or reopen it, use the versioned `complete`, `abandon`, or `reopen` command with `data: {}` and the item's current expected heads. Use a coding-session credential or that item's controller. Done and abandoned items move to Closed and exit Workline's review queue. Reopening returns them to unfinished work. Read the item back and report its status. These commands update Workline metadata. Manage PR and coding session state separately.
 
