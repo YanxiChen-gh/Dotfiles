@@ -23,13 +23,33 @@ Session fields: `id`, `hostId`, `host`, `environment` (`local`, `ssh`, `cloud`, 
 
 Reuse the same key and payload after an uncertain write. On HTTP 409, retrieve current context before choosing another operation. Report metadata only, never transcripts, source code, or secrets. Reporter access cannot queue, pause, share, change prerequisites or reviewers, publish trusted observations, or grant permissions. Preserve existing organizer hooks, relays, pins, and manual placements. Reporting does not prove that a session started or a PR merged.
 
-When the author explicitly asks to queue a draft for review, verify the current GitHub PR is their open draft and contains the changes they intend to review. If intended changes are still local, report that before queuing. Reuse the linked Workline item, or register it as unfinished first. With a coding-session credential or the item's controller, submit the same versioned command with `action: "queue"` and `data: {}`. Report the observed Workline status after a successful command. With reporter access, direct the owner to the account menu to create a coding-session credential for this host. The owner can also queue the item at `https://workline-bice.vercel.app/?work=WORK_ID`.
+When the author asks to queue one or more Obsidian drafts for review, verify each open draft's author, head repository, head branch, base branch, and published contents with `gh pr view` or the GitHub API. Report local-only changes before queuing. Reuse the work item linked to the coding session or the delivering PRs. Associate the selected drafts with that item and retrieve its current version and heads. Leave PRs already in review on their existing items.
+
+With a coding-session credential or the item's controller, submit one versioned `queue-reviews` command to `/api/work/WORK_ID/commands`. Put every selected draft in `data.pull_requests` with `number`, `head_ref`, and `base_ref`. Workline derives a merge prerequisite when a draft's base branch matches another selected draft's head branch. When the base is an open PR outside the selection, verify the parent with GitHub and send its PR number in `parent`. Match the repository and branch when resolving a parent. Use `gh stack view --json` when available.
+
+```json
+{
+  "action": "queue-reviews",
+  "version": 4,
+  "expected_heads": {"vantainc/obsidian#123": null, "vantainc/obsidian#124": null},
+  "data": {
+    "pull_requests": [
+      {"number": 123, "head_ref": "foundation", "base_ref": "main"},
+      {"number": 124, "head_ref": "follow-up", "base_ref": "foundation"}
+    ]
+  }
+}
+```
+
+For dependencies GitHub branches cannot express, use the session's implementation context and existing Workline prerequisites. Put a PR-specific prerequisite in that draft's `dependencies` array. A merge prerequisite is `{"kind":"merged","scope":"review","target":"vantainc/obsidian#NUMBER","label":"..."}`. For a rollout, use `kind: "deployed"` and include the exact `environment`, `service`, and `region`. A prerequisite PR can already be in review and can live outside Workline. Omit `dependencies` to preserve the draft's saved explicit prerequisites. When adding a prerequisite, carry forward the saved explicit prerequisites and leave out the generated review-scope merge gate for `inferred_parent`. Ask only when a required dependency or its release condition is ambiguous.
+
+Read the item back and report the status of each selected PR in `review_queue`. Workline releases each draft when its own prerequisites and required CI clear. With reporter access, direct the owner to the account menu to create a coding-session credential for this host.
 
 When the owner explicitly asks to mark a Workline item done, abandon it, or reopen it, use the versioned `complete`, `abandon`, or `reopen` command with `data: {}` and the item's current expected heads. Use a coding-session credential or that item's controller. Done and abandoned items move to Closed and exit Workline's review queue. Reopening returns them to unfinished work. Read the item back and report its status. These commands update Workline metadata. Manage PR and coding session state separately.
 
-When the author explicitly asks to queue a particular Obsidian draft targeting `main` and merge when ready, check that `/api/me` returns `can_set_merge_intent: true`. Verify the requested PR is linked to the item, then queue with `data: {"merge_when_ready": true, "merge_pr": "vantainc/obsidian#NUMBER"}`. Read the item back to verify the exact PR key. Workline keeps the opt-in pending while merge prerequisites clear. GitHub enforces approvals, CI, and its merge queue. For review alone, use `data: {}`. With a credential that lacks merge access, use the signed-in owner's **Merge when ready** control.
+When the author explicitly asks to queue a particular Obsidian draft targeting `main` and merge when ready, check that `/api/me` returns `can_set_merge_intent: true`. Verify the requested PR is linked to the item, then use the `queue` command with `data: {"merge_when_ready": true, "merge_pr": "vantainc/obsidian#NUMBER"}`. Read the item back to verify the exact PR key. Workline keeps the opt-in pending while merge prerequisites clear. GitHub enforces approvals, CI, and its merge queue. With a credential that lacks merge access, use the signed-in owner's **Merge when ready** control.
 
-When the author asks to queue their Obsidian stack, verify the open drafts and bottom-to-top order in GitHub. Use `gh stack view --json` when available and confirm the live PRs' author, head repo, base branch and published contents with `gh pr view` or the GitHub API. POST `/api/work/stack --key STABLE_OPERATION_KEY` with a JSON `layers` array. Each layer has `number`, `title`, `head_ref`, and `base_ref`. The server adds a review prerequisite on the preceding layer's merge and waits for GitHub to retarget each draft to `main`. Use the returned item IDs to report the queue. If a layer is already linked alongside other PRs, preserve the existing association and report the conflict.
+For a stack whose layers already have separate work items, or when the author asks for a separate item per layer, use `/api/work/stack --key STABLE_OPERATION_KEY` with a bottom-to-top `layers` array. Each layer has `number`, `title`, `head_ref`, and `base_ref`. Use the returned item IDs to report the queue. For layers linked together on one work item, use `queue-reviews` on that item.
 
 Use the same queue request with one layer for a standalone Obsidian draft with prerequisites. Put external prerequisites in the affected layer's `dependencies`. If the bottom draft targets another PR's branch, identify that parent in GitHub and add its merge as a review prerequisite. Link any missing predecessor to Workline before submitting. A merge prerequisite uses `{"kind":"merged","scope":"review","target":"vantainc/obsidian#NUMBER","label":"..."}`. A rollout prerequisite uses `kind: "deployed"`, the same target and label, `environment: "prod"` or `"staging"`, `service: "app"` or an exact `"infra-<project>"` slug, and `region: "all"`. Use `scope: "activation"` when the rollout only blocks merge, and `scope: "review"` when it must block review. Set `merge_when_ready: true` on a layer only when the author explicitly authorized it for that PR. Plain stack queueing leaves merge opt-ins unchanged.
 
