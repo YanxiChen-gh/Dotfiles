@@ -53,6 +53,8 @@ For a required condition the runner cannot verify, such as a fresh-session check
 
 Read the item back and report each selected PR's status, merge choice, and pending gates in `review_queue`. A numeric `merge_opted_in_at` means merge when ready, `null` means review only, and an absent field falls back to the item's legacy `merge_when_ready` target if present. Workline releases each draft when its review gates and required CI clear. GitHub enforces approvals, CI, and its merge queue. With reporter access, direct the owner to the account menu to create a coding-session credential for this host.
 
+To verify a repair handoff, read `/api/work/WORK_ID/timeline?pr=OWNER/REPO%23NUMBER` for the linked PR. The timeline distinguishes the requested Ona execution from the commit Workline published.
+
 For an owner-requested audit of **Needs me**, call `POST /api/work/refresh` with an empty JSON object using the authorized Workline helper and a stable operation key. Workline checks saved feedback against GitHub, preserves uncertain or actionable feedback, and updates its own records. Read back the board and inspect remaining owner actions.
 
 When the author names reviewers, resolve their GitHub logins and include the full list in each selected PR's `reviewers` array in `queue-reviews`. A merge-capable coding session can save reviewers and merge intent in the same request. Omit `reviewers` to preserve the current selection. An empty list returns that PR to work-item or repository defaults. Verify the saved list on readback. GitHub's approval rules determine when the PR can merge.

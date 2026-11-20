@@ -26,7 +26,7 @@ REQUEST_ID_HEADER = "x-workline-request-id"
 
 @contextmanager
 def trace(event, path, key, **fields):
-    route = re.sub(r"^/api/work/(?!stack$)[a-zA-Z0-9-]+", "/api/work/:id", path)
+    route = re.sub(r"^/api/work/(?!(?:stack|refresh)$)[a-zA-Z0-9-]+", "/api/work/:id", path.partition("?")[0])
     started = monotonic()
     outcome = "ok"
     try:
@@ -212,7 +212,10 @@ def main():
     args = parser.parse_args()
     pattern = (
         r"/api/work(?:/stack|/refresh|/[a-zA-Z0-9-]+/commands)?"
-        if args.key is not None else r"/api/(?:me|work(?:/[a-zA-Z0-9-]+)?|sessions)"
+        if args.key is not None else (
+            r"/api/(?:me|sessions|work(?:/[a-zA-Z0-9-]+(?:/timeline\?pr="
+            r"[a-zA-Z0-9-]+/[a-zA-Z0-9_.-]+%23[1-9][0-9]*)?)?)"
+        )
     )
     if re.fullmatch(pattern, args.path) is None:
         parser.error("Use a supported Workline API path")

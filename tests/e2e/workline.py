@@ -123,6 +123,13 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
         self.token.chmod(0o644)
         self.assertNotEqual(self.call("/api/me").returncode, 0)
 
+    def test_reads_a_linked_pr_timeline_without_leaking_its_query_into_diagnostics(self):
+        path = "/api/work/example/timeline?pr=fixture/repo%23123"
+        result = self.call(path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("fixture/repo", result.stderr)
+        self.assertNotEqual(self.call(path + "&extra=1").returncode, 0)
+
     def test_refresh_checks_the_board_without_supplying_an_item_or_outcome(self):
         result = self.call("/api/work/refresh", "--key", "session-123", payload={})
         self.assertEqual(result.returncode, 0, result.stderr)
