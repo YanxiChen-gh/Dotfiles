@@ -47,8 +47,11 @@ if "--data-binary" in args:
     assert "Idempotency-Key: session-123" in headers.read_text()
     body = pathlib.Path(args[args.index("--data-binary") + 1][1:])
     assert body.stat().st_mode & 0o077 == 0
-    action = json.loads(body.read_text())["action"]
-    assert action == "progress" or (action in ("queue", "queue-reviews", "review-notes", "complete", "abandon", "reopen") and os.environ.get("FAKE_SCOPE") in ("queue", "controller"))
+    if "/api/work/refresh" in args:
+        assert json.loads(body.read_text()) == {}
+    else:
+        action = json.loads(body.read_text())["action"]
+        assert action == "progress" or (action in ("queue", "queue-reviews", "review-notes", "complete", "abandon", "reopen") and os.environ.get("FAKE_SCOPE") in ("queue", "controller"))
 if os.environ.get("FAKE_FAILURE"):
     print("wk_test_reporter test_vercel_private", file=sys.stderr)
     sys.exit(1)
@@ -119,6 +122,10 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
         self.assertIn("HTTP 409", result.stderr)
         self.token.chmod(0o644)
         self.assertNotEqual(self.call("/api/me").returncode, 0)
+
+    def test_refresh_checks_the_board_without_supplying_an_item_or_outcome(self):
+        result = self.call("/api/work/refresh", "--key", "session-123", payload={})
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_queue_requires_an_explicit_queue_grant(self):
         args = ("/api/work/example/commands", "--key", "session-123")

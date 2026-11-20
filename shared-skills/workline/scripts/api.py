@@ -211,7 +211,7 @@ def main():
     parser.add_argument("--key", help="Stable idempotency key; POST JSON from stdin")
     args = parser.parse_args()
     pattern = (
-        r"/api/work(?:/stack|/[a-zA-Z0-9-]+/commands)?"
+        r"/api/work(?:/stack|/refresh|/[a-zA-Z0-9-]+/commands)?"
         if args.key is not None else r"/api/(?:me|work(?:/[a-zA-Z0-9-]+)?|sessions)"
     )
     if re.fullmatch(pattern, args.path) is None:
