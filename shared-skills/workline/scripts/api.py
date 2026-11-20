@@ -19,7 +19,7 @@ from uuid import uuid4
 
 
 ORIGIN = "https://workline-bice.vercel.app"
-QUEUE_COMMANDS = ("queue", "queue-reviews", "review-notes", "complete", "abandon", "reopen")
+QUEUE_COMMANDS = ("queue", "queue-reviews", "review-notes", "complete", "abandon", "abandon-pr", "reopen")
 REQUEST_ID = str(uuid4())
 REQUEST_ID_HEADER = "x-workline-request-id"
 
