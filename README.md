@@ -216,7 +216,7 @@ The installer symlinks [`codex/config.toml`](codex/config.toml) to `${CODEX_HOME
 
 The installer links `codex/skills/` into `~/.agents/skills` on personal and work machines, preserving existing unmanaged skills. Invoke `$codex-session-control` in a Mac Codex conversation with desktop app tools to launch, inspect, follow up on, or open tasks in saved local and SSH projects. The skill guides existing capabilities; it does not configure remote connections or add tools to cloud conversations. Codex detects skill changes automatically; restart it if the skill does not appear.
 
-Invoke `$ona-session-migration` from a Codex desktop chat on your current Ona host to create a fresh owner environment and hand off selected chats once the matching projects are available in Codex.
+Invoke `$ona-session-migration` from a Codex desktop chat on your current Ona host to resume selected work in a fresh owner environment. The skill can hand off the original chats or restore the work into fresh Codex chats.
 
 The Codex sidebar organizer runs each pass in a fresh chat and archives that run after persisting its result. One internal launch-only chat receives the 30-minute heartbeat and local/remote lifecycle signals, then uses native `create_thread`; it never classifies work itself. The discussion stays outside background execution. The canonical policy and launcher protocol live in `~/.codex/chat-organizer/`, alongside the private event/run registry; the classification ledger stays at its configured persistent path.
 
