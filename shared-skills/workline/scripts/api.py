@@ -120,6 +120,12 @@ def request(path, key):
     if key and path.endswith("/commands") and action not in ("progress", "associate", "session", *QUEUE_COMMANDS):
         raise ValueError("Use the owner browser for author-intent commands")
 
+    if action == "queue-reviews":
+        for pr in payload.get("data", {}).get("pull_requests", []):
+            if pr.get("reviewers") and pr.get("merge_when_ready") is False and not pr.get("review_only_reason"):
+                raise ValueError("Named reviewers keep the normal merge preference. For explicit review only, "
+                                 "quote the owner's request in review_only_reason.")
+
     token = ona_token() if "WORKLINE_CONFIG" not in os.environ else None
     if token:
         transport = ona_request

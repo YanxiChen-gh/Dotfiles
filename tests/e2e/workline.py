@@ -177,6 +177,17 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
                 allowed = self.call(*args, payload={"action": action})
                 self.assertEqual(allowed.returncode, 0, allowed.stderr)
 
+    def test_named_reviewers_require_explicit_review_only_intent(self):
+        self.environment["FAKE_SCOPE"] = "queue"
+        pr = {"number": 2, "reviewers": ["fixture-reviewer"], "merge_when_ready": False}
+        args = ("/api/work/example/commands", "--key", "session-123")
+        payload = {"action": "queue-reviews", "data": {"pull_requests": [pr]}}
+        result = self.call(*args, payload=payload)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("review_only_reason", result.stderr)
+        pr["review_only_reason"] = "Please queue for review only."
+        self.assertEqual(self.call(*args, payload=payload).returncode, 0)
+
     def test_ona_session_queues_without_a_local_workline_key(self):
         helper = runpy.run_path(str(HELPER))
         request = helper["request"]
