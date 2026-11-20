@@ -29,6 +29,8 @@ Set `merge_when_ready: true` for each newly queued PR unless the author explicit
 
 With a coding-session credential or the item's controller, submit one versioned `queue-reviews` command to `/api/work/WORK_ID/commands`. Put every selected draft in `data.pull_requests` with `number`, `head_ref`, and `base_ref`. Workline derives a merge prerequisite when a draft's base branch matches another selected draft's head branch. When the base is an open PR outside the selection, verify the parent with GitHub and send its PR number in `parent`. Match the repository and branch when resolving a parent. Use `gh stack view --json` when available.
 
+If a draft targets a copy of another Obsidian PR's branch, verify which upstream PR supplied the copy and the exact copied commit. Send the upstream PR number as `parent`, the actual copied branch as `base_ref`, and the full copied SHA as `copied_base_sha`. Verify the copy ref still points to that SHA and the commit belongs to the upstream branch history. Workline waits for the upstream merge, replays the draft's changes onto `main`, and retargets the draft. Ask for the copy point only if the branch history leaves it ambiguous.
+
 ```json
 {
   "action": "queue-reviews",
