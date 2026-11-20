@@ -27,6 +27,7 @@ REQUEST_ID_HEADER = "x-workline-request-id"
 @contextmanager
 def trace(event, path, key, **fields):
     route = re.sub(r"^/api/work/(?!(?:stack|refresh)$)[a-zA-Z0-9-]+", "/api/work/:id", path.partition("?")[0])
+    route = re.sub(r"(/runs)/[a-f0-9-]+$", r"\1/:id", route)
     started = monotonic()
     outcome = "ok"
     try:
@@ -74,16 +75,21 @@ def ona_token():
     cli = shutil.which("gitpod") or shutil.which("ona")
     if cli is None:
         return None
-    try:
-        result = subprocess.run(
-            [cli, "--context", "environment", "idp", "token", "--audience", ORIGIN],
-            capture_output=True, text=True, timeout=15, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    token = result.stdout.strip()
-    if result.returncode == 0 and re.fullmatch(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}", token):
-        return token
+    for timeout in (15, 25):
+        try:
+            result = subprocess.run(
+                [cli, "--context", "environment", "idp", "token", "--audience", ORIGIN],
+                capture_output=True, text=True, timeout=timeout, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            continue
+        except OSError:
+            return None
+        token = result.stdout.strip()
+        if result.returncode == 0 and re.fullmatch(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){2}", token):
+            return token
+        if "deadline exceeded" not in result.stderr.lower():
+            return None
     return None
 
 
@@ -211,10 +217,10 @@ def main():
     parser.add_argument("--key", help="Stable idempotency key; POST JSON from stdin")
     args = parser.parse_args()
     pattern = (
-        r"/api/work(?:/stack|/refresh|/[a-zA-Z0-9-]+/commands)?"
+        r"/api/work(?:/stack|/refresh|/[a-zA-Z0-9-]+/(?:commands|runs))?"
         if args.key is not None else (
             r"/api/(?:me|sessions|work(?:/[a-zA-Z0-9-]+(?:/timeline\?pr="
-            r"[a-zA-Z0-9-]+/[a-zA-Z0-9_.-]+%23[1-9][0-9]*)?)?)"
+            r"[a-zA-Z0-9-]+/[a-zA-Z0-9_.-]+%23[1-9][0-9]*|/runs/[a-f0-9-]{36})?)?)"
         )
     )
     if re.fullmatch(pattern, args.path) is None:

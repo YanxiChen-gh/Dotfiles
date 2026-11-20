@@ -47,7 +47,10 @@ if "--data-binary" in args:
     assert "Idempotency-Key: session-123" in headers.read_text()
     body = pathlib.Path(args[args.index("--data-binary") + 1][1:])
     assert body.stat().st_mode & 0o077 == 0
-    if "/api/work/refresh" in args:
+    if "/api/work/example/runs" in args:
+        assert json.loads(body.read_text()) == {"mode": "rehearsal"}
+        assert os.environ.get("FAKE_SCOPE") == "controller"
+    elif "/api/work/refresh" in args:
         assert json.loads(body.read_text()) == {}
     else:
         action = json.loads(body.read_text())["action"]
@@ -122,6 +125,24 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
         self.assertIn("HTTP 409", result.stderr)
         self.token.chmod(0o644)
         self.assertNotEqual(self.call("/api/me").returncode, 0)
+
+    def test_environment_identity_recovers_after_a_temporary_timeout(self):
+        helper = runpy.run_path(str(HELPER))
+        minted = subprocess.CompletedProcess([], 0, "dummy.fixture.only", "")
+        with (patch("shutil.which", return_value="test-ona"),
+              patch("subprocess.run", side_effect=[subprocess.TimeoutExpired("test-ona", 15), minted]) as call):
+            self.assertEqual(helper["ona_token"](), "dummy.fixture.only")
+            self.assertEqual(call.call_count, 2)
+
+    def test_runs_review_rehearsal_and_reads_its_scoped_receipt(self):
+        path = "/api/work/example/runs"
+        run = "12345678-1234-4234-8234-123456789012"
+        self.environment["FAKE_SCOPE"] = "controller"
+        started = self.call(path, "--key", "session-123", payload={"mode": "rehearsal"})
+        self.assertEqual(started.returncode, 0, started.stderr)
+        result = self.call(f"{path}/{run}")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn(run, result.stderr)
 
     def test_reads_a_linked_pr_timeline_without_leaking_its_query_into_diagnostics(self):
         path = "/api/work/example/timeline?pr=fixture/repo%23123"
