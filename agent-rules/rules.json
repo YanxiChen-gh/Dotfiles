@@ -15,17 +15,7 @@
       "targets": {
         "cursor": {
           "file": "pr-authoring.mdc",
-          "description": "Read the canonical PR style guide before authoring, editing, or reviewing code, unit tests, comments, or PR descriptions, whether or not a PR exists. Check the changed work against it before handoff.",
-          "alwaysApply": true
-        }
-      }
-    },
-    "pr-review-tone": {
-      "body": "pr-review-tone.md",
-      "targets": {
-        "cursor": {
-          "file": "pr-review-tone.mdc",
-          "description": "Read the review-voice guide when a PR review is requested or when drafting review feedback. This does not authorize posting.",
+          "description": "Use the applicable authoring or review guide when writing code, PR feedback or technical documents.",
           "alwaysApply": true
         }
       }
@@ -70,31 +60,11 @@
         }
       }
     },
-    "scope-before-code": {
-      "body": "scope-before-code.md",
-      "targets": {
-        "cursor": {
-          "file": "scope-before-code.mdc",
-          "description": "Use when a task has a material unresolved product, interface, architecture, rollout, or migration decision that cannot be resolved from the request and repository context.",
-          "alwaysApply": false
-        }
-      }
-    },
     "verification-and-handoff": {
       "body": "verification-and-handoff.md",
       "scope": "work",
-      "comment": "Codex-only: Cursor already carries this via the hand-authored dev-cycle-verification.mdc.",
+      "comment": "Work PR handoff guidance.",
       "targets": {}
-    },
-    "doc-and-planning": {
-      "body": "doc-and-planning.md",
-      "targets": {
-        "cursor": {
-          "file": "doc-and-planning.mdc",
-          "description": "Authoring workflow and style guidance for design docs, RFCs, specs, runbooks, and playbooks.",
-          "alwaysApply": true
-        }
-      }
     },
     "local-dev-environment": {
       "body": "local-dev-environment.md",
@@ -111,11 +81,6 @@
       "body": "mcp-preferences.md",
       "scope": "work",
       "comment": "Codex-only: Cursor already carries the Glean bit via the hand-authored use-glean-mcp-for-google-docs.mdc.",
-      "targets": {}
-    },
-    "codex-skills": {
-      "body": "codex-skills.md",
-      "comment": "Codex-only: tells Codex where its symlinked skills live, since it has no native skill auto-load.",
       "targets": {}
     },
     "vanta-work": {
@@ -136,7 +101,7 @@
       {"file": "codex/AGENTS-work.md", "scope": "work"}
     ],
     "title": "Codex Global Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "doc-and-planning", "verification-and-handoff", "codex-skills"],
+    "rules": ["writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "verification-and-handoff"],
     "footer": "@RTK.md"
   },
   "claude": {
@@ -145,7 +110,7 @@
       {"file": "claude/CLAUDE-work.md", "scope": "work"}
     ],
     "title": "User-Level Claude Code Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "doc-and-planning", "verification-and-handoff"],
+    "rules": ["writing-style", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "verification-and-handoff"],
     "footer": "@RTK.md"
   },
   "opencode": {
@@ -154,7 +119,7 @@
       {"file": "opencode/AGENTS-work.md", "scope": "work"}
     ],
     "title": "OpenCode Global Instructions",
-    "rules": ["dotfiles-repo", "writing-style", "mcp-preferences", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "pr-review-tone", "doc-and-planning", "verification-and-handoff"],
+    "rules": ["writing-style", "mcp-preferences", "autonomy", "vanta-work", "engineering-principles", "git-and-generated-files", "pr-authoring", "verification-and-handoff"],
     "footer": ""
   }
 }

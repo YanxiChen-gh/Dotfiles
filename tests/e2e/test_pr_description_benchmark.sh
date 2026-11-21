@@ -213,7 +213,7 @@ else
 fi
 EOF
 chmod +x "$TMP/fake-bin/claude"
-manifest_path="$(realpath -e "$MANIFEST")"
+manifest_path="$(realpath "$MANIFEST")"
 manifest_sha="$(sha256sum "$MANIFEST" | cut -d' ' -f1)"
 data_git_sha="$(git -C "$TMP/repo" rev-parse HEAD)"
 data_dirty=true

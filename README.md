@@ -11,17 +11,10 @@ Personal shell and agent configuration for Claude Code, omp, OpenCode, Codex, an
 [PR authoring](agent-rules/guides/pr-authoring.md) is the substantive style standard for code, tests,
 comments, and PR descriptions. [Review voice](agent-rules/guides/review-tone.md) governs review feedback.
 The `agent-rules/` sources embed instructions to read these guides in Claude, Codex, and OpenCode's
-generated main prompts; OMP reuses the OpenCode prompt. Both Cursor instructions are always-on,
-with the review-voice guide read only for review feedback. Skills, hooks, and evaluation tools
+generated main prompts; OMP reuses the OpenCode prompt. Cursor loads the same task-guide pointer and applies the review voice when drafting feedback. Skills, hooks, and evaluation tools
 reference the same guides. Repository requirements and publishing permissions remain separate.
 
 Run `python3 agent-rules/build.py` after changing prompt sources or the manifest.
-
-## Plannotator
-
-The installer adds the Plannotator binary without upstream hooks or optional runtimes, and installs its general `plannotator` skill. Launch through `plannotator-safe` with an explicit free `PLANNOTATOR_PORT`; the helper keeps the server on loopback, suppresses browser opening, and disables hosted sharing. Verify the URL with `scripts/expose-port.sh <port>` before handing it to the user. OMP runs the waiting CLI as a managed async Bash job. Its final stdout returns the decision and feedback to the originating session; another review starts a new session.
-
-Temporary presentation files can live under the ignored `.plannotator/` directory. Existing `.lavish/` artifacts remain ignored to keep private material out of commits. Plannotator stores preferences and document history under its own data directory; browser onboarding choices persist across ports on the same hostname, but are not a server-side skip-onboarding setting.
 
 ## Orca agent control
 
@@ -132,6 +125,31 @@ If you already keep a hand-managed `~/.config/nvim/init.vim`, note that `install
 
 `terminal/gruvbox-dark.itermcolors` is the iTerm2 color preset. iTerm imports presets through its GUI, not a symlink: **Settings → Profiles → Colors → Color Presets → Import…**, pick the file, then select it from the same menu.
 
+## Tinycast search shortcuts
+
+Use the existing [GitHub extension](https://www.raycast.com/raycast/github) for inline PR search:
+
+1. In Tinycast **Settings > Extensions > Install > Search Registries**, install **GitHub** from the **Raycast Store** (prebuilt).
+2. Open **Search Pull Requests** and complete GitHub sign-in in the browser when prompted.
+3. In **Settings > Extensions**, choose GitHub's **Configure** and set **Default Search Terms** to `author:@me in:title,body`. This preference also affects its issue and discussion searches.
+4. In **Settings > Extensions**, set the **Search Pull Requests** command's alias to `pr`.
+
+Summon Tinycast, type `pr`, open **Search Pull Requests**, and append search text to the prefilled qualifiers. Keep `author:@me in:title,body` in the search field to search your PR titles and descriptions. The upstream command supplies `is:pr archived:false` without an open/closed state filter, so it includes open, closed, and merged PRs in non-archived repositories. Inline results and sign-in still need verification in Tinycast 0.12.1.
+
+Restore Glean browser search from [tinycast/quicklinks.json](tinycast/quicklinks.json):
+
+1. In Tinycast **Settings > Quicklinks**, enable quicklinks and **Show in launcher**.
+2. Run **Import Quicklinks** and select this checkout's `tinycast/quicklinks.json`.
+3. In **Search Glean**'s Settings row, manually set alias `gl`. Leave the PR browser fallback's alias empty so `pr` belongs to the extension.
+
+Summon Tinycast, type `gl`, select **Search Glean**, press **Tab** to focus **Query**, enter search text, and press **Enter**. It opens Glean in the browser using the signed-in Glean account; Tinycast URL-encodes the query automatically.
+
+The import also includes **Search My PRs (Browser)** as a fallback, using `is:pr author:@me in:title,body` and the browser's signed-in GitHub user, across open, closed, and merged PRs. Search for it by name and fill **Query** with **Tab** as above.
+
+Import skips quicklinks whose name or URL already exists; edit an existing entry to update it. `install.sh` does not import these definitions.
+
+References: [Tinycast extension installation](https://tinycast.dev/docs/extensions/installing/), [configuration](https://tinycast.dev/docs/extensions/customising/), [compatibility and sign-in](https://tinycast.dev/docs/extensions/compatibility/), [GitHub search command](https://github.com/raycast/extensions/blob/main/extensions/github/src/search-pull-requests.tsx), [GitHub preferences](https://github.com/raycast/extensions/blob/main/extensions/github/package.json), [Tinycast quicklinks](https://tinycast.dev/docs/launcher/quicklinks/), [aliases](https://tinycast.dev/docs/launcher/aliases/).
+
 ## Claude Code → Cursor workspace skill sync
 
 `sync-claude-skills-to-repo.sh` copies skills from a repository’s `.claude/skills` and `.claude/plugins/*/skills` into that repo’s `.cursor/skills/_cc_sync/`, rewriting Claude `@file` include lines into explicit “read these paths” instructions for Cursor.
@@ -181,11 +199,7 @@ Rules that more than one tool shares live once under `agent-rules/`: a tool-agno
 
 `install.sh` installs OpenCode with the official installer, links [`opencode/opencode.jsonc`](opencode/opencode.jsonc) into `$XDG_CONFIG_HOME/opencode/` (default `~/.config/opencode/`), and preserves the existing GPT-5.6 agent defaults. Existing unmanaged files are moved once to a `.pre-dotfiles` backup rather than deleted. [`opencode-claude-auth`](https://github.com/griffinmartin/opencode-claude-auth) is pinned and loaded as an npm plugin so Anthropic models can reuse Claude Code's SSO credentials without storing them in this repo. It is a community workaround that may be affected by Anthropic's terms or OAuth changes. On macOS it also copies credentials from Keychain into OpenCode's mode-`0600` `auth.json`; Linux already uses Claude Code's credentials file.
 
-OpenCode gets the same generated global rules, auto-discovers skills under `~/.claude/skills` and `~/.agents/skills`, and uses a local plugin adapter for deterministic verification and comment reminders. On work machines the installer links the Obsidian AI Platform plugin's skills into the shared Agent Skills directory, so OpenCode, omp, and Codex use the same skill sources without copied snapshots. A wrapper in `~/.local/bin` enables OpenCode's official auto mode for TUI and `run` sessions while preserving explicit deny rules; Herdr resume launches are spaced by 15 seconds to avoid concurrent cold-start stalls. OpenCode also links a `vanta-doc-discovery` adapter that reads the current Obsidian worktree's repository skill and maps its Claude-specific behavior.
-
-#### Canary takeover
-
-Canary takeover is manual by default. Run `/canary-takeover` to start a bounded fresh-child experiment while the root remains a frozen fallback. Set `OPENCODE_CANARY_TAKEOVER=1` before launching OpenCode to enable one automatic takeover at the first context-pressure event. V1 is cooperative: it instructs the agents not to push or merge the work repository, then audits writer overlap and prohibited actions rather than claiming to prevent them. After the audit, the maturity-data sync persists the handoff and terminal evidence in the private data repo.
+OpenCode uses the same generated global rules and discovers skills under `~/.claude/skills` and `~/.agents/skills`. On work machines the installer links the Obsidian AI Platform plugin's skills into the shared Agent Skills directory, so OpenCode, omp, and Codex use the same skill sources without copied snapshots. A wrapper in `~/.local/bin` enables OpenCode's official auto mode for TUI and `run` sessions while preserving explicit deny rules; Herdr resume launches are spaced by 15 seconds to avoid concurrent cold-start stalls. OpenCode also links a `vanta-doc-discovery` adapter that reads the current Obsidian worktree's repository skill and maps its Claude-specific behavior.
 
 #### Slack attention notifications
 
@@ -208,11 +222,11 @@ The installer links the transport at `~/.local/bin/slack-webhook-post.sh` but ne
 
 ### Shared global skills (Claude + OpenCode + omp + Cursor + Codex)
 
-Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills-cursor`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. The Obsidian AI Platform plugin uses the same shared path for OpenCode, omp, and Codex while Claude Code loads the plugin natively and Cursor receives its generated workspace copies. Managed AI Platform links follow the active Obsidian checkout; unrelated existing skills are preserved. Claude Code, Codex, OpenCode, omp, and Cursor discover their applicable paths natively. Cursor-only meta-skills stay under `cursor/skills/`.
+Skills under `shared-skills/` are symlinked to `~/.claude/skills`, `~/.cursor/skills`, and the open Agent Skills path at `~/.agents/skills` when `WORK_MACHINE=1`, so one copy works across tools. The Obsidian AI Platform plugin uses the same shared path for OpenCode, omp, and Codex while Claude Code loads the plugin natively and Cursor receives its generated workspace copies. Managed AI Platform links follow the active Obsidian checkout; unrelated existing skills are preserved. Claude Code, Codex, OpenCode, omp, and Cursor discover their applicable paths natively. Cursor manages its built-in skills.
 
 ### Codex defaults and session control
 
-The installer symlinks [`codex/config.toml`](codex/config.toml) to `${CODEX_HOME:-~/.codex}/config.toml`, setting `gpt-6.2-sol` with High reasoning and Auto-review (`on-request`, `auto_review`, `workspace-write`) on each host provisioned with Dotfiles. Existing configuration is preserved as `config.toml.pre-dotfiles`. Settings edited through the symlink also update the Dotfiles source. Project, profile, and existing-chat overrides can still take precedence. The desktop app remembers its permission-mode selection separately per host; its first-time UI selection may still require choosing Auto-review.
+The installer symlinks [`codex/config.toml`](codex/config.toml) to `${CODEX_HOME:-~/.codex}/config.toml`, setting `gpt-6.2-astra` with High reasoning and Auto-review (`on-request`, `auto_review`, `workspace-write`) on each host provisioned with Dotfiles. Existing configuration is preserved as `config.toml.pre-dotfiles`. Settings edited through the symlink also update the Dotfiles source. Project, profile, and existing-chat overrides can still take precedence. The desktop app remembers its permission-mode selection separately per host; its first-time UI selection may still require choosing Auto-review.
 
 The installer links `codex/skills/` into `~/.agents/skills` on personal and work machines, preserving existing unmanaged skills. Invoke `$codex-session-control` in a Mac Codex conversation with desktop app tools to launch, inspect, follow up on, or open tasks in saved local and SSH projects. The skill guides existing capabilities; it does not configure remote connections or add tools to cloud conversations. Codex detects skill changes automatically; restart it if the skill does not appear.
 
@@ -289,10 +303,6 @@ The helper clones to `/workspaces/data-apps` by default, follows the repository'
 Refresh Snowflake SSO yourself in a private terminal with `auth-vanta-data-apps-snowflake`; the helper rejects non-interactive agent execution so authorization URLs cannot enter a transcript. In an Ona CDE, it opens a creator-only callback bridge and prints the exact foreground command to run on the Mac. Keep both terminals open until authentication and the read-only traces-table probe complete. The helper never captures the authorization URL, redirect, code, or token.
 
 Run Streamlit on port `8501`, then use `scripts/expose-port.sh 8501 /_stcore/health` to verify it and return `http://127.0.0.1:8501/_stcore/health`. The automatic SSH forwarder makes the same port available on the Mac. If Streamlit already cached an expired or failed Snowflake connection, restart Streamlit after refreshing SSO.
-
-### Agent maturity
-
-The agent-maturity bootstrap installs one model-agnostic engine and private data store. Claude Code uses native lifecycle hooks, Codex uses the same hook scripts through `~/.codex/hooks.json`, OpenCode uses `dotfiles-harness.js`, and omp uses `dotfiles-harness.ts` to adapt lifecycle events. All four discover the same skills without copying them. Installation now treats a failed bootstrap as fatal before OMP setup, and OMP publishes its readiness marker only when the engine scripts plus its shared scope and outcome skills exist. Codex requires a one-time `/hooks` review after installation or whenever the hook definition changes.
 
 ### Work monorepo clone
 

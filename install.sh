@@ -60,6 +60,7 @@ setup_agent_helpers || exit 1
 install_neovim
 setup_nvim_config
 setup_cloudev_tasks
+install_fzf || exit 1
 setup_herdr_config
 setup_treehouse_config
 setup_wezterm_config
@@ -78,7 +79,6 @@ install_from_url "uv" "uv" "https://astral.sh/uv/install.sh"
 install_from_url "Claude Code" "claude" "https://claude.ai/install.sh"
 install_opencode
 install_agent_browser || exit 1
-install_plannotator || exit 1
 install_orca || exit 1
 install_from_url "herdr" "herdr" "https://herdr.dev/install.sh"
 setup_herdr_opener_plugin
@@ -102,7 +102,7 @@ setup_langsmith_mcp
 setup_figma_mcp_cli || exit 1
 
 # Install LangSmith skills for Claude Code
-if command -v claude >/dev/null 2>&1; then
+if [ "$WORK_MACHINE" = "1" ] && command -v claude >/dev/null 2>&1; then
     echo "Installing LangSmith skills for Claude Code..."
     npx skills add langchain-ai/langsmith-skills --agent claude-code --skill '*' --yes --global 2>/dev/null \
         && echo "✅ LangSmith skills installed (Claude Code)" \
@@ -110,17 +110,13 @@ if command -v claude >/dev/null 2>&1; then
 fi
 
 # Install LangSmith skills for Cursor (same package; agent-specific install path)
-if command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -d "$HOME/.cursor" ]; then
+if [ "$WORK_MACHINE" = "1" ] && { command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -d "$HOME/.cursor" ]; }; then
     echo "Installing LangSmith skills for Cursor..."
     npx skills add langchain-ai/langsmith-skills --agent cursor --skill '*' --yes --global 2>/dev/null \
         && echo "✅ LangSmith skills installed (Cursor)" \
         || echo "⚠️  LangSmith skills installation failed for Cursor (can retry manually)"
 fi
 
-# Install agent skills: Plannotator (artifact review), browser automation,
-# herdr (terminal agent multiplexer).
-install_plannotator_skill || exit 1
-remove_lavish_skill || exit 1
 install_agent_skill "vercel-labs/agent-browser" "agent-browser" || exit 1
 remove_chrome_devtools_axi || exit 1
 install_agent_skill "ogulcancelik/herdr" "herdr"
@@ -132,10 +128,8 @@ install_herdr_opencode_integration
 setup_codex_config || exit 1
 setup_advisors
 setup_rtk
-setup_agent_maturity || exit 1
 setup_omp_integration || exit 1
 setup_session_hub || exit 1
-setup_superpowers_plugin
 setup_vanta_ai_platform_plugin || exit 1
 setup_vanta_doc_discovery_plugin
 

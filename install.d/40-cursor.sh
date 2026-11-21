@@ -83,29 +83,17 @@ with open('$cursor_user_dir/settings.json', 'w') as f:
         echo "✅ snippets linked"
     fi
 
-    # Agent skills: personal cursor/skills + work shared-skills (same skill dirs for Claude + Cursor)
-    if [ -d "$cursor_dotfiles/skills" ] || { [ "$WORK_MACHINE" = "1" ] && [ -d "$script_dir/shared-skills" ]; }; then
-        echo "Linking Cursor agent skills..."
-        rm -rf "$cursor_home_dir/skills-cursor"
-        mkdir -p "$cursor_home_dir/skills-cursor"
-        if [ -d "$cursor_dotfiles/skills" ]; then
-            for skill_dir in "$cursor_dotfiles/skills"/*/; do
-                [ -d "$skill_dir" ] || continue
-                name=$(basename "$skill_dir")
-                rm -f "$cursor_home_dir/skills-cursor/$name"
-                ln -s "$skill_dir" "$cursor_home_dir/skills-cursor/$name"
-            done
+    for skill_dir in "$script_dir/shared-skills"/*; do
+        [ -f "$skill_dir/SKILL.md" ] || continue
+        target="$cursor_home_dir/skills/${skill_dir##*/}"
+        if [ "$WORK_MACHINE" = "1" ]; then
+            [ ! -e "$target" ] && [ ! -L "$target" ] || continue
+            mkdir -p "$cursor_home_dir/skills" && ln -s "$skill_dir" "$target" || return 1
+        elif [ -L "$target" ] && [ "$(readlink "$target")" = "$skill_dir" ]; then
+            # Herdr's installer also provides its troubleshooting skill on personal hosts.
+            [ "${skill_dir##*/}" = troubleshoot-herdr ] || rm -f "$target" || return 1
         fi
-        if [ "$WORK_MACHINE" = "1" ] && [ -d "$script_dir/shared-skills" ]; then
-            for skill_dir in "$script_dir/shared-skills"/*/; do
-                [ -d "$skill_dir" ] || continue
-                name=$(basename "$skill_dir")
-                rm -f "$cursor_home_dir/skills-cursor/$name"
-                ln -s "$skill_dir" "$cursor_home_dir/skills-cursor/$name"
-            done
-        fi
-        echo "✅ agent skills linked"
-    fi
+    done
 
     # Agent hooks (RTK shell rewrite for Cursor Agent)
     if [ -f "$cursor_dotfiles/hooks.json" ]; then

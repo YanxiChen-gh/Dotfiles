@@ -1,6 +1,6 @@
 ---
 name: doc-authoring
-description: Write design docs, RFCs, specs, runbooks, and playbooks in Yanxi's style - the local .md later synced to a Google Doc via gsync. Use when asked to write, draft, or restructure any such doc. Loads the style rubric, links exemplars, and enforces a draft-then-cut pass. Not for PR descriptions (use the pr-authoring guide / simplify-pr) or code comments.
+description: Write design docs, RFCs, specs, runbooks, and playbooks in Yanxi's style - the local .md later synced to a Google Doc via gsync. Use when asked to write, draft, or restructure any such doc. Loads the style rubric, links exemplars, and enforces a draft-then-cut pass. Not for PR descriptions (use the pr-authoring guide) or code comments.
 ---
 
 # Doc Authoring

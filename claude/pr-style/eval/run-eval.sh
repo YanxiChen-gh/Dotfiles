@@ -16,8 +16,6 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$HERE/.."
 JUDGE="$HERE/judge.md"
-# The cleaner IS the real simplify-pr skill agents use - the eval validates that, not a stand-in.
-CLEANER="${SIMPLIFY_PR_SKILL:-$ROOT/../skills/simplify-pr/SKILL.md}"
 RUBRIC="$ROOT/rubric.md"
 AUTHOR_GUIDE="$ROOT/../../agent-rules/guides/pr-authoring.md"
 REVIEW_GUIDE="$ROOT/../../agent-rules/guides/review-tone.md"
@@ -42,7 +40,7 @@ judge_file() { style_eval_engine_file judge "$1" "${2:-}"; }
 
 capture_description_manifest_provenance() {
   local manifest="$1" flow="$2"
-  DESCRIPTION_BENCHMARK_MANIFEST_PATH="$(realpath -e "$manifest")"
+  DESCRIPTION_BENCHMARK_MANIFEST_PATH="$(realpath "$manifest")"
   DESCRIPTION_BENCHMARK_MANIFEST_SHA256="$(sha256sum "$manifest" | cut -d' ' -f1)"
   DESCRIPTION_DATA_REPO_ROOT="$(git -C "$(dirname "$manifest")" rev-parse --show-toplevel)"
   DESCRIPTION_DATA_REPO_GIT_SHA="$(git -C "$DESCRIPTION_DATA_REPO_ROOT" rev-parse HEAD)"
@@ -67,14 +65,20 @@ benchmark_case_ids=$DESCRIPTION_BENCHMARK_CASE_IDS
 EOF
 }
 
-clean() { # $1 = file (diff or draft)
-  agent "$(cat "$CLEANER")
+cleaner_guidance() {
+  if [ -n "${SIMPLIFY_PR_SKILL:-}" ]; then
+    cat "$SIMPLIFY_PR_SKILL" || return 1
+    printf '\n\n'
+  fi
+  cat "$AUTHOR_GUIDE"
+}
 
-rubric:
+clean() { # $1 = file (diff or draft)
+  agent "rubric:
 $(cat "$RUBRIC")
 
 pr-authoring guide:
-$(cat "$AUTHOR_GUIDE")
+$(cleaner_guidance)
 
 === DRAFT / DIFF TO CLEAN ===
 $(cat "$1")"
@@ -116,7 +120,7 @@ simplify_calibrate() {
   answer_key_file="$run_dir/answer-key.md"
   cp "$ex" "$answer_key_file"
   style_eval_blind_before "$answer_key_file" >"$blind_file"
-  style_eval_write_metadata "$run_dir" "$benchmark" "$answer_key_file" "$CLEANER" "$AUTHOR_GUIDE" "$RUBRIC" "$JUDGE"
+  style_eval_write_metadata "$run_dir" "$benchmark" "$answer_key_file" ${SIMPLIFY_PR_SKILL:+"$SIMPLIFY_PR_SKILL"} "$AUTHOR_GUIDE" "$RUBRIC" "$JUDGE"
 
   if [ -n "${EVAL_CANDIDATE:-}" ]; then
     [ -f "$EVAL_CANDIDATE" ] || { echo "candidate not found: $EVAL_CANDIDATE" >&2; return 1; }
@@ -124,10 +128,8 @@ simplify_calibrate() {
     printf 'candidate_source=%s\n' "$EVAL_CANDIDATE" >>"$run_dir/metadata.txt"
     printf 'candidate_source_sha256=%s\n' "$(sha256sum "$EVAL_CANDIDATE" | cut -d' ' -f1)" >>"$run_dir/metadata.txt"
   else
-    agent "$(cat "$CLEANER")
-
-pr-authoring guide:
-$(cat "$AUTHOR_GUIDE")
+    agent "pr-authoring guide:
+$(cleaner_guidance)
 
 You are the cleaner under evaluation. For every numbered example below, inspect only its BEFORE
 material and propose the exact cuts or tightening you would make. Do not use tools or read files;
@@ -229,9 +231,8 @@ description_heldout_simplify() {
     return 1
   }
   {
-    cat "$CLEANER"
     printf '\n\npr-authoring guide:\n'
-    cat "$AUTHOR_GUIDE"
+    cleaner_guidance
     cat <<'EOF'
 
 
@@ -283,7 +284,7 @@ EOF
 
   style_eval_write_metadata "$run_dir" "description-heldout-$benchmark_id-v$benchmark_version-simplify" \
     "$materialized/manifest.json" "$materialized/simplify/blind-input.md" \
-    "$materialized/simplify/answer-key.md" "$CLEANER" "$AUTHOR_GUIDE" "$RUBRIC" "$JUDGE" \
+    "$materialized/simplify/answer-key.md" ${SIMPLIFY_PR_SKILL:+"$SIMPLIFY_PR_SKILL"} "$AUTHOR_GUIDE" "$RUBRIC" "$JUDGE" \
     "$agent_prompt_file" "$judge_prompt_file"
   append_description_manifest_metadata "$run_dir/metadata.txt"
   if [ -n "${EVAL_CANDIDATE:-}" ]; then

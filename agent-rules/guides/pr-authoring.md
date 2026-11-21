@@ -34,7 +34,7 @@ impact the title and code cannot explain. Accuracy alone does not earn a sentenc
 Stay high-level; never mechanically list files or changes. Preserve required template sections,
 but keep their content minimal.
 Do not repeat information already carried by the title, diff, or another section.
-When tightening an existing description, fix concrete violations and leave compliant prose alone.
+When tightening an existing description or code comments, check the actual diff, preserve necessary meaning, and propose only concrete fixes. Obtain approval before updating an existing PR description.
 
 ## 4. Comments
 

@@ -1,38 +1,6 @@
 # shellcheck shell=sh
 # Sourced by ../install.sh - function definitions only.
 
-# Install superpowers plugin for Claude Code (user scope - always available)
-setup_superpowers_plugin() {
-    echo "Setting up superpowers plugin for Claude Code..."
-
-    if ! command -v claude >/dev/null 2>&1; then
-        echo "⚠️  Warning: 'claude' command not found. Skipping superpowers plugin setup."
-        return 1
-    fi
-
-    if claude plugin list 2>/dev/null | grep -q "superpowers"; then
-        echo "✅ superpowers plugin already installed"
-        return 0
-    fi
-
-    # Register the superpowers marketplace if not already known
-    if ! claude plugin marketplace list 2>/dev/null | grep -q "superpowers-marketplace"; then
-        echo "Adding superpowers-marketplace..."
-        if ! claude plugin marketplace add obra/superpowers-marketplace 2>/dev/null; then
-            echo "⚠️  Warning: Failed to add superpowers-marketplace"
-            return 1
-        fi
-    fi
-
-    echo "Installing superpowers plugin..."
-    if claude plugin install superpowers@superpowers-marketplace 2>/dev/null; then
-        echo "✅ superpowers plugin installed"
-    else
-        echo "⚠️  Warning: Failed to install superpowers plugin"
-        return 1
-    fi
-}
-
 # Setup Claude Code config: user-level CLAUDE.md and skills
 setup_claude_config() {
     script_dir=$(resolve_script_dir) || return 1
@@ -75,107 +43,43 @@ setup_claude_config() {
         echo "✅ Claude Code skills linked (work)"
     fi
 
-    # Register the comment-bar PostToolUse hook (work scope): nudges the model to apply the
-    # comment bar after JS/TS edits, since current models over-comment by default. Idempotent
-    # (deduped on the script name). Kill switch + retirement trigger live in the script itself.
-    hook_script="$script_dir/claude/hooks/comment-self-check.sh"
-    if [ "$WORK_MACHINE" = "1" ] && [ -f "$hook_script" ]; then
-        chmod +x "$hook_script" 2>/dev/null || true
-        COMMENT_HOOK_CMD="bash $hook_script" python3 - "$claude_dir/settings.json" <<'PY'
-import json, os, sys
-
-path, cmd = sys.argv[1], os.environ["COMMENT_HOOK_CMD"]
-try:
-    with open(path) as f:
-        cfg = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    cfg = {}
-
-post = cfg.setdefault("hooks", {}).setdefault("PostToolUse", [])
-present = any(
-    "comment-self-check.sh" in h.get("command", "")
-    for entry in post
-    for h in entry.get("hooks", [])
-)
-if not present:
-    post.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": cmd}]})
-    with open(path, "w") as f:
-        json.dump(cfg, f, indent=2)
-        f.write("\n")
-    print("registered comment-bar PostToolUse hook")
-else:
-    print("comment-bar hook already registered")
-PY
-        echo "✅ Claude Code comment-bar hook registered (work)"
-    fi
-
-    # Register the verify-gate PreToolUse(Bash) hook (work scope): blocks `gh pr create`
-    # when the PR body lacks reviewer-useful verification evidence
-    # (Trust L2→L3 lever). Runtime-scoped to work-org repos (default VantaInc) so it doesn't
-    # gate personal repos; override with VERIFY_GATE_WORK_ORGS. Idempotent (deduped on the
-    # script name). Fail-open + kill switch (VERIFY_GATE=off) + retirement trigger live in the
-    # script itself.
-    vg_hook="$script_dir/claude/hooks/verify-gate-pretooluse.sh"
-    if [ "$WORK_MACHINE" = "1" ] && [ -f "$vg_hook" ]; then
-        chmod +x "$vg_hook" "$script_dir/claude/hooks/verify-gate-check.py" 2>/dev/null || true
-        VERIFY_HOOK_CMD="bash $vg_hook" python3 - "$claude_dir/settings.json" <<'PY'
-import json, os, sys
-
-path, cmd = sys.argv[1], os.environ["VERIFY_HOOK_CMD"]
-try:
-    with open(path) as f:
-        cfg = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    cfg = {}
-
-pre = cfg.setdefault("hooks", {}).setdefault("PreToolUse", [])
-present = any(
-    "verify-gate-pretooluse.sh" in h.get("command", "")
-    for entry in pre
-    for h in entry.get("hooks", [])
-)
-if not present:
-    pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": cmd}]})
-    with open(path, "w") as f:
-        json.dump(cfg, f, indent=2)
-        f.write("\n")
-    print("registered verify-gate PreToolUse hook")
-else:
-    print("verify-gate hook already registered")
-PY
-        echo "✅ Claude Code verify-gate hook registered (work)"
-    fi
-
-    # Remove the retired LLM PR-authoring gate from prior installations. PR style is
-    # evaluated during drafting; only deterministic evidence remains a PR boundary.
-    if [ "$WORK_MACHINE" = "1" ] && [ -f "$claude_dir/settings.json" ]; then
-        python3 - "$claude_dir/settings.json" <<'PY'
+    # Earlier installations registered hooks for scripts that are no longer installed.
+    if [ -f "$claude_dir/settings.json" ]; then
+        python3 - "$claude_dir/settings.json" "$script_dir" <<'PY'
 import json
+from pathlib import Path
+import shlex
 import sys
 
-path = sys.argv[1]
-with open(path, encoding="utf-8") as f:
+path = Path(sys.argv[1])
+with path.open() as f:
     config = json.load(f)
-
 hooks = config.get("hooks", {})
-entries = hooks.get("PreToolUse", [])
-filtered = []
 changed = False
-for entry in entries:
-    retained = [
-        hook
-        for hook in entry.get("hooks", [])
-        if "pr-authoring-gate-pretooluse.sh" not in hook.get("command", "")
-    ]
-    changed = changed or len(retained) != len(entry.get("hooks", []))
-    if retained:
-        filtered.append({**entry, "hooks": retained})
+for event, script in (
+    ("PreToolUse", "verify-gate-pretooluse.sh"),
+    ("PreToolUse", "pr-authoring-gate-pretooluse.sh"),
+    ("PostToolUse", "comment-self-check.sh"),
+):
+    target = Path(sys.argv[2], "claude/hooks", script).resolve()
+    groups = []
+    for group in hooks.get(event, []):
+        remaining = []
+        for hook in group.get("hooks", []):
+            try:
+                words = shlex.split(hook.get("command", ""))
+            except ValueError:
+                words = []
+            if words and words[-1].endswith("/" + script) and Path(words[-1]).expanduser().resolve() == target:
+                changed = True
+            else:
+                remaining.append(hook)
+        if remaining or "hooks" not in group:
+            groups.append({**group, "hooks": remaining} if "hooks" in group else group)
+    if event in hooks:
+        hooks[event] = groups
 if changed:
-    hooks["PreToolUse"] = filtered
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-        f.write("\n")
-    print("removed retired Claude Code PR-authoring gate")
+    path.write_text(json.dumps(config, indent=2) + "\n")
 PY
     fi
 }
@@ -211,41 +115,6 @@ setup_advisors() {
         ln -s "$skill_dir" "$HOME/.claude/skills/$name"
     done
     echo "✅ advisor skills linked"
-}
-
-# Install the agent-maturity engine. It lives in its own PUBLIC repo
-# (github.com/YanxiChen-gh/agent-maturity); the engine's bootstrap.sh does all the heavy
-# lifting (clone-or-pull → install.sh → skills + Claude/Codex hooks + `li` + env). OpenCode's
-# incompatible hook API is adapted by opencode/plugins/dotfiles-harness.js. Data stays private.
-setup_agent_maturity() {
-    echo "Setting up agent-maturity engine..."
-    local boot="${AGENT_MATURITY_BOOTSTRAP_URL:-https://raw.githubusercontent.com/YanxiChen-gh/agent-maturity/main/bootstrap.sh}"
-    local data_repo="${AGENT_MATURITY_DATA_REPO:-YanxiChen-gh/agent-maturity-data}"
-    local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
-    if ! curl -fsSL "$boot" | bash -s -- --data-repo "$data_repo" \
-         --name "$(git config --global user.name)" --email "$(git config --global user.email)" >/dev/null; then
-        echo "⚠️  agent-maturity install failed (curl $boot | bash)"
-        return 1
-    fi
-
-    missing=""
-    for path in \
-        "$HOME/.claude/skills/canary-takeover/SKILL.md" \
-        "$HOME/.agents/skills/canary-takeover/SKILL.md" \
-        "$HOME/.claude/skills/record-task-outcome/SKILL.md" \
-        "$HOME/.agents/skills/record-task-outcome/SKILL.md" \
-        "$HOME/.agent-maturity.env" \
-        "$HOME/.claude/settings.json" \
-        "$config_home/opencode/plugins/dotfiles-harness.js"
-    do
-        [ -e "$path" ] || missing="$missing $path"
-    done
-    if [ -n "$missing" ]; then
-        echo "⚠️  agent-maturity client integration incomplete; missing:$missing"
-        return 1
-    fi
-
-    echo "✅ agent-maturity installed for Claude Code, Codex, and OpenCode"
 }
 
 # Enable Vanta AI Platform skills for Claude Code, shared Agent Skills clients, and Cursor.

@@ -22,3 +22,6 @@ __pycache__/
 # Private presentation artifacts
 .lavish/
 .plannotator/
+
+# Cursor supplies its built-in skill catalog.
+/cursor/skills/

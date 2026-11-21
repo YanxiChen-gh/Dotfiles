@@ -308,7 +308,7 @@ printf 'unmanaged helper\n' >"$INSTALL_HOME/.local/bin/auth-vanta-agents"
 for target in \
     "$INSTALL_HOME/.claude/skills/auth-vanta-agents" \
     "$INSTALL_HOME/.agents/skills/auth-vanta-agents" \
-    "$INSTALL_HOME/.cursor/skills-cursor/auth-vanta-agents"
+    "$INSTALL_HOME/.cursor/skills/auth-vanta-agents"
 do
     mkdir -p "$(dirname "$target")"
     ln -s "$ROOT/shared-skills/auth-vanta-agents/" "$target"
@@ -328,7 +328,7 @@ done
 for target in \
     "$INSTALL_HOME/.claude/skills/auth-vanta-agents" \
     "$INSTALL_HOME/.agents/skills/auth-vanta-agents" \
-    "$INSTALL_HOME/.cursor/skills-cursor/auth-vanta-agents"
+    "$INSTALL_HOME/.cursor/skills/auth-vanta-agents"
 do
     [ ! -e "$target" ] || fail "personal setup retained work auth skill: $target"
 done

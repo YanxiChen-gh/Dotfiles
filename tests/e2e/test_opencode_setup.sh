@@ -15,16 +15,12 @@ OPENCODE_POOL="$TMP/treehouse-pool/7/opencode-repo"
 EXAMPLE_TOKEN="local-only"
 MCP_HOST="example.com"
 MCP_CLIENT_ID="client-value"
-AGENT_MATURITY_HOME="$HOME/agent-maturity"
-HARNESS_HOOKS="$HOME/harness-hooks"
 export HOME
 export XDG_CONFIG_HOME
 export XDG_STATE_HOME
 export EXAMPLE_TOKEN
 export MCP_HOST
 export MCP_CLIENT_ID
-export AGENT_MATURITY_HOME
-export HARNESS_HOOKS
 export OPENCODE_PRIMARY OPENCODE_LINKED OPENCODE_POOL
 unset MISSING_ENV
 unset HERDR_ENV HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_BIN_PATH DOTFILES_HERDR_TASK_WORKSPACE
@@ -46,104 +42,6 @@ with open(sys.argv[1], "a", encoding="utf-8") as log:
 PY
 EOF
 chmod +x "$HOME/.opencode/bin/opencode"
-
-mkdir -p "$AGENT_MATURITY_HOME/scripts" "$HARNESS_HOOKS"
-cat >"$AGENT_MATURITY_HOME/scripts/scope-gate-userpromptsubmit.sh" <<'EOF'
-#!/bin/sh
-cat >/dev/null
-printf '%s\n' '[scope-gate] test prompt'
-EOF
-cat >"$AGENT_MATURITY_HOME/scripts/scope-gate-pretooluse.sh" <<'EOF'
-#!/bin/sh
-input=$(cat)
-case "$input" in
-  *'"session_id":"approved-root"'*) exit 0 ;;
-  *'src/app.js'*) ;;
-  *'/briefs/'*) exit 0 ;;
-esac
-printf '%s\n' 'scope blocked' >&2
-exit 2
-EOF
-cat >"$AGENT_MATURITY_HOME/scripts/canary-takeover-schema.jq" <<'EOF'
-def enum($values): . as $value | ($value | type == "string") and ($values | index($value) != null);
-def nonempty_or_null: . == null or (type == "string" and length > 0);
-def integer_or_null: . == null or (type == "number" and . >= 0 and floor == .);
-def number_or_null: . == null or (type == "number" and . >= 0);
-def strings: type == "array" and all(.[]; type == "string" and length > 0);
-def pass_conditions:
-  .reconciliation.completed
-  and (.successor.session_id != null or .successor.task_id != null)
-  and (.audit.critical_omissions | length == 0)
-  and (.audit.duplicate_actions | length == 0)
-  and (.audit.unsafe_actions | length == 0)
-  and (.audit.old_root_intervention_required | not)
-  and (.audit.writer_overlap | not)
-  and (.verification.status == "done" or .verification.status == "not_applicable");
-def valid_payload:
-  type == "object"
-  and (keys == ["audit", "client", "efficiency", "human_unblocks", "reconciliation", "repo", "scope_id", "source_session_id", "status", "successor", "verification", "work_unit"])
-  and (.repo | type == "string" and length > 0)
-  and (.client == "opencode")
-  and (.scope_id | nonempty_or_null)
-  and (.source_session_id | type == "string" and length > 0)
-  and (.work_unit | type == "string" and length > 0)
-  and (.status | enum(["passed", "failed", "aborted"]))
-  and ((.successor | keys) == ["model", "orientation_turns", "session_id", "task_id"])
-  and (.successor.model | nonempty_or_null)
-  and (.successor.session_id | nonempty_or_null)
-  and (.successor.task_id | nonempty_or_null)
-  and (.successor.orientation_turns | integer_or_null)
-  and ((.reconciliation | keys) == ["completed", "mismatches"])
-  and (.reconciliation.completed | type == "boolean")
-  and (.reconciliation.mismatches | strings)
-  and ((.audit | keys) == ["critical_omissions", "duplicate_actions", "old_root_intervention_required", "unsafe_actions", "writer_overlap"])
-  and (.audit.critical_omissions | strings)
-  and (.audit.duplicate_actions | strings)
-  and (.audit.old_root_intervention_required | type == "boolean")
-  and (.audit.unsafe_actions | strings)
-  and (.audit.writer_overlap | type == "boolean")
-  and ((.verification | keys) == ["evidence", "status"])
-  and (.verification.status | enum(["done", "not_done", "not_applicable", "unknown"]))
-  and (.verification.evidence | strings)
-  and ((.efficiency | keys) == ["source_context_tokens", "successor_cost", "successor_input_tokens", "wall_seconds"])
-  and (.efficiency.source_context_tokens | integer_or_null)
-  and (.efficiency.successor_cost | number_or_null)
-  and (.efficiency.successor_input_tokens | integer_or_null)
-  and (.efficiency.wall_seconds | integer_or_null)
-  and (.human_unblocks | integer_or_null)
-  and (if .verification.status == "done" then (.verification.evidence | length > 0) else true end)
-  and (if .status == "passed" then pass_conditions
-    elif .status == "failed" then
-      (.successor.session_id != null or .successor.task_id != null) and (pass_conditions | not)
-    else
-      .successor.session_id == null
-      and .successor.task_id == null
-      and .successor.orientation_turns == null
-      and (.reconciliation.completed | not)
-      and (.verification.status == "unknown" or .verification.status == "not_done")
-    end);
-if $kind == "record" then
-  .version == 1
-  and .takeover_id == $takeover_id
-  and (.recorded_at | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))
-  and ({repo, client, scope_id, source_session_id, work_unit, status, successor, reconciliation, audit, verification, efficiency, human_unblocks} | valid_payload)
-else false end
-EOF
-cat >"$HARNESS_HOOKS/comment-self-check.sh" <<'EOF'
-#!/bin/sh
-cat >/dev/null
-printf '%s\n' '{"hookSpecificOutput":{"additionalContext":"Comment self-check test"}}'
-EOF
-cat >"$HARNESS_HOOKS/verify-gate-pretooluse.sh" <<'EOF'
-#!/bin/sh
-payload=$(cat)
-case "$payload" in
-  *'pr create'*)
-    printf '%s\n' 'Verify gate test block' >&2
-    exit 2
-    ;;
-esac
-EOF
 
 HERDR_TITLE_LOG="$TMP/herdr-title.log"
 HERDR_COMMAND_LOG="$TMP/herdr-command.log"
@@ -343,8 +241,6 @@ assert config["$schema"] == "https://opencode.ai/config.json"
 assert config["model"] == "openai/gpt-5.6-sol"
 assert config["compaction"] == {"prune": True}
 assert config["command"]["checkpoint"]["description"] == "Checkpoint context and continue in the same session"
-assert config["command"]["canary-takeover"]["description"] == "Let a fresh successor perform one bounded unit of real local work"
-assert "canary-takeover skill" in config["command"]["canary-takeover"]["template"]
 assert config["agent"]["build"]["variant"] == "high"
 assert config["agent"]["plan"]["variant"] == "high"
 assert config["agent"]["general"]["variant"] == "high"
@@ -539,13 +435,11 @@ cmp -s "$MCP" "$TMP/mcp-before.json" || fail "MCP sync is not idempotent"
 
 node --input-type=module - "$ROOT/opencode/plugins/dotfiles-harness.js" <<'JS'
 import assert from "node:assert/strict"
-import { execFile as execFileCallback, spawn as spawnChild } from "node:child_process"
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { spawn as spawnChild } from "node:child_process"
+import { readFile, rm, writeFile } from "node:fs/promises"
 import { Readable } from "node:stream"
 import { pathToFileURL } from "node:url"
-import { promisify } from "node:util"
 
-const spawnedInputs = []
 globalThis.Bun = {
   env: process.env,
   spawn(command, options) {
@@ -555,7 +449,6 @@ globalThis.Bun = {
     })
     if (options.stdin instanceof Blob) {
       options.stdin.text().then((input) => {
-        spawnedInputs.push({ command, input })
         child.stdin.end(input)
       })
     }
@@ -566,20 +459,6 @@ globalThis.Bun = {
     }
   },
 }
-process.env.AGENT_MATURITY_DATA_DIR = `${process.env.HOME}/maturity-data`
-const execFile = promisify(execFileCallback)
-const maturityRemote = `${process.env.HOME}/maturity-remote.git`
-await mkdir(process.env.AGENT_MATURITY_DATA_DIR, { recursive: true })
-await execFile("git", ["init", "-q", process.env.AGENT_MATURITY_DATA_DIR])
-await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "config", "user.name", "Test"])
-await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "config", "user.email", "test@example.com"])
-await writeFile(`${process.env.AGENT_MATURITY_DATA_DIR}/tracker.md`, "# tracker\n")
-await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "add", "tracker.md"])
-await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "commit", "-qm", "init"])
-await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "branch", "-M", "main"])
-await execFile("git", ["init", "-q", "--bare", maturityRemote])
-await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "remote", "add", "origin", maturityRemote])
-await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "push", "-qu", "origin", "main"])
 const pluginModule = await import(pathToFileURL(process.argv[2]))
 const sessionRecords = new Map([
   [
@@ -598,12 +477,6 @@ const summarizeCalls = []
 const promptCalls = []
 const summarizeFailures = new Set()
 const slackNotifications = []
-const sessionChildren = new Map([
-  ["approved-root", [{ id: "approved-child", parentID: "approved-root" }]],
-  ["approved-child", [{ id: "approved-grandchild", parentID: "approved-child" }]],
-])
-const sessionStatuses = {}
-let sessionStatusUnavailable = false
 let releaseApprovedRootPrompt
 const approvedRootPrompt = new Promise((resolve) => {
   releaseApprovedRootPrompt = resolve
@@ -613,13 +486,6 @@ const client = {
     async get({ path }) {
       sessionGetIDs.push(path.id)
       return { data: sessionRecords.get(path.id) }
-    },
-    async children({ path }) {
-      return { data: sessionChildren.get(path.id) ?? [] }
-    },
-    async status() {
-      if (sessionStatusUnavailable) return { error: "status unavailable" }
-      return { data: sessionStatuses }
     },
     async summarize(input) {
       summarizeCalls.push(input)
@@ -636,7 +502,6 @@ const client = {
 const hooks = await pluginModule.DotfilesHarnessPlugin(
   { client, directory: process.cwd() },
   {
-    hooksDir: process.env.HARNESS_HOOKS,
     slackNotify: async (message) => slackNotifications.push(message),
     slackPermissionDelayMs: 10,
   },
@@ -672,18 +537,6 @@ void hooks.event(
     parentID: "approved-child",
   }),
 )
-
-const canaryReady = await hooks.tool.canary_takeover_preflight.execute(
-  {},
-  { sessionID: "approved-root", agent: "build" },
-)
-assert.equal(canaryReady.metadata.status, "ready")
-const childCanary = await hooks.tool.canary_takeover_preflight.execute(
-  {},
-  { sessionID: "approved-child", agent: "general" },
-)
-assert.equal(childCanary.metadata.status, "unavailable")
-assert.match(childCanary.output, /root sessions/)
 
 await hooks.event(sessionIDEvent("session.status", "test-session", { status: { type: "idle" } }))
 await flushNotifications()
@@ -885,7 +738,6 @@ const stalledNotification = new Promise((resolve) => {
 const nonblockingHooks = await pluginModule.DotfilesHarnessPlugin(
   { client, directory: process.cwd() },
   {
-    hooksDir: process.env.HARNESS_HOOKS,
     slackNotify: () => stalledNotification,
   },
 )
@@ -903,7 +755,6 @@ const orderedNotifications = []
 const orderedHooks = await pluginModule.DotfilesHarnessPlugin(
   { client, directory: process.cwd() },
   {
-    hooksDir: process.env.HARNESS_HOOKS,
     slackNotify: async (message) => orderedNotifications.push(message),
   },
 )
@@ -922,7 +773,6 @@ const descendantNotifications = []
 const descendantHooks = await pluginModule.DotfilesHarnessPlugin(
   { client, directory: process.cwd() },
   {
-    hooksDir: process.env.HARNESS_HOOKS,
     slackNotify: async (message) => descendantNotifications.push(message),
   },
 )
@@ -981,7 +831,6 @@ const interleavedNotifications = []
 const interleavedHooks = await pluginModule.DotfilesHarnessPlugin(
   { client, directory: process.cwd() },
   {
-    hooksDir: process.env.HARNESS_HOOKS,
     slackNotify: async (message) => interleavedNotifications.push(message),
     slackPermissionDelayMs: 10,
   },
@@ -1044,7 +893,7 @@ await hooks["experimental.chat.system.transform"](
   { sessionID: "approved-child" },
   { system: childSystem },
 )
-assert.doesNotMatch(childSystem.join("\n"), /scope-gate.*test prompt/)
+assert.match(childSystem.join("\n"), /parent session|parent owns|to the parent/i)
 
 const checkpointModel = {
   id: "test-model",
@@ -1057,286 +906,6 @@ const checkpointTokens = {
   reasoning: 0,
   cache: { read: 0, write: 0 },
 }
-const writeCanaryRecord = async (sessionID, status, mismatches, takeoverID, valid = true) => {
-  const directory = `${process.env.AGENT_MATURITY_DATA_DIR}/takeovers`
-  const path = `${directory}/${takeoverID}.json`
-  const aborted = status === "aborted"
-  await mkdir(directory, { recursive: true })
-  const record = {
-      version: 1,
-      takeover_id: takeoverID,
-      recorded_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-      repo: "fixture",
-      client: "opencode",
-      scope_id: null,
-      source_session_id: sessionID,
-      work_unit: "fixture canary",
-      status,
-      successor: {
-        model: null,
-        orientation_turns: aborted ? null : 1,
-        session_id: aborted ? null : `${sessionID}-successor`,
-        task_id: null,
-      },
-      reconciliation: { completed: !aborted, mismatches },
-      audit: {
-        critical_omissions: [],
-        duplicate_actions: [],
-        old_root_intervention_required: false,
-        unsafe_actions: [],
-        writer_overlap: false,
-      },
-      verification: {
-        evidence: aborted ? [] : ["fixture verification"],
-        status: aborted ? "unknown" : "done",
-      },
-      efficiency: {
-        source_context_tokens: null,
-        successor_cost: null,
-        successor_input_tokens: null,
-        wall_seconds: null,
-      },
-      human_unblocks: 0,
-  }
-  if (!valid) delete record.audit
-  await writeFile(path, JSON.stringify(record))
-  return { takeoverID, path }
-}
-const syncCanaryRecord = async ({ takeoverID, path }) => {
-  await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "add", path])
-  await execFile("git", [
-    "-C",
-    process.env.AGENT_MATURITY_DATA_DIR,
-    "commit",
-    "-qm",
-    `canary ${takeoverID}`,
-  ])
-  await execFile("git", ["-C", process.env.AGENT_MATURITY_DATA_DIR, "push", "-q"])
-}
-
-process.env.OPENCODE_CANARY_TAKEOVER = "1"
-const autoCanaryHooks = await pluginModule.DotfilesHarnessPlugin(
-  { client, directory: process.cwd() },
-  { hooksDir: process.env.HARNESS_HOOKS, slackNotify: async () => {} },
-)
-await autoCanaryHooks.event(sessionEvent("session.created", { id: "auto-canary-root" }))
-await autoCanaryHooks.event(
-  sessionEvent("session.created", { id: "auto-canary-child", parentID: "auto-canary-root" }),
-)
-await autoCanaryHooks.event(
-  event("message.updated", {
-    info: {
-      id: "auto-canary-pressure",
-      sessionID: "auto-canary-root",
-      role: "assistant",
-      finish: "stop",
-      tokens: checkpointTokens,
-      providerID: "test-provider",
-      modelID: "test-model",
-      agent: "build",
-    },
-  }),
-)
-const autoCanarySystem = []
-await autoCanaryHooks["experimental.chat.system.transform"](
-  { sessionID: "auto-canary-root", model: checkpointModel },
-  { system: autoCanarySystem },
-)
-assert.match(autoCanarySystem.join("\n"), /load the canary-takeover skill/)
-const gatedCheckpoint = await autoCanaryHooks.tool.context_checkpoint.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(gatedCheckpoint.title, "Canary takeover required")
-
-sessionRecords.set("auto-canary-late-grandchild", {
-  id: "auto-canary-late-grandchild",
-  parentID: "auto-canary-child",
-})
-sessionStatuses["auto-canary-late-grandchild"] = { type: "busy" }
-const blockedAutoCanary = await autoCanaryHooks.tool.canary_takeover_preflight.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(blockedAutoCanary.metadata.status, "blocked")
-assert.deepEqual(blockedAutoCanary.metadata.active, [
-  { sessionID: "auto-canary-late-grandchild", status: "busy" },
-])
-const stillRequiredSystem = []
-await autoCanaryHooks["experimental.chat.system.transform"](
-  { sessionID: "auto-canary-root", model: checkpointModel },
-  { system: stillRequiredSystem },
-)
-assert.match(stillRequiredSystem.join("\n"), /load the canary-takeover skill/)
-
-delete sessionStatuses["auto-canary-late-grandchild"]
-const readyAutoCanary = await autoCanaryHooks.tool.canary_takeover_preflight.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(readyAutoCanary.metadata.status, "ready")
-const awaitingEvidenceSystem = []
-await autoCanaryHooks["experimental.chat.system.transform"](
-  { sessionID: "auto-canary-root", model: checkpointModel },
-  { system: awaitingEvidenceSystem },
-)
-assert.match(awaitingEvidenceSystem.join("\n"), /record and sync terminal evidence/)
-const evidenceGatedCheckpoint = await autoCanaryHooks.tool.context_checkpoint.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(evidenceGatedCheckpoint.metadata.requirement, "complete")
-const missingEvidenceCompletion = await autoCanaryHooks.tool.canary_takeover_complete.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(missingEvidenceCompletion.metadata.status, "blocked")
-const invalidCanary = await writeCanaryRecord(
-  "auto-canary-root",
-  "passed",
-  [],
-  readyAutoCanary.metadata.attemptID,
-  false,
-)
-await syncCanaryRecord(invalidCanary)
-const invalidEvidenceCompletion = await autoCanaryHooks.tool.canary_takeover_complete.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(invalidEvidenceCompletion.metadata.status, "blocked")
-const unsyncedCanary = await writeCanaryRecord(
-  "auto-canary-root",
-  "passed",
-  [],
-  readyAutoCanary.metadata.attemptID,
-)
-const unsyncedEvidenceCompletion = await autoCanaryHooks.tool.canary_takeover_complete.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(unsyncedEvidenceCompletion.metadata.status, "blocked")
-await syncCanaryRecord(unsyncedCanary)
-const completedAutoCanary = await autoCanaryHooks.tool.canary_takeover_complete.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(completedAutoCanary.metadata.status, "completed")
-const afterCanarySystem = []
-await autoCanaryHooks["experimental.chat.system.transform"](
-  { sessionID: "auto-canary-root", model: checkpointModel },
-  { system: afterCanarySystem },
-)
-assert.match(afterCanarySystem.join("\n"), /call context_checkpoint exactly once/)
-
-const reloadedCanaryHooks = await pluginModule.DotfilesHarnessPlugin(
-  { client, directory: process.cwd() },
-  { hooksDir: process.env.HARNESS_HOOKS, slackNotify: async () => {} },
-)
-await reloadedCanaryHooks.event(sessionEvent("session.created", { id: "auto-canary-root" }))
-await reloadedCanaryHooks.event(
-  event("message.updated", {
-    info: {
-      id: "auto-canary-pressure-reloaded",
-      sessionID: "auto-canary-root",
-      role: "assistant",
-      finish: "stop",
-      tokens: checkpointTokens,
-      providerID: "test-provider",
-      modelID: "test-model",
-      agent: "build",
-    },
-  }),
-)
-const reloadedSystem = []
-await reloadedCanaryHooks["experimental.chat.system.transform"](
-  { sessionID: "auto-canary-root", model: checkpointModel },
-  { system: reloadedSystem },
-)
-assert.match(reloadedSystem.join("\n"), /call context_checkpoint exactly once/)
-assert.doesNotMatch(reloadedSystem.join("\n"), /load the canary-takeover skill/)
-
-await autoCanaryHooks.event(sessionEvent("session.deleted", { id: "auto-canary-root" }))
-await autoCanaryHooks.event(sessionEvent("session.created", { id: "auto-canary-root" }))
-await autoCanaryHooks.event(
-  event("message.updated", {
-    info: {
-      id: "auto-canary-pressure-recreated",
-      sessionID: "auto-canary-root",
-      role: "assistant",
-      finish: "stop",
-      tokens: checkpointTokens,
-      providerID: "test-provider",
-      modelID: "test-model",
-      agent: "build",
-    },
-  }),
-)
-const recreatedSystem = []
-await autoCanaryHooks["experimental.chat.system.transform"](
-  { sessionID: "auto-canary-root", model: checkpointModel },
-  { system: recreatedSystem },
-)
-assert.match(recreatedSystem.join("\n"), /load the canary-takeover skill/)
-const recreatedPreflight = await autoCanaryHooks.tool.canary_takeover_preflight.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(recreatedPreflight.metadata.status, "ready")
-assert.notEqual(recreatedPreflight.metadata.attemptID, readyAutoCanary.metadata.attemptID)
-const replayedEvidenceCompletion = await autoCanaryHooks.tool.canary_takeover_complete.execute(
-  {},
-  { sessionID: "auto-canary-root", agent: "build" },
-)
-assert.equal(replayedEvidenceCompletion.metadata.status, "blocked")
-
-await autoCanaryHooks.event(sessionEvent("session.created", { id: "auto-canary-unavailable" }))
-await autoCanaryHooks.event(
-  event("message.updated", {
-    info: {
-      id: "auto-canary-unavailable-pressure",
-      sessionID: "auto-canary-unavailable",
-      role: "assistant",
-      finish: "stop",
-      tokens: checkpointTokens,
-      providerID: "test-provider",
-      modelID: "test-model",
-      agent: "build",
-    },
-  }),
-)
-sessionStatusUnavailable = true
-const unavailableAutoCanary = await autoCanaryHooks.tool.canary_takeover_preflight.execute(
-  {},
-  { sessionID: "auto-canary-unavailable", agent: "build" },
-)
-sessionStatusUnavailable = false
-assert.equal(unavailableAutoCanary.metadata.status, "unavailable")
-assert.match(unavailableAutoCanary.output, /Record an aborted canary/)
-const unavailablePendingSystem = []
-await autoCanaryHooks["experimental.chat.system.transform"](
-  { sessionID: "auto-canary-unavailable", model: checkpointModel },
-  { system: unavailablePendingSystem },
-)
-assert.match(unavailablePendingSystem.join("\n"), /record and sync terminal evidence/)
-const unavailableCanary = await writeCanaryRecord(
-  "auto-canary-unavailable",
-  "aborted",
-  ["preflight unavailable: status unavailable"],
-  unavailableAutoCanary.metadata.attemptID,
-)
-await syncCanaryRecord(unavailableCanary)
-const unavailableCompleted = await autoCanaryHooks.tool.canary_takeover_complete.execute(
-  {},
-  { sessionID: "auto-canary-unavailable", agent: "build" },
-)
-assert.equal(unavailableCompleted.metadata.status, "completed")
-const unavailableCompletedSystem = []
-await autoCanaryHooks["experimental.chat.system.transform"](
-  { sessionID: "auto-canary-unavailable", model: checkpointModel },
-  { system: unavailableCompletedSystem },
-)
-assert.match(unavailableCompletedSystem.join("\n"), /call context_checkpoint exactly once/)
-
 await hooks.event(
   event("message.updated", {
     info: {
@@ -1621,9 +1190,6 @@ await hooks["tool.execute.before"](
   { tool: "write", sessionID: "approved-grandchild", callID: "child-write-call" },
   { args: { filePath: "src/app.js", content: "const value = true" } },
 )
-assert.ok(
-  !spawnedInputs.some(({ command }) => command.at(-1).endsWith("scope-gate-pretooluse.sh")),
-)
 
 await assert.rejects(
   hooks["tool.execute.before"](
@@ -1632,52 +1198,6 @@ await assert.rejects(
   ),
   /return questions to their parent/,
 )
-for (const command of [
-  "plannotator",
-  "plannotator annotate /tmp/review.md",
-  "PLANNOTATOR_PORT=43123 scripts/plannotator-safe.sh review",
-  'env PLANNOTATOR_PORT=43123 "/tmp/tools/plannotator-safe" annotate /tmp/review.md',
-  "bash -lc 'plannotator-safe annotate /tmp/review.html'",
-  "result=$(plannotator-safe.sh annotate /tmp/review.txt)",
-  "command -v plannotator && plannotator review",
-  "plannotator --help; plannotator-safe.sh archive",
-  "plannotator sessions --open 1",
-  "plannotator inbox --background",
-]) {
-  for (const tool of ["bash", "shell"]) {
-    await assert.rejects(
-      hooks["tool.execute.before"](
-        { tool, sessionID: "approved-child", callID: "child-review-call" },
-        { args: { command } },
-      ),
-      /interactive Plannotator/,
-    )
-  }
-  await hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "test-session", callID: "root-review-call" },
-    { args: { command } },
-  )
-}
-for (const command of [
-  "plannotator --help",
-  "plannotator -v",
-  "plannotator review --help",
-  "plannotator-safe.sh annotate -h",
-  '"/tmp/tools/plannotator-safe.sh" --version',
-  "command -v plannotator",
-  "which plannotator-safe.sh",
-  "type -a /tmp/tools/plannotator",
-  "plannotator sessions --json",
-  "plannotator guide list",
-  "sh -n scripts/plannotator-safe.sh",
-  "cat scripts/plannotator-safe.sh",
-  "bash -lc 'sh -n scripts/plannotator-safe.sh && cat scripts/plannotator-safe.sh'",
-]) {
-  await hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "approved-child", callID: "child-cli-inspect-call" },
-    { args: { command } },
-  )
-}
 await hooks["tool.execute.before"](
   { tool: "question", sessionID: "test-session", callID: "root-question-call" },
   { args: {} },
@@ -1691,13 +1211,6 @@ sessionRecords.set("resumed-child", {
   parentID: "approved-root",
 })
 sessionRecords.set("approved-root", { id: "approved-root" })
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "resumed-grandchild", callID: "resumed-review-call" },
-    { args: { command: "plannotator-safe.sh annotate /tmp/review.md" } },
-  ),
-  /interactive Plannotator/,
-)
 await hooks["tool.execute.before"](
   { tool: "write", sessionID: "resumed-grandchild", callID: "resumed-child-write-call" },
   { args: { filePath: "src/app.js", content: "const value = true" } },
@@ -1714,13 +1227,6 @@ await hooks["tool.execute.before"](
   { args: { filePath: "src/app.js", content: "const value = true" } },
 )
 
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "unresolved-session", callID: "unresolved-review-call" },
-    { args: { command: "plannotator review" } },
-  ),
-  /interactive Plannotator/,
-)
 await assert.rejects(
   hooks["tool.execute.before"](
     { tool: "question", sessionID: "unresolved-session", callID: "unresolved-question-call" },
@@ -1743,30 +1249,6 @@ await hooks["tool.execute.before"](
   },
 )
 
-const editOutput = { output: "edited" }
-await hooks["tool.execute.after"](
-  {
-    tool: "edit",
-    sessionID: "test-session",
-    callID: "edit-call",
-    args: { filePath: "test.ts", newString: "// explains why" },
-  },
-  editOutput,
-)
-assert.ok(
-  spawnedInputs.some(({ command, input }) => {
-    return command.at(-1).endsWith("comment-self-check.sh") && input.includes("explains why")
-  }),
-)
-assert.match(editOutput.output, /Comment self-check/)
-
-await assert.rejects(
-  hooks["tool.execute.before"](
-    { tool: "bash", sessionID: "test-session", callID: "bash-call" },
-    { args: { command: 'gh -R VantaInc/example pr create --body "missing evidence"' } },
-  ),
-  /Verify gate/,
-)
 
 const titleLogLines = async () => {
   const content = (await readFile(process.env.HERDR_TITLE_LOG, "utf8")).trim()
@@ -1796,7 +1278,6 @@ process.env.HERDR_FAIL_PANE_METADATA_ONCE = "1"
 
 const titleHooks = await pluginModule.DotfilesHarnessPlugin(
   { directory: process.cwd() },
-  { hooksDir: process.env.HARNESS_HOOKS },
 )
 await titleHooks.event(
   sessionEvent("session.created", {
@@ -1947,7 +1428,6 @@ assert.match(subagentCommands.at(-1), /--token subagent_1=\[run\] Replacement ch
 await writeFile(process.env.HERDR_TITLE_LOG, "")
 const resumedTitleHooks = await pluginModule.DotfilesHarnessPlugin(
   { directory: process.cwd() },
-  { hooksDir: process.env.HARNESS_HOOKS },
 )
 await resumedTitleHooks.event(
   sessionEvent("session.updated", { id: "resumed-root", title: "Resumed title" }),
@@ -1973,7 +1453,6 @@ for (const [index, checkout] of checkoutCases.entries()) {
   await writeFile(process.env.HERDR_COMMAND_LOG, "")
   const workspaceHooks = await pluginModule.DotfilesHarnessPlugin(
     { directory: checkout.directory },
-    { hooksDir: process.env.HARNESS_HOOKS },
   )
   await workspaceHooks.event(
     sessionEvent("session.updated", { id: `workspace-root-${index}`, title: "Task title" }),
@@ -1991,7 +1470,6 @@ await rm(process.env.HERDR_FAIL_MARKER, { force: true })
 process.env.HERDR_FAIL_METADATA_ONCE = "1"
 const metadataRetryHooks = await pluginModule.DotfilesHarnessPlugin(
   { directory: process.env.OPENCODE_POOL },
-  { hooksDir: process.env.HARNESS_HOOKS },
 )
 const originalWarn = console.warn
 const warnings = []
@@ -2018,7 +1496,6 @@ await rm(process.env.HERDR_FAIL_MARKER, { force: true })
 process.env.HERDR_FAIL_ONCE = "1"
 const retryHooks = await pluginModule.DotfilesHarnessPlugin(
   { directory: process.cwd() },
-  { hooksDir: process.env.HARNESS_HOOKS },
 )
 const titleWarnings = []
 console.warn = (warning) => titleWarnings.push(warning)
@@ -2033,7 +1510,6 @@ delete process.env.HERDR_ENV
 delete process.env.HERDR_FAIL_ONCE
 const outsideHerdrHooks = await pluginModule.DotfilesHarnessPlugin(
   { directory: process.cwd() },
-  { hooksDir: process.env.HARNESS_HOOKS },
 )
 await outsideHerdrHooks.event(
   sessionEvent("session.created", { id: "outside", title: "Outside title" }),

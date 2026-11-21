@@ -174,7 +174,12 @@ style_eval_harness_state_sha256() {
     git -C "$harness_root" diff HEAD --no-ext-diff --binary
     while IFS= read -r -d '' file; do
       printf 'untracked=%s\n' "$file"
-      sha256sum "$harness_root/$file"
+      if [ -L "$harness_root/$file" ]; then
+        printf 'symlink='
+        readlink "$harness_root/$file"
+      else
+        sha256sum <"$harness_root/$file"
+      fi
     done < <(git -C "$harness_root" ls-files --others --exclude-standard -z)
   } | sha256sum | cut -d' ' -f1
 }
@@ -252,12 +257,10 @@ style_eval_validate_manifest_simplify_json() {
       (($example.recall - (($example.caught | length) / $denominator)) | fabs < 0.000001) and
       ($example.cited_right_rule | type == "boolean")
     ) and
-    ([.examples[].recall] | add / length) as $mean |
     (.mean_recall | type == "number") and
-    ((.mean_recall - $mean) | fabs < 0.000001) and
-    ([.examples[].load_bearing_overreach[]] | length) as $load_bearing_count |
+    ((.mean_recall - ([.examples[].recall] | add / length)) | fabs < 0.000001) and
     (.load_bearing_overreach_count | type == "number" and . == floor) and
-    (.load_bearing_overreach_count == $load_bearing_count)
+    (.load_bearing_overreach_count == ([.examples[].load_bearing_overreach[]] | length))
   ' "$judgment" >/dev/null
 }
 

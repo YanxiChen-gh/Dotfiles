@@ -1,6 +1,5 @@
-# PR Style
+# Task guides
 
-Before authoring, editing, or reviewing code, unit tests, comments, or PR descriptions, read
-`~/dotfiles/agent-rules/guides/pr-authoring.md` and follow all applicable rules, whether or not a PR exists.
-Before handoff, check the changed work against the guide and fix concrete violations.
-Delegated agents must follow the same standard.
+For code, tests, comments or PR text, follow `~/dotfiles/agent-rules/guides/pr-authoring.md`. When drafting review feedback, also use `~/dotfiles/agent-rules/guides/review-tone.md`. For a design doc, RFC, spec or runbook, use `~/dotfiles/claude/doc-style/rubric.md`.
+
+Use service connectors for direct lookups and browser automation for UI work. Use Herdr, Orca or cross-chat control when requested.

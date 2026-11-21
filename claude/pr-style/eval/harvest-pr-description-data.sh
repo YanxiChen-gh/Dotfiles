@@ -8,10 +8,13 @@ AUTHOR="${AUTHOR:-}"
 LIMIT="${1:-500}"
 DATA="${STYLE_HARNESS_DATA:-$HOME/style-harness-data}"
 OUTPUT_DIR="${2:-$DATA/pr-style/corpus/authoring/revisions}"
-IMMUTABLE_EVIDENCE_DIR="$(realpath -m "$DATA/pr-style/corpus/evidence")"
-IMMUTABLE_BENCHMARKS_DIR="$(realpath -m "$DATA/pr-style/corpus/benchmarks")"
-RESOLVED_OUTPUT_DIR="$(realpath -m "$OUTPUT_DIR")"
-LEXICAL_OUTPUT_DIR="$(realpath -ms "$OUTPUT_DIR")"
+resolve_path() {
+  python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+}
+IMMUTABLE_EVIDENCE_DIR="$(resolve_path "$DATA/pr-style/corpus/evidence")"
+IMMUTABLE_BENCHMARKS_DIR="$(resolve_path "$DATA/pr-style/corpus/benchmarks")"
+RESOLVED_OUTPUT_DIR="$(resolve_path "$OUTPUT_DIR")"
+LEXICAL_OUTPUT_DIR="$(python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$OUTPUT_DIR")"
 is_immutable_corpus_path() {
   case "$1" in
     "$IMMUTABLE_EVIDENCE_DIR"|"$IMMUTABLE_EVIDENCE_DIR"/*|\

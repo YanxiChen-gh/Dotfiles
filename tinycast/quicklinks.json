@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "quicklinks": [
+    {
+      "name": "Search My PRs (Browser)",
+      "link": "https://github.com/search?type=pullrequests&q=is%3Apr%20author%3A%40me%20in%3Atitle%2Cbody%20{argument name=\"Query\"}"
+    },
+    {
+      "name": "Search Glean",
+      "link": "https://app.glean.com/search?q={argument name=\"Query\"}"
+    }
+  ]
+}

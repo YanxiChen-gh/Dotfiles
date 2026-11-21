@@ -1,6 +1,6 @@
 # omp (oh-my-pi) harness
 
-A parallel harness that runs the same gates as the opencode setup, on
+A companion to the OpenCode setup for
 [oh-my-pi](https://github.com/can1357/oh-my-pi) instead of opencode. It
 exists to answer two questions: what does the config look like, and how much of
 `dotfiles-harness.js` survives once the harness gives you first-party batteries.
@@ -29,18 +29,11 @@ first-party what opencode made us rebuild:
 | Event ordering / dedupe queues | ~120 lines | typed, ordered lifecycle events |
 | Same-session checkpoint/compaction | ~400 lines | native auto-compaction |
 | Auto mode | wrapper script | native `yolo` default |
-| Scope / verify / PR / comment gates | kept | **kept, ported verbatim** |
 | Slack attention | kept | kept, slimmer |
-| Canary takeover | ~300 lines | deferred (see below) |
-
-The gates are the point, and they port almost unchanged: `dotfiles-harness.ts`
-shells out to the exact same `agent-maturity` and `claude/hooks` scripts, with the
-same JSON-stdin / exit-code-2 contract. What disappeared was the scaffolding
-around them.
 
 ## Layout
 
-- `agent/extensions/dotfiles-harness.ts` - the ported gates, Herdr title bridge, and Slack notifier.
+- `agent/extensions/dotfiles-harness.ts` - the Herdr title bridge and Slack notifier.
 - `install.d/66-omp.sh` links these into `~/.omp/agent/`, hides thinking blocks,
   enables extended context, and selects `openai-codex/gpt-6.1-sol` via ChatGPT
   OAuth. It resets any existing `enabledModels` allow-list so omp's full built-in
@@ -90,35 +83,21 @@ The opencode integration, mapped to its omp equivalent:
 | --- | --- |
 | Model + agents | `openai-codex/gpt-6.1-sol` via ChatGPT OAuth by default; the full omp model catalog is available |
 | Auto mode (`--auto` wrapper) | Native `yolo` default |
-| Scope / verify / PR / comment gates | ported in `dotfiles-harness.ts` (same scripts) |
 | Slack attention notifications | ported in `dotfiles-harness.ts` |
 | Herdr session/subagent/state sync | native `herdr integration install omp`; workspace title mirrored by the harness |
 | Same-session checkpoint/compaction | native auto-compaction |
 | Global rules (`AGENTS.md`) | `APPEND_SYSTEM.md` (linked) |
-| Skills: `~/.claude/skills` + `~/.agents/skills` (shared, advisor, agent-maturity, Obsidian AI Platform) | **native** - omp's Claude + Agents providers read the same dirs |
+| Skills: `~/.claude/skills` + `~/.agents/skills` (shared, advisor, Obsidian AI Platform) | **native** - omp's Claude + Agents providers read the same dirs |
 | Glean MCP overlay | native merge from `omp/mcp-servers-work.json` on work machines; exact managed entry removal from default and named profiles on personal machines |
 | RTK token-optimized shell output | `rtk init --agent omp` (best-effort; may be unsupported) |
 | Herdr workflow launch (`prefix+a`) | omp by default; `OMP_EXPERIMENT=0` selects OpenCode |
 | `opencode-claude-auth` (Anthropic SSO) | Native setup and `/login` |
-| Canary takeover | deferred (checkpoint/maturity-coupled) |
 | `vanta-doc-discovery` work Glean adapter | **supported** - uses the active runtime's mounted Glean search and document-read tools; OpenCode aliases remain client-conditional |
 | `tui.jsonc` | not ported (cosmetic TUI prefs) |
 
-The skills row is the important one: omp discovers `~/.claude/skills` and
-`~/.agents/skills` natively. The installer links shared, advisor, agent-maturity,
-and Obsidian AI Platform skills there and refuses to mark omp ready when its
-required maturity scripts or shared scope and outcome skills are missing.
+OMP discovers shared skills in `~/.claude/skills` and `~/.agents/skills`.
 The native Agent Hub owns subagent detail. Herdr remains the cross-workspace
 lifecycle view and does not duplicate omp's task list.
-
-Plannotator presentation sessions run as managed async Bash jobs in the root
-interactive OMP session. Use `plannotator-safe` with an explicit free
-`PLANNOTATOR_PORT`, then verify and share the loopback URL through
-`scripts/expose-port.sh`. The waiting CLI returns feedback on stdout when the
-user submits a decision. Address it in the same conversation and start a new
-session when the revised artifact needs review; do not open a second question
-or approval surface while the presentation is pending.
-
 
 On work machines, `auth-vanta-agents` reports OMP Glean and `slack-vanta`
 status without reading credential payloads. Run it yourself in a private
@@ -132,16 +111,6 @@ Keep these lifecycle details in mind when troubleshooting:
 2. Global rules are linked at `~/.omp/agent/APPEND_SYSTEM.md`.
 3. Run `herdr integration status` after Herdr upgrades and confirm `omp: current`.
 
-The Dotfiles harness recognizes ready Plannotator servers owned by the root
-session's managed Bash jobs. When the model and foreground tools have settled
-and only dedicated review jobs remain, it reports a review blocker through
-Herdr's native integration. Herdr supplies the request notification; the
-harness does not send a second toast. Feedback, dismissal, failure, resumed
-work, and session changes release only the harness's own blocker.
-Unrelated jobs, composite shell commands, and nested sessions are not
-classified as review-only waits. CLI feedback and managed async delivery
-remain unchanged.
-
 `setup_omp_harness` in `install.d/66-omp.sh` activates only the versioned
 extension link without changing native settings or agent instructions.
 Existing OMP processes retain their loaded extension until their next
@@ -149,7 +118,7 @@ start; Herdr does not need a restart.
 
 Global instructions route code, unit tests, comments, and PR descriptions to the shared
 [PR style guide](../agent-rules/guides/pr-authoring.md) for both authoring and review, with a check before
-handoff. The cleanup skill, evaluation harness, and comment reminder use that same standard.
+handoff. The style evaluation uses the same guide.
 Review requests also load the separate [review voice](../agent-rules/guides/review-tone.md). Historical
 examples remain manual evaluation references, not few-shot inputs for the agent.
 
@@ -168,9 +137,6 @@ workflow through finite managed async polling rounds. OMP can yield the progress
 response and resume when a job result arrives. Keep the session open until the
 readiness or blocker update; this is session-owned monitoring, not a durable daemon.
 Push-only requests do not start babysitting, and monitoring does not expand permissions.
-
-Canary takeover is intentionally not ported - it is coupled to the checkpoint flow
-and maturity-data sync. Add it once the trial proves the rest is worth keeping.
 
 ## Try it in your real environment
 

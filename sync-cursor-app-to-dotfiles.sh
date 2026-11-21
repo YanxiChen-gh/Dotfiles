@@ -75,16 +75,6 @@ print('\n'.join(ids))
     echo "✅ extensions.txt exported ($count extensions)"
 fi
 
-# Export skills (only if not symlinked)
-if [ -d "$CURSOR_HOME_DIR/skills-cursor" ] && [ ! -L "$CURSOR_HOME_DIR/skills-cursor" ]; then
-    echo "Exporting agent skills..."
-    rm -rf "$CURSOR_DOTFILES/skills"
-    cp -r "$CURSOR_HOME_DIR/skills-cursor" "$CURSOR_DOTFILES/skills"
-    echo "✅ agent skills exported"
-elif [ -L "$CURSOR_HOME_DIR/skills-cursor" ]; then
-    echo "ℹ️  skills is already symlinked (changes auto-sync)"
-fi
-
 # Export rules
 # Rules are individually symlinked, so we check each file
 if [ -d "$CURSOR_HOME_DIR/rules" ]; then

@@ -54,7 +54,26 @@ assert_scope_links() {
     XDG_CONFIG_HOME="$HOME/.config"
     export HOME XDG_CONFIG_HOME WORK_MACHINE
 
+    mkdir -p "$HOME/.claude"
+    python3 - "$ROOT" "$HOME/.claude/settings.json" <<'PYFIXTURE'
+import json
+import sys
+from pathlib import Path
+
+commands = [f"bash {sys.argv[1]}/claude/hooks/verify-gate-pretooluse.sh", "other-hook"]
+Path(sys.argv[2]).write_text(json.dumps({"hooks": {"PreToolUse": [
+    {"matcher": "Bash", "hooks": [{"type": "command", "command": cmd} for cmd in commands]}
+]}}))
+PYFIXTURE
     setup_claude_config >/dev/null
+    python3 - "$HOME/.claude/settings.json" <<'PYFIXTURE'
+import json
+import sys
+from pathlib import Path
+
+groups = json.loads(Path(sys.argv[1]).read_text())["hooks"]["PreToolUse"]
+assert groups == [{"matcher": "Bash", "hooks": [{"type": "command", "command": "other-hook"}]}]
+PYFIXTURE
     setup_codex_config >/dev/null
     setup_codex_config >/dev/null
     setup_opencode_config >/dev/null
@@ -118,14 +137,18 @@ XDG_CONFIG_HOME="$HOME/.config"
 OS="linux"
 WORK_MACHINE=1
 export HOME XDG_CONFIG_HOME OS WORK_MACHINE
-mkdir -p "$HOME/.cursor/rules"
+mkdir -p "$HOME/.cursor/rules" "$HOME/.cursor/skills-cursor/example"
+printf 'vendor skill\n' >"$HOME/.cursor/skills-cursor/example/SKILL.md"
 printf 'unmanaged Cursor rule\n' >"$HOME/.cursor/rules/unmanaged.mdc"
 printf 'colliding Cursor rule\n' >"$HOME/.cursor/rules/vanta-work.mdc"
 setup_cursor >/dev/null
 [ -L "$HOME/.cursor/rules/vanta-work.mdc" ] || fail "Cursor did not select work rules"
+[ -f "$HOME/.cursor/skills/workline/SKILL.md" ] || fail "Cursor omitted the work skill"
+[ "$(cat "$HOME/.cursor/skills-cursor/example/SKILL.md")" = "vendor skill" ] || fail "Cursor setup overwrote built-in skills"
 [ "$(cat "$HOME/.cursor/rules/vanta-work.mdc.pre-dotfiles")" = "colliding Cursor rule" ] || fail "Cursor did not preserve a colliding unmanaged rule"
 WORK_MACHINE=0
 setup_cursor >/dev/null
+[ ! -L "$HOME/.cursor/skills/workline" ] || fail "Cursor kept a work skill in the personal profile"
 [ ! -L "$HOME/.cursor/rules/vanta-work.mdc" ] || fail "Cursor retained managed work rules in personal scope"
 [ "$(cat "$HOME/.cursor/rules/vanta-work.mdc")" = "colliding Cursor rule" ] || fail "Cursor did not restore a colliding unmanaged rule"
 [ -f "$HOME/.cursor/rules/unmanaged.mdc" ] || fail "Cursor removed an unmanaged rule"

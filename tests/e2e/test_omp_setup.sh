@@ -358,12 +358,6 @@ if [ -z "$BUN_BIN" ] && [ -x "$ORIGINAL_HOME/.bun/bin/bun" ]; then
   BUN_BIN="$ORIGINAL_HOME/.bun/bin/bun"
 fi
 if [ -n "$BUN_BIN" ]; then
-  mkdir -p "$TMP/maturity/scripts"
-  cat > "$TMP/maturity/scripts/scope-gate-userpromptsubmit.sh" <<'EOF'
-#!/bin/sh
-printf '%s\n' "${SCOPE_BRIEF-scope brief}"
-EOF
-  chmod +x "$TMP/maturity/scripts/scope-gate-userpromptsubmit.sh"
   cat > "$TMP/bin/herdr" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >> "$HERDR_LOG"
@@ -383,83 +377,6 @@ const pi = {
 }
 const extension = (await import(pathToFileURL(extensionPath).href)).default
 await extension(pi)
-if (handlers.has("turn_start")) throw new Error("scope injection still registers turn_start")
-
-const toolCall = handlers.get("tool_call")
-if (!toolCall) throw new Error("tool_call hook is missing")
-const toolResult = handlers.get("tool_result")
-if (!toolResult) throw new Error("tool_result hook is missing")
-const blockedByHook = (value: unknown): boolean =>
-  typeof value === "object" && value !== null && "block" in value && value.block === true
-const rootContext = {
-  mode: "tui",
-  agent: { kind: "main" },
-  sessionManager: { getSessionId: () => "root-session" },
-  ui: { notify() {} },
-}
-const childContext = { ...rootContext, agent: { kind: "sub", depth: 0 } }
-const headlessContext = { ...rootContext, mode: "print" }
-const opens = [
-  "plannotator",
-  "PLANNOTATOR_PORT=43123 scripts/plannotator-safe.sh annotate /tmp/review.md",
-  "plannotator-safe review --patch-file /tmp/change.patch",
-  'env PLANNOTATOR_PORT=43123 "/tmp/tools/plannotator-safe" annotate /tmp/review.md',
-  "plannotator archive",
-  "plannotator sessions --open 1",
-  "bash -lc 'plannotator annotate /tmp/review.html'",
-  "result=$(plannotator-safe.sh annotate /tmp/review.txt)",
-  "command -v plannotator && plannotator review",
-  "plannotator --help; plannotator-safe.sh review",
-]
-for (const command of opens) {
-  for (const context of [childContext, headlessContext, { ...rootContext, agent: undefined }]) {
-    const result = await toolCall({ toolName: "bash", input: { command, async: true } }, context)
-    if (!blockedByHook(result)) throw new Error("Root-only review was allowed: " + command)
-  }
-  const foreground = await toolCall({ toolName: "bash", input: { command } }, rootContext)
-  if (!blockedByHook(foreground)) throw new Error("Foreground review was allowed: " + command)
-  const allowed = await toolCall({ toolName: "bash", input: { command, async: true } }, rootContext)
-  if (blockedByHook(allowed)) throw new Error("Managed root review was blocked: " + command)
-}
-for (const toolName of ["shell", "hub"]) {
-  const result = await toolCall({
-    toolName,
-    input: { application: "plannotator-safe.sh", args: ["annotate", "/tmp/review.md"], async: true },
-  }, rootContext)
-  if (!blockedByHook(result)) throw new Error("Review was allowed outside managed Bash")
-}
-for (const command of [
-  "plannotator --help",
-  "plannotator -v",
-  "plannotator review --help",
-  "plannotator-safe.sh annotate -h",
-  '"/tmp/tools/plannotator-safe.sh" --version',
-  "command -v plannotator",
-  "which plannotator-safe.sh",
-  "type -a /tmp/tools/plannotator",
-  "plannotator sessions --json",
-  "plannotator guide list",
-  "sh -n scripts/plannotator-safe.sh",
-  "cat scripts/plannotator-safe.sh",
-  "bash -lc 'sh -n scripts/plannotator-safe.sh && cat scripts/plannotator-safe.sh'",
-]) {
-  for (const context of [childContext, headlessContext]) {
-    const result = await toolCall({ toolName: "bash", input: { command } }, context)
-    if (blockedByHook(result)) throw new Error("CLI inspection was blocked: " + command)
-  }
-}
-for (const isError of [false, true]) {
-  const result = await toolResult({
-    toolName: "bash",
-    input: { command: opens[1], async: true },
-    isError,
-    content: [{ type: "text", text: '{"feedback":"Revise the diagram"}' }],
-  }, rootContext)
-  if (result !== undefined) throw new Error("CLI feedback was rewritten")
-  const ask = await toolCall({ toolName: "ask", input: {} }, rootContext)
-  if (blockedByHook(ask)) throw new Error("Completed review left stale interaction state")
-}
-
 const sessionStart = handlers.get("session_start")
 const turnEnd = handlers.get("turn_end")
 if (!sessionStart || !turnEnd) throw new Error("Herdr title hooks are missing")
@@ -488,7 +405,7 @@ await intervals[0]?.()
 await Bun.sleep(50)
 EOF
   : > "$TMP/herdr.log"
-  HOME="$TMP/home" AGENT_MATURITY_HOME="$TMP/maturity" \
+  HOME="$TMP/home" \
     HERDR_ENV=1 HERDR_SOCKET_PATH= HERDR_WORKSPACE_ID=test-workspace HERDR_TAB_ID=test-tab \
     DOTFILES_HERDR_TASK_WORKSPACE=1 HERDR_BIN_PATH="$TMP/bin/herdr" HERDR_LOG="$TMP/herdr.log" \
     "$BUN_BIN" "$TMP/test-extension.ts" "$ROOT/omp/agent/extensions/dotfiles-harness.ts"
@@ -688,24 +605,11 @@ grep -F "python3 $ROOT/scripts/ensure_omp_mcp.py" "$TMP/default-gate.log" >/dev/
 ! grep -F -- '--remove' "$TMP/default-gate.log" >/dev/null
 grep -F 'herdr integration install omp' "$TMP/default-gate.log" >/dev/null
 
-MATURITY="$TMP/maturity-ready"
-mkdir -p \
-  "$MATURITY/scripts" \
-  "$TMP/home/.agents/skills/scope-gate" \
-  "$TMP/home/.agents/skills/record-task-outcome"
-for script in scope-gate-userpromptsubmit.sh scope-gate-pretooluse.sh record-task-outcome.sh sync-maturity-data.sh; do
-  : >"$MATURITY/scripts/$script"
-done
-: >"$TMP/home/.agents/skills/scope-gate/SKILL.md"
-: >"$TMP/home/.agents/skills/record-task-outcome/SKILL.md"
-: >"$TMP/home/.agent-maturity.env"
-
 # Herdr readiness is published only after the full binary/config/integration
 # chain succeeds, and a failed refresh clears any stale marker.
 (
   export HOME="$TMP/home"
   export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
-  export AGENT_MATURITY_HOME="$MATURITY"
   export WORK_MACHINE=1
   unset OMP_EXPERIMENT
   . "$ROOT/install.d/66-omp.sh"
@@ -722,7 +626,6 @@ done
 if (
   export HOME="$TMP/home"
   export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
-  export AGENT_MATURITY_HOME="$MATURITY"
   export WORK_MACHINE=1
   unset OMP_EXPERIMENT
   . "$ROOT/install.d/66-omp.sh"
@@ -742,7 +645,6 @@ fi
 (
   export HOME="$TMP/home"
   export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
-  export AGENT_MATURITY_HOME="$MATURITY"
   export WORK_MACHINE=0
   unset OMP_EXPERIMENT
   . "$ROOT/install.d/66-omp.sh"
@@ -778,7 +680,6 @@ rm -rf "$TMP/marker-publication-agent"
 if (
   export HOME="$TMP/home"
   export PI_CODING_AGENT_DIR="$TMP/marker-publication-agent"
-  export AGENT_MATURITY_HOME="$MATURITY"
   export WORK_MACHINE=1
   unset OMP_EXPERIMENT
   . "$ROOT/install.d/66-omp.sh"
@@ -796,25 +697,4 @@ fi
   echo "FAIL: failed readiness marker publication left a marker" >&2
   exit 1
 }
-rm "$MATURITY/scripts/record-task-outcome.sh"
-if (
-  export HOME="$TMP/home"
-  export AGENT_MATURITY_HOME="$MATURITY"
-  export PI_CODING_AGENT_DIR="$TMP/readiness-agent"
-  unset OMP_EXPERIMENT
-  export WORK_MACHINE=1
-  . "$ROOT/install.d/66-omp.sh"
-  install_omp() { return 0; }
-  setup_omp_config() { return 0; }
-  install_herdr_omp_integration() { return 0; }
-  setup_omp_integration
-); then
-  echo "FAIL: omp setup accepted incomplete agent-maturity integration" >&2
-  exit 1
-fi
-[ ! -e "$TMP/readiness-agent/.dotfiles-ready" ] || {
-  echo "FAIL: incomplete omp setup retained a stale Herdr readiness marker" >&2
-  exit 1
-}
-
 echo "omp setup tests passed."

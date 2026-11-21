@@ -95,7 +95,7 @@ validate_evidence_case() {
     echo "case $case_id evidence not found: $evidence_path" >&2
     return 1
   }
-  resolved_evidence="$(realpath -e "$evidence_file")"
+  resolved_evidence="$(realpath "$evidence_file")"
   case "$resolved_evidence" in
     "$root"/pr-style/corpus/evidence/pr-description-revisions/*) ;;
     *) echo "case $case_id evidence escapes the allowed directory: $evidence_path" >&2; return 1 ;;
@@ -166,7 +166,7 @@ validate_manifest() {
   require_tools
   [ -f "$manifest" ] || { echo "manifest not found: $manifest" >&2; return 1; }
   root="$(manifest_root "$manifest")"
-  root="$(realpath -e "$root")"
+  root="$(realpath "$root")"
   validate_structure "$manifest"
   while IFS= read -r case_json; do
     validate_evidence_case "$manifest" "$root" "$case_json"
@@ -187,7 +187,7 @@ materialize_manifest() (
   esac
   [ ! -e "$target_dir" ] || { echo "output already exists: $target_dir" >&2; return 1; }
   validate_manifest "$manifest"
-  root="$(realpath -e "$(manifest_root "$manifest")")"
+  root="$(realpath "$(manifest_root "$manifest")")"
   output_parent="$(dirname "$target_dir")"
   mkdir -p "$output_parent"
   output_dir="$(mktemp -d "$output_parent/.pr-description-benchmark.XXXXXX")"
