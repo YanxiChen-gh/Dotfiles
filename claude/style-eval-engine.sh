@@ -239,6 +239,7 @@ style_eval_validate_manifest_simplify_json() {
     all(.examples[];
       . as $example |
       ($case_by_id[$example.case_id]) as $case |
+      (($example.caught | length) + ($example.missed | length)) as $denominator |
       ($case != null) and
       ($example.caught | strings) and
       ($example.missed | strings) and
@@ -251,7 +252,6 @@ style_eval_validate_manifest_simplify_json() {
       all($example.load_bearing_overreach[]; . as $item |
         ($example.overreach | index($item)) != null and
         ($case.scoring.must_preserve | index($item)) != null) and
-      (($example.caught | length) + ($example.missed | length)) as $denominator |
       ($denominator > 0) and
       ($example.recall | type == "number" and . >= 0 and . <= 1) and
       (($example.recall - (($example.caught | length) / $denominator)) | fabs < 0.000001) and

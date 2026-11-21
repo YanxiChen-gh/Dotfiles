@@ -45,6 +45,7 @@ install_fzf >/dev/null
 [ "$(wc -l <"$LOG" | tr -d ' ')" -eq 1 ] || fail "existing fzf was reinstalled"
 
 rm -f "$BIN/fzf"
+hash -r
 : >"$LOG"
 install_from_apt() {
     printf 'apt %s\n' "$1" >>"$LOG"
@@ -57,6 +58,7 @@ install_fzf >/dev/null
 command -v fzf >/dev/null 2>&1 || fail "Linux install did not expose fzf"
 
 rm -f "$BIN/fzf"
+hash -r
 install_from_apt() { return 0; }
 if install_fzf >/dev/null; then
     fail "installer accepted a missing fzf executable"
