@@ -19,7 +19,7 @@ from uuid import uuid4
 
 
 ORIGIN = "https://workline-bice.vercel.app"
-QUEUE_COMMANDS = ("queue", "queue-reviews", "review-notes", "complete", "abandon", "abandon-pr", "reopen")
+QUEUE_COMMANDS = ("queue", "queue-reviews", "record-prerequisite", "review-notes", "complete", "abandon", "abandon-pr", "reopen")
 REQUEST_ID = str(uuid4())
 REQUEST_ID_HEADER = "x-workline-request-id"
 
@@ -226,7 +226,7 @@ def main():
         r"/api/work(?:/stack|/refresh|/[a-zA-Z0-9-]+/(?:commands|runs))?"
         if args.key is not None else (
             r"/api/(?:me|sessions|work(?:/[a-zA-Z0-9-]+(?:/timeline\?pr="
-            r"[a-zA-Z0-9-]+/[a-zA-Z0-9_.-]+%23[1-9][0-9]*|/runs/[a-f0-9-]{36})?)?)"
+            r"[a-zA-Z0-9-]+/[a-zA-Z0-9_.-]+%23[1-9][0-9]*|/prepare-queue\?prs=[1-9][0-9]*(?:,[1-9][0-9]*)*|/runs/[a-f0-9-]{36})?)?)"
         )
     )
     if re.fullmatch(pattern, args.path) is None:

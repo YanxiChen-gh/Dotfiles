@@ -54,7 +54,7 @@ if "--data-binary" in args:
         assert json.loads(body.read_text()) == {}
     else:
         action = json.loads(body.read_text())["action"]
-        assert action == "progress" or (action in ("queue", "queue-reviews", "review-notes", "complete", "abandon", "abandon-pr", "reopen") and os.environ.get("FAKE_SCOPE") in ("queue", "controller"))
+        assert action == "progress" or (action in ("queue", "queue-reviews", "record-prerequisite", "review-notes", "complete", "abandon", "abandon-pr", "reopen") and os.environ.get("FAKE_SCOPE") in ("queue", "controller"))
 if os.environ.get("FAKE_FAILURE"):
     print("wk_test_reporter test_vercel_private", file=sys.stderr)
     sys.exit(1)
@@ -88,6 +88,14 @@ print(os.environ.get("FAKE_STATUS", "200"), end="")
             result = self.call("/api/work/example/commands", "--key", "session-123",
                                payload={"action": "progress"})
             self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_prepare_linked_prs_and_record_a_prerequisite(self):
+        result = self.call("/api/work/example/prepare-queue?prs=123,124")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.environment["FAKE_SCOPE"] = "controller"
+        result = self.call("/api/work/example/commands", "--key", "session-123",
+                           payload={"action": "record-prerequisite"})
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_rejects_unsupported_paths_and_intent(self):
         for path in ("https://example.com/api/me", "/api/credentials", "/api/work?x=1"):
