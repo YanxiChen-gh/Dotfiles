@@ -3,7 +3,7 @@ name: workline
 description: Retrieve shared PR/session context, report work, and queue Obsidian drafts with prerequisites and lifecycle notes in Workline.
 ---
 
-Workline is at https://workline-bice.vercel.app. Use the bundled `scripts/api.py` with Python 3 from any working directory. It reads `~/.config/workline/config.json` (override with `WORKLINE_CONFIG`) and launches Vercel from the config file's directory. Keep the config outside project checkouts so Vercel launchers such as `pnpm dlx` use host settings. If access is missing or expired, explain the gap once and continue the user's task.
+Workline is at https://workline-bice.vercel.app. Use the bundled `scripts/api.py` with Python 3 from any working directory. Start with `/api/me` to verify access. When `WORKLINE_CONFIG` is unset, the helper tries Ona identity first and falls back to `~/.config/workline/config.json` if needed. Setting `WORKLINE_CONFIG` selects a local config file and skips Ona identity. Keep the config outside project checkouts. The helper launches Vercel from the config file's directory so launchers such as `pnpm dlx` use host settings. If access is missing or expired, explain the gap once and continue the user's task.
 
 Start with `/api/me` and `/api/work`. Reuse the work item containing the current native session ID or the PR delivering the user's request. A contextual PR reference does not establish an association. If neither identity is known, retrieve native session metadata from available tools; leave unavailable facts unknown. Register significant engineering work once, then report meaningful progress, blockers, and handoff. Reading or brainstorming alone need not create work.
 
