@@ -31,8 +31,12 @@ SH
 cat >"$TMP/bin/systemctl" <<'SH'
 #!/bin/sh
 printf '%s\n' "$*" >>"$HOME/service-calls"
-[ "${SERVICE_MANAGER:-}" = systemd ] || exit 1
+if [ "${SERVICE_MANAGER:-}" != systemd ]; then
+    printf '%s\n' 'systemd is not running in this container'
+    exit 0
+fi
 case "$2" in
+    show) printf '%s\n' 'Version=fixture' ;;
     is-active) test -f "$HOME/service-loaded" ;;
     enable) touch "$HOME/service-loaded" ;;
 esac

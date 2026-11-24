@@ -36,6 +36,17 @@ def available(command):
     ).returncode == 0
 
 
+def has_user_systemd():
+    if not shutil.which("systemctl"):
+        return False
+    result = subprocess.run(
+        ["systemctl", "--user", "show", "--property=Version"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=False,
+    )
+    # Some containers install a systemctl shim that exits zero without a manager.
+    return result.returncode == 0 and result.stdout.startswith("Version=")
+
+
 def launch(config, detach):
     with (ROOT / "reporter.lock").open("a") as lock:
         try:
@@ -108,9 +119,7 @@ def install(platform):
     manager = "login"
     if platform == "macos" and shutil.which("launchctl"):
         manager = "launchd"
-    elif platform == "linux" and shutil.which("systemctl") and available(
-        ["systemctl", "--user", "show-environment"]
-    ):
+    elif platform == "linux" and has_user_systemd():
         manager = "systemd"
     config = {
         "node": node, "source": previous.get("source") or str(uuid4()),
@@ -147,8 +156,10 @@ def main():
                 install(args.platform)
         else:
             config = json.loads((ROOT / "config.json").read_text())
-            if args.action == "run" or config["manager"] == "login":
-                launch(config, detach=args.action == "ensure")
+            if args.action == "run":
+                launch(config, detach=False)
+            elif config["manager"] == "login" and os.access(ROOT, os.W_OK):
+                launch(config, detach=True)
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         sys.exit(f"Workline reporter setup failed: {error}")
 
