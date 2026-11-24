@@ -32,6 +32,12 @@ On Ona (`IS_ON_ONA=true`), `install.sh` clones `YanxiChen-gh/Dotfiles` into `/wo
 
 In Vanta's Ona remote dev env (detected via `IS_ON_ONA`), interactive shells default to zsh. `install.sh` adds a runtime-gated guard to `~/.bashrc` that hands interactive bash sessions over to zsh, and best-effort `chsh`'s the login shell when run inside Ona. The guard is a no-op on a personal machine (where `IS_ON_ONA` is unset) - `chsh` alone isn't enough because Ona SSHs in via `exec -l $SHELL -i` with `$SHELL=/bin/bash` and a container's `/etc/passwd` can reset on rebuild.
 
+## Workline activity
+
+On work installs (`WORK_MACHINE=1`), Dotfiles starts the Workline reporter for linked Codex sessions. It uses the host's existing Workline access and waits for a Codex app-server control socket. It resolves the host ID from the local organizer configuration or verified linked sessions. Set `WORKLINE_CODEX_HOST_ID` at install time when multiple host identities match.
+
+On macOS, launchd starts the reporter at login. On Linux, the installer uses the user systemd service when available. On CDEs without a user service manager, the installer starts it in the background and the next zsh login or interactive shell restarts it if it has stopped. Reporter files and fallback logs are under `~/.local/share/workline-activity`.
+
 ## Herdr remote browser opening
 
 Herdr resolves Ctrl-clicked pane URLs on its server, so `herdr --remote` otherwise launches the browser on the remote machine. Use `herdr-remote <ssh-target>` instead to create a fail-closed, loopback-only SSH relay. On macOS, a link pairs the originating full-screen **WezTerm** window on the left with a dedicated **Google Chrome** window on the right in native macOS Split View. Subsequent links open tabs in that window without rebuilding the layout. Closing that browser restores the terminal's full width; the next link creates a new partner. Normal browser windows, the browser profile, system URL handlers, and local Herdr sessions are unchanged.

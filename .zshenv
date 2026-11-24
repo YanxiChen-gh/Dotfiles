@@ -20,3 +20,7 @@ if [ -f "$HOME/.ona_env" ] && command grep -q "Synced from Ona environment .* fo
     export PATH=$_ona_saved_PATH
     unset _ona_saved_HOME _ona_saved_USER _ona_saved_LOGNAME _ona_saved_SHELL _ona_saved_PWD _ona_saved_PATH
 fi
+
+if [[ -o login || -o interactive ]] && [ -f "$HOME/.local/share/workline-activity/activity-service.py" ]; then
+    python3 "$HOME/.local/share/workline-activity/activity-service.py" ensure
+fi

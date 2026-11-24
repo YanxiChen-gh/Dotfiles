@@ -79,3 +79,14 @@ setup_codex_config() {
         echo "✅ Codex shared skills linked (work)"
     fi
 }
+
+# Start the reporter with the Workline credentials already available on a work host.
+setup_workline_activity() (
+    [ "${WORK_MACHINE:-}" = "1" ] || return 0
+    case "$OS" in
+        linux|macos) ;;
+        *) return 0 ;;
+    esac
+    script_dir=$(resolve_script_dir) || return 1
+    python3 "$script_dir/shared-skills/workline/scripts/activity-service.py" install --platform "$OS"
+)

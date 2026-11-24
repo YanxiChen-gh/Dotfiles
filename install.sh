@@ -126,6 +126,7 @@ setup_claude_config
 setup_opencode_config
 install_herdr_opencode_integration
 setup_codex_config || exit 1
+setup_workline_activity || echo "Could not start Workline activity reporting." >&2
 setup_advisors
 setup_rtk
 setup_omp_integration || exit 1
